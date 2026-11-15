@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { type TestContext, test } from "node:test";
-import type { PublicSettings, SageApi } from "../src/shared/api.js";
+import type { Notice, PublicSettings, SageApi } from "../src/shared/api.js";
 import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 
 // The first checks read the renderer's source for the behaviour that matters (unsaved settings
@@ -80,6 +80,7 @@ async function startWindow(
     chooseFolder: async () => null,
     chooseApp: async () => null,
     takeNotices: async () => [],
+    ackNotices: async () => {},
     ...overrides,
   };
   const elements = installFakeDom(ids, api);
@@ -159,6 +160,45 @@ test("Save key sends the address on screen with the key, and shows a refusal", a
   assert.equal(el("settings-status").textContent, "Key not saved: Save settings first, then save the key.");
   assert.equal(el("online-key").value, "", "the key field is emptied either way");
   assert.doesNotMatch(el("key-status").textContent, /A key is saved/);
+});
+
+test("notices are confirmed only after they are on screen, and never shown twice", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  let failAck = true;
+  let shownWhenAcked: (string | null)[] = [];
+  let screen = (): (string | null)[] => [];
+  const { texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      shownWhenAcked = screen();
+      acks.push(ids);
+      if (failAck) throw new Error("the main process didn't answer");
+    },
+  });
+  screen = texts;
+  assert.deepEqual(acks, [], "nothing to confirm at startup");
+  // Collected on the next poll, shown, then confirmed.
+  waiting.push({ id: "n1", text: "Sage reminder: Stretch" });
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Sage reminder: Stretch"]);
+  assert.deepEqual(acks, [["n1"]]);
+  assert.deepEqual(shownWhenAcked, ["Sage reminder: Stretch"], "on screen before it is confirmed");
+
+  // The confirmation failed, so Sage hands it out again with a new one: shown once, confirmed again.
+  waiting.push({ id: "n2", text: "Second" });
+  failAck = false;
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Sage reminder: Stretch", "Second"]);
+  assert.deepEqual(acks, [["n1"], ["n1", "n2"]]);
+
+  // Nothing waiting: nothing to confirm.
+  waiting.length = 0;
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.equal(acks.length, 2);
 });
 
 test("settings are loaded at startup and after a successful save, and save messages are shown", () => {

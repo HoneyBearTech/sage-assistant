@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { serviceOrigin } from "../core/brain/online.js";
 import { describeError } from "../core/log.js";
+import { MAX_NOTICES } from "../core/notices.js";
 import type { Sage } from "../core/sage.js";
 import type { Settings } from "../core/settings.js";
 import { CHANNELS, type Channel, type PublicSettings, type Result } from "../shared/api.js";
@@ -18,6 +19,12 @@ const keyPayload = z.strictObject({
   key: z.string().min(1).max(1_000),
   // The address on screen when Save key was pressed; checked against the saved one.
   baseUrl: z.string().trim().max(500),
+});
+
+// Notice ids are short (see NoticeBoard); the board never holds more than MAX_NOTICES, plus one
+// "more waiting" line.
+const ackPayload = z.strictObject({
+  ids: z.array(z.string().min(1).max(32)).max(MAX_NOTICES + 1),
 });
 
 export const SAVE_SETTINGS_FIRST = "Save settings first, then save the key.";
@@ -97,7 +104,11 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     },
     [CHANNELS.chooseFolder]: () => pickers.chooseFolder(),
     [CHANNELS.chooseApp]: () => pickers.chooseApp(),
-    // Returning a notice to the window is what makes it delivered (a reminder counts as shown).
+    // Handing a notice out doesn't make it delivered; the window's confirmation does.
     [CHANNELS.takeNotices]: () => sage.notices.take(),
+    [CHANNELS.ackNotices]: async (payload) => {
+      const parsed = ackPayload.safeParse(payload);
+      if (parsed.success) await sage.notices.ack(parsed.data.ids);
+    },
   };
 }

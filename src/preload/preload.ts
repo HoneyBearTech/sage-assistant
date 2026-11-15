@@ -12,6 +12,7 @@ const api: SageApi = {
   chooseFolder: () => ipcRenderer.invoke(CHANNELS.chooseFolder),
   chooseApp: () => ipcRenderer.invoke(CHANNELS.chooseApp),
   takeNotices: () => ipcRenderer.invoke(CHANNELS.takeNotices),
+  ackNotices: (ids) => ipcRenderer.invoke(CHANNELS.ackNotices, { ids }),
 };
 
 contextBridge.exposeInMainWorld("sage", api);

@@ -173,7 +173,7 @@ test("a reminder that couldn't be shown is tried again on the next check, and th
   assert.equal(await reminders.markFired(first.id, clock.now()), false, "already marked");
 });
 
-test("a reminder the desktop can't show waits in the window and counts as shown only once collected", async (t) => {
+test("a reminder the desktop can't show waits in the window and counts as shown only once confirmed", async (t) => {
   const dir = await tempDir(t);
   const { logger } = captureLogs();
   const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
@@ -205,10 +205,118 @@ test("a reminder the desktop can't show waits in the window and counts as shown 
   );
   await restarted.tick();
   assert.equal(desktopTries, 2);
-  assert.deepEqual(await restartedBoard.take(), ["Sage reminder: Stretch"]);
+  const taken = await restartedBoard.take();
+  assert.deepEqual(
+    taken.map((n) => n.text),
+    ["Sage reminder: Stretch"],
+  );
+  assert.equal((await reminders.get(stretch.id))!.firedAt, null, "collected but not confirmed yet");
+  await restartedBoard.ack(taken.map((n) => n.id));
   assert.equal((await reminders.get(stretch.id))!.firedAt, "2026-11-15T09:00:15.000Z");
   await restarted.tick();
-  assert.equal(desktopTries, 2, "collected once, never offered again");
+  assert.equal(desktopTries, 2, "confirmed once, never offered again");
+});
+
+test("the window collects a reminder and crashes before confirming it: it comes back after a restart", async (t) => {
+  const dir = await tempDir(t);
+  const { logger } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const board = new NoticeBoard();
+  const scheduler = new ReminderScheduler(
+    new RemindersStore(dir, logger, () => clock.now()),
+    () => false,
+    clock,
+    logger,
+    board,
+  );
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  const call = await reminders.add("Call the dentist", new Date("2026-11-15T08:59:00Z"));
+  await scheduler.tick();
+  assert.deepEqual(
+    (await board.take()).map((n) => n.text),
+    ["Sage reminder: Call the dentist"],
+  );
+  // The window crashes here, before it confirms. Nothing was recorded as shown.
+  assert.equal((await reminders.get(call.id))!.firedAt, null);
+
+  // Sage starts again: a new board and scheduler, the same data folder.
+  clock.advance(60_000);
+  const freshBoard = new NoticeBoard();
+  const fresh = new ReminderScheduler(
+    new RemindersStore(dir, logger, () => clock.now()),
+    () => false,
+    clock,
+    logger,
+    freshBoard,
+  );
+  await fresh.tick();
+  const again = await freshBoard.take();
+  assert.deepEqual(
+    again.map((n) => n.text),
+    ["Sage reminder: Call the dentist"],
+    "the reminder comes back",
+  );
+  await freshBoard.ack(again.map((n) => n.id));
+  assert.equal((await reminders.get(call.id))!.firedAt, "2026-11-15T09:01:00.000Z");
+  await fresh.tick();
+  assert.deepEqual(await freshBoard.take(), [], "and only once");
+});
+
+test("a confirmation that arrives while a check runs doesn't show the reminder twice", async (t) => {
+  const dir = await tempDir(t);
+  const { logger } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  const board = new NoticeBoard();
+  let desktopTries = 0;
+  let release!: () => void;
+  let blockNext = false;
+  let slowStarted!: () => void;
+  const slow = new Promise<void>((resolve) => {
+    slowStarted = resolve;
+  });
+  const scheduler = new ReminderScheduler(
+    reminders,
+    () => {
+      desktopTries++;
+      if (!blockNext) return false;
+      blockNext = false;
+      slowStarted();
+      // This notification is slow, so the check is still running.
+      return new Promise<boolean>((resolve) => {
+        release = () => resolve(false);
+      });
+    },
+    clock,
+    logger,
+    board,
+  );
+  // Records are watched, so the test can let one finish if it starts (no sleeping).
+  let recordStarted = false;
+  let recordFinished: Promise<boolean> = Promise.resolve(false);
+  const markFired = reminders.markFired.bind(reminders);
+  reminders.markFired = (id, at) => {
+    recordStarted = true;
+    recordFinished = markFired(id, at);
+    return recordFinished;
+  };
+  await reminders.add("A", new Date("2026-11-15T08:30:00Z"));
+  await scheduler.tick();
+  const taken = await board.take();
+  // B is older, so the next check offers B before A, and B's notification is slow.
+  await reminders.add("B", new Date("2026-11-15T08:00:00Z"));
+  blockNext = true;
+  const checking = scheduler.tick();
+  await slow;
+  // A is confirmed while that check, which has already read A as due, waits on B.
+  const acking = board.ack(taken.map((n) => n.id));
+  await new Promise((resolve) => setImmediate(resolve));
+  if (recordStarted) await recordFinished;
+  release();
+  await checking;
+  await acking;
+  assert.equal(desktopTries, 2, "A was offered once; the second check offered only B");
+  assert.notEqual((await reminders.list()).find((r) => r.text === "A")!.firedAt, null);
 });
 
 test("more due reminders than the window holds: none is lost, and the window is told how many wait", async (t) => {
@@ -224,13 +332,16 @@ test("more due reminders than the window holds: none is lost, and the window is 
   await scheduler.tick();
   const first = await board.take();
   assert.equal(first.length, MAX_NOTICES + 1);
-  assert.equal(first[0], "Sage reminder: R0", "the oldest are kept");
-  assert.equal(first.at(-1), "2 more reminders are waiting and will appear here in a moment.");
+  assert.equal(first[0]!.text, "Sage reminder: R0", "the oldest are kept");
+  assert.equal(first.at(-1)!.text, "2 more reminders are waiting and will appear here in a moment.");
+  await board.ack(first.map((n) => n.id));
   await scheduler.tick();
-  assert.deepEqual(await board.take(), [
-    `Sage reminder: R${MAX_NOTICES}`,
-    `Sage reminder: R${MAX_NOTICES + 1}`,
-  ]);
+  const second = await board.take();
+  assert.deepEqual(
+    second.map((n) => n.text),
+    [`Sage reminder: R${MAX_NOTICES}`, `Sage reminder: R${MAX_NOTICES + 1}`],
+  );
+  await board.ack(second.map((n) => n.id));
   assert.ok((await reminders.list()).every((r) => r.firedAt !== null));
 });
 

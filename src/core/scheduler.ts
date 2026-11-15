@@ -21,11 +21,17 @@ export const systemClock: Clock = {
  */
 export type Notifier = (title: string, body: string) => boolean | Promise<boolean>;
 
+/** The notice-board key of a reminder's window notice. */
+export function reminderNoticeKey(id: string): string {
+  return `reminder:${id}`;
+}
+
 /**
  * Checks for due reminders on a timer and shows each one once. A reminder counts as shown only
- * when a desktop notification was confirmed, or when the window has collected it from the notice
- * board. Until then it stays due: it is offered again on the next check, or the next time Sage
- * starts, so a reminder waiting for the window when Sage closes isn't lost.
+ * when a desktop notification was confirmed, or when the window has confirmed it put the notice
+ * on screen (not merely collected it). Until then it stays due: it is offered again on the next
+ * check, or the next time Sage starts, so a reminder waiting for the window when Sage closes or
+ * crashes isn't lost.
  */
 export class ReminderScheduler {
   private handle: unknown;
@@ -91,7 +97,7 @@ export class ReminderScheduler {
       await this.record(reminder.id);
       return false;
     }
-    const key = `reminder:${reminder.id}`;
+    const key = reminderNoticeKey(reminder.id);
     // Waiting in the window already: don't show it a second time on the desktop.
     if (this.board?.has(key)) return false;
 
@@ -105,9 +111,12 @@ export class ReminderScheduler {
       await this.record(reminder.id);
       return true;
     }
+    const id = reminder.id;
     const queued = this.board?.post(`Sage reminder: ${reminder.text}`, {
       key,
-      onDelivered: () => this.record(reminder.id),
+      // Runs when the window confirms the notice is on screen. It waits for any check in
+      // progress, so that check can't offer the same reminder again while it is recorded.
+      onDelivered: () => this.serial.run(() => this.record(id)),
     });
     if (!queued) {
       this.logger.warn("A reminder couldn't be shown yet; Sage will try again on the next check");

@@ -88,11 +88,19 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
 });
 
 // Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data
-// files that had to be set aside. Collected on load and every few seconds.
+// files that had to be set aside. Collected on load and every few seconds. Each one is confirmed
+// after it is on screen; until then Sage hands it out again, so ids already shown are skipped.
 const NOTICE_POLL_MS = 5_000;
+const shownNotices = new Set<string>();
 async function collectNotices(): Promise<void> {
   try {
-    for (const notice of await sage.takeNotices()) addMessage("notice", notice);
+    const notices = await sage.takeNotices();
+    for (const notice of notices) {
+      if (shownNotices.has(notice.id)) continue;
+      addMessage("notice", notice.text);
+      shownNotices.add(notice.id);
+    }
+    if (notices.length > 0) await sage.ackNotices(notices.map((notice) => notice.id));
   } catch {
     // The next poll tries again.
   }

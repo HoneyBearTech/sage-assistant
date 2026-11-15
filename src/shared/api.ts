@@ -10,7 +10,14 @@ export const CHANNELS = {
   chooseFolder: "sage:choose-folder",
   chooseApp: "sage:choose-app",
   takeNotices: "sage:notices-take",
+  ackNotices: "sage:notices-ack",
 } as const;
+
+/** A message from Sage itself for the window. The id is what the window confirms with. */
+export interface Notice {
+  id: string;
+  text: string;
+}
 
 export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
 
@@ -46,6 +53,11 @@ export interface SageApi {
   clearKey(): Promise<Result>;
   chooseFolder(): Promise<string | null>;
   chooseApp(): Promise<string | null>;
-  /** Messages from Sage itself (reminders, data-file problems), each handed out once. */
-  takeNotices(): Promise<string[]>;
+  /**
+   * Messages from Sage itself (reminders, data-file problems). A notice is handed out again until
+   * the window confirms it with `ackNotices`, so the window skips ids it already shows.
+   */
+  takeNotices(): Promise<Notice[]>;
+  /** Confirms these notices are on screen; only then does a reminder count as shown. */
+  ackNotices(ids: string[]): Promise<void>;
 }

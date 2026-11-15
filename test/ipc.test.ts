@@ -5,7 +5,8 @@ import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings } from "../src/main/ipc.js";
-import { CHANNELS } from "../src/shared/api.js";
+import { MAX_NOTICES } from "../src/core/notices.js";
+import { CHANNELS, type Notice } from "../src/shared/api.js";
 import { FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir } from "./helpers.js";
 
 async function setup(t: Parameters<typeof tempDir>[0]) {
@@ -168,13 +169,51 @@ test("Save key with no address saved and none typed keeps the key for the first 
   assert.deepEqual(await keyStore.get(), { key: "fake-value-for-tests", origin: null });
 });
 
-test("notices are handed to the window once each", async (t) => {
+test("notices are handed to the window until it confirms them, and confirmed once", async (t) => {
   const { handlers, sage } = await setup(t);
-  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
-  sage.notices.post("Sage reminder: Stand up");
+  const take = async () => (await handlers[CHANNELS.takeNotices](undefined)) as Notice[];
+  assert.deepEqual(await take(), []);
+  let delivered = 0;
+  sage.notices.post("Sage reminder: Stand up", { key: "r", onDelivered: () => void delivered++ });
   sage.notices.post("Second");
-  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), ["Sage reminder: Stand up", "Second"]);
-  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
+  const taken = await take();
+  assert.deepEqual(
+    taken.map((n) => n.text),
+    ["Sage reminder: Stand up", "Second"],
+  );
+  assert.deepEqual(await take(), taken, "handed out again, same ids, until confirmed");
+  assert.equal(delivered, 0);
+
+  assert.equal(await handlers[CHANNELS.ackNotices]({ ids: [taken[0]!.id] }), undefined);
+  assert.equal(delivered, 1);
+  assert.deepEqual(await take(), [taken[1]]);
+  await handlers[CHANNELS.ackNotices]({ ids: taken.map((n) => n.id) });
+  assert.equal(delivered, 1, "a repeated confirmation is ignored");
+  assert.deepEqual(await take(), []);
+});
+
+test("notice confirmations are validated: a short list of short ids, nothing else", async (t) => {
+  const { handlers, sage } = await setup(t);
+  let delivered = 0;
+  sage.notices.post("Sage reminder: a", { key: "r", onDelivered: () => void delivered++ });
+  const [notice] = (await handlers[CHANNELS.takeNotices](undefined)) as Notice[];
+  const id = notice!.id;
+  for (const payload of [
+    undefined,
+    id,
+    [id],
+    { ids: id },
+    { ids: [id], extra: 1 },
+    { ids: [id, 5] },
+    { ids: [id, ""] },
+    { ids: [id, "x".repeat(33)] },
+    { ids: [id, ...Array.from({ length: MAX_NOTICES + 1 }, (_, i) => `n${i + 100}`)] },
+  ]) {
+    assert.equal(await handlers[CHANNELS.ackNotices](payload), undefined);
+  }
+  assert.equal(delivered, 0, "no malformed confirmation counts");
+  await handlers[CHANNELS.ackNotices]({ ids: [id] });
+  assert.equal(delivered, 1);
 });
 
 test("an unreadable settings, notes or reminders file is kept aside and the window is told once", async (t) => {
@@ -196,7 +235,9 @@ test("an unreadable settings, notes or reminders file is kept aside and the wind
   assert.deepEqual(await sage.notes.list(), []);
   assert.deepEqual(await sage.reminders.list(), []);
   await sage.notes.list();
-  const notices = (await handlers[CHANNELS.takeNotices](undefined)) as string[];
+  const taken = (await handlers[CHANNELS.takeNotices](undefined)) as Notice[];
+  await handlers[CHANNELS.ackNotices]({ ids: taken.map((n) => n.id) });
+  const notices = taken.map((n) => n.text);
   assert.equal(notices.length, 3, "one notice per file, not one per read");
   const files = await readdir(dir);
   for (const [what, name] of [

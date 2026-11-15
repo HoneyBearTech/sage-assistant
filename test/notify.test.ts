@@ -69,7 +69,10 @@ test("a notification the system never confirms counts as not shown after the tim
   assert.equal(await pending, false);
 });
 
-test("the notice board hands each notice out once, and it is delivered only then", async () => {
+const texts = (notices: { text: string }[]) => notices.map((notice) => notice.text);
+const idsOf = (notices: { id: string }[]) => notices.map((notice) => notice.id);
+
+test("a notice is delivered only when the window confirms it, not when it is handed out", async () => {
   const board = new NoticeBoard();
   assert.deepEqual(await board.take(), []);
   const delivered: string[] = [];
@@ -81,10 +84,36 @@ test("the notice board hands each notice out once, and it is delivered only then
   board.post("x".repeat(MAX_NOTICE_TEXT + 10));
   assert.equal(board.has("r1"), true);
   assert.deepEqual(delivered, [], "not delivered while it only waits");
+
   const taken = await board.take();
-  assert.deepEqual(taken, ["Sage reminder: a", "x".repeat(MAX_NOTICE_TEXT)]);
+  assert.deepEqual(texts(taken), ["Sage reminder: a", "x".repeat(MAX_NOTICE_TEXT)]);
+  assert.equal(new Set(idsOf(taken)).size, 2, "each notice has its own id");
+  assert.deepEqual(delivered, [], "handing out isn't delivering");
+  assert.equal(board.has("r1"), true, "still waiting for the window's confirmation");
+
+  // Not confirmed yet: the next take hands out the same notices with the same ids.
+  assert.deepEqual(await board.take(), taken);
+
+  await board.ack([taken[0]!.id]);
   assert.deepEqual(delivered, ["r1"]);
   assert.equal(board.has("r1"), false);
+  assert.deepEqual(await board.take(), [taken[1]], "only the unconfirmed one comes back");
+  await board.ack([taken[1]!.id]);
+  assert.deepEqual(await board.take(), []);
+});
+
+test("a confirmation counts once: repeated, unknown and never-handed-out ids are ignored", async () => {
+  const board = new NoticeBoard();
+  let deliveries = 0;
+  board.post("a", { key: "a", onDelivered: () => void deliveries++ });
+  // Not handed out yet, so nothing can confirm it, even with a guessed id.
+  await board.ack(["n1", "n2", "n3"]);
+  assert.equal(deliveries, 0);
+  const [notice] = await board.take();
+  await board.ack([notice!.id, notice!.id, "unknown", "n999"]);
+  assert.equal(deliveries, 1);
+  await board.ack([notice!.id]);
+  assert.equal(deliveries, 1, "a second confirmation doesn't deliver it again");
   assert.deepEqual(await board.take(), []);
 });
 
@@ -94,17 +123,25 @@ test("a full board keeps the oldest notices, refuses new ones and says how many 
   assert.equal(board.post("late 1", { key: "late1" }), false);
   assert.equal(board.post("late 2", { key: "late2" }), false);
   assert.equal(board.post("late 1", { key: "late1" }), false, "offered again: still counted once");
-  const taken = await board.take();
+  const taken = texts(await board.take());
   assert.equal(taken.length, MAX_NOTICES + 1);
   assert.equal(taken[0], "notice 0", "the oldest are kept");
   assert.equal(taken[MAX_NOTICES - 1], `notice ${MAX_NOTICES - 1}`);
   assert.equal(taken.at(-1), "2 more reminders are waiting and will appear here in a moment.");
-  assert.equal(board.post("late 1", { key: "late1" }), true, "room again after the window took them");
+  // Handed out but not confirmed: they still take up room, and the "more" line isn't repeated.
+  assert.equal(board.post("late 1", { key: "late1" }), false, "no room until the window confirms");
+  const again = await board.take();
+  assert.equal(again.at(-1)!.text, "1 more reminder is waiting and will appear here in a moment.");
+  await board.ack(idsOf(again));
+  assert.equal(board.post("late 1", { key: "late1" }), true, "room again after the window confirmed them");
   board.post("x");
   board.post("y");
   for (let i = 0; i < MAX_NOTICES - 3; i++) board.post(`fill ${i}`);
   assert.equal(board.post("one too many", { key: "extra" }), false);
-  assert.equal((await board.take()).at(-1), "1 more reminder is waiting and will appear here in a moment.");
+  assert.equal(
+    texts(await board.take()).at(-1),
+    "1 more reminder is waiting and will appear here in a moment.",
+  );
 });
 
 test("while a notice's delivery is being recorded it still counts as present", async () => {
@@ -120,11 +157,14 @@ test("while a notice's delivery is being recorded it still counts as present", a
       throw new Error("record failed");
     },
   });
-  const taking = board.take();
+  const taken = await board.take();
+  assert.deepEqual(texts(taken), ["a", "b"]);
+  const acking = board.ack(idsOf(taken));
   assert.equal(board.has("a"), true);
   assert.equal(board.has("b"), true, "a later notice also counts while an earlier one records");
   finish();
-  assert.deepEqual(await taking, ["a", "b"], "a failing record doesn't lose the texts");
-  assert.equal(board.has("a"), false);
+  await acking;
+  assert.equal(board.has("a"), false, "a failing record doesn't stop the others");
   assert.equal(board.has("b"), false);
+  assert.deepEqual(await board.take(), []);
 });
