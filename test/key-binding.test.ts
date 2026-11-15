@@ -61,7 +61,7 @@ test("switching services mid-turn: the old service never receives the new servic
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
 
   assert.deepEqual(await handlers[CHANNELS.saveSettings](online(serviceA.url)), { ok: true });
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY_A }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY_A, baseUrl: serviceA.url }), { ok: true });
 
   // Service A holds its reply while the user moves to service B and saves B's key.
   const reply = handlers[CHANNELS.send]({ text: "what notes do I have?" });
@@ -72,7 +72,7 @@ test("switching services mid-turn: the old service never receives the new servic
   };
   assert.equal(moved.ok, true);
   assert.match(moved.message ?? "", /saved key was removed/);
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY_B }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY_B, baseUrl: serviceB.url }), { ok: true });
 
   // Now A answers with a tool call; the old turn must stop instead of going back to A.
   json(paused!, 200, toolCallReply());

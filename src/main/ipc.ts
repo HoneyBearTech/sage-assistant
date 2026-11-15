@@ -14,7 +14,13 @@ export interface Pickers {
 export type Handler = (payload: unknown) => Promise<unknown>;
 
 const sendPayload = z.strictObject({ text: z.string().trim().min(1).max(8_000) });
-const keyPayload = z.strictObject({ key: z.string().min(1).max(1_000) });
+const keyPayload = z.strictObject({
+  key: z.string().min(1).max(1_000),
+  // The address on screen when Save key was pressed; checked against the saved one.
+  baseUrl: z.string().trim().max(500),
+});
+
+export const SAVE_SETTINGS_FIRST = "Save settings first, then save the key.";
 
 export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSettings {
   return {
@@ -74,8 +80,11 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       if (!parsed.success) return fail("That doesn't look like a key.");
       try {
         // The key belongs to the service whose address is saved now (or, if none is saved yet, to
-        // the first address saved after it).
+        // the first address saved after it). The user typed it for the address on screen, so if
+        // that isn't the saved one, nothing is stored: the key would otherwise be tied to a
+        // service it wasn't entered for.
         const origin = serviceOrigin((await sage.settings.load()).online.baseUrl);
+        if (serviceOrigin(parsed.data.baseUrl) !== origin) return fail(SAVE_SETTINGS_FIRST);
         await sage.keyStore.set(parsed.data.key, origin);
         return { ok: true };
       } catch (error) {

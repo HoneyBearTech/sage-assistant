@@ -41,7 +41,8 @@ export interface SageApi {
   resetChat(): Promise<void>;
   getSettings(): Promise<PublicSettings>;
   saveSettings(settings: SettingsInput): Promise<Result>;
-  setKey(key: string): Promise<Result>;
+  /** `baseUrl` is the address on screen; the key is saved only if it is the saved address. */
+  setKey(key: string, baseUrl: string): Promise<Result>;
   clearKey(): Promise<Result>;
   chooseFolder(): Promise<string | null>;
   chooseApp(): Promise<string | null>;

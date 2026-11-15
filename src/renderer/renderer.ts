@@ -229,7 +229,9 @@ byId<HTMLButtonElement>("save-key").addEventListener("click", () => {
   const key = keyInput.value;
   keyInput.value = "";
   if (!key.trim()) return;
-  void sage.setKey(key).then(async (result) => {
+  // The address on screen goes with the key; the main process refuses it if that address isn't
+  // saved yet, so a key is never tied to the wrong service.
+  void sage.setKey(key, onlineUrl.value).then(async (result) => {
     settingsStatus.textContent = result.ok ? "Key saved." : `Key not saved: ${result.message}`;
     await refreshKeyStatus();
   });

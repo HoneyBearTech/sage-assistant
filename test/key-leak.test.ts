@@ -122,7 +122,7 @@ test("the online key never appears in any file, log line, reply or the chat hist
   });
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
 
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: SENTINEL }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: SENTINEL, baseUrl: "" }), { ok: true });
   const saved = await handlers[CHANNELS.saveSettings]({
     ...defaultSettings(),
     brain: "online",

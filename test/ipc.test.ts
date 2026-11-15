@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
-import { createIpcHandlers, toPublicSettings } from "../src/main/ipc.js";
+import { createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings } from "../src/main/ipc.js";
 import { CHANNELS } from "../src/shared/api.js";
 import { FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir } from "./helpers.js";
 
@@ -56,17 +56,30 @@ test("settings go out without the key, and come back validated", async (t) => {
   assert.equal(before.online.hasKey, false);
   assert.equal(before.brain, "local");
 
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" }), {
+    ok: true,
+  });
   assert.deepEqual(await keyStore.get(), { key: "fake-value-for-tests", origin: null });
   const after = (await handlers[CHANNELS.getSettings](undefined)) as any;
   assert.equal(after.online.hasKey, true);
   assert.ok(!JSON.stringify(after).includes("fake-value-for-tests"));
 
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "" }), {
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "", baseUrl: "" }), {
     ok: false,
     message: "That doesn't look like a key.",
   });
-  const short = (await handlers[CHANNELS.setKey]({ key: "short" })) as any;
+  // The address on screen is required, and must be a short string.
+  for (const payload of [
+    { key: "fake-value-for-tests" },
+    { key: "fake-value-for-tests", baseUrl: 5 },
+    { key: "fake-value-for-tests", baseUrl: "x".repeat(501) },
+  ]) {
+    assert.deepEqual(await handlers[CHANNELS.setKey](payload), {
+      ok: false,
+      message: "That doesn't look like a key.",
+    });
+  }
+  const short = (await handlers[CHANNELS.setKey]({ key: "short", baseUrl: "" })) as any;
   assert.equal(short.ok, false);
   assert.deepEqual(await handlers[CHANNELS.clearKey](undefined), { ok: true });
   assert.equal(await keyStore.get(), null);
@@ -87,7 +100,7 @@ test("changing the online service's address removes the saved key and says so", 
     handlers[CHANNELS.saveSettings]({ ...base, online: { baseUrl, model } });
 
   // A key set before the first address is saved is kept: there was no earlier service.
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" });
   assert.deepEqual(await save("https://service.example/v1"), { ok: true });
   assert.equal(await keyStore.has(), true);
   // The same service with a different path, trailing slash or model keeps the key.
@@ -102,16 +115,57 @@ test("changing the online service's address removes the saved key and says so", 
   // With no key saved there is nothing to remove and no message.
   assert.deepEqual(await save("https://third.example/v1"), { ok: true });
   // A different port is a different service; so is clearing the address.
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "https://third.example/v1" });
+  assert.equal(await keyStore.has(), true);
   assert.equal(((await save("https://third.example:8443/v1")) as any).ok, true);
   assert.equal(await keyStore.has(), false);
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "https://third.example:8443" });
+  assert.equal(await keyStore.has(), true);
   await save("");
   assert.equal(await keyStore.has(), false);
   // A refused save changes nothing.
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" });
+  assert.equal(await keyStore.has(), true);
   assert.equal(((await handlers[CHANNELS.saveSettings]({ brain: "elsewhere" })) as any).ok, false);
   assert.equal(await keyStore.has(), true);
+});
+
+test("Save key only saves for the address that is saved, not one typed but not yet saved", async (t) => {
+  const { handlers, keyStore } = await setup(t);
+  const base = (await handlers[CHANNELS.getSettings](undefined)) as any;
+  const save = (baseUrl: string) =>
+    handlers[CHANNELS.saveSettings]({ ...base, online: { baseUrl, model: "m" } });
+  const setKey = (baseUrl: string) => handlers[CHANNELS.setKey]({ key: "fake-key-for-service-b", baseUrl });
+  const refused = { ok: false, message: SAVE_SETTINGS_FIRST };
+
+  // Service A is saved; the user types service B's address and B's key and presses Save key.
+  assert.deepEqual(await save("https://a.example/v1"), { ok: true });
+  assert.deepEqual(await setKey("https://b.example/v1"), refused);
+  assert.equal(await keyStore.get(), null, "nothing is stored for A");
+  // An address typed with nothing saved yet is refused too, and so is an empty field while one is saved.
+  assert.deepEqual(await setKey(""), refused);
+  assert.equal(await keyStore.get(), null);
+
+  // After Save settings for B, the same key is saved, and tied to B.
+  assert.deepEqual(await save("https://b.example/v1"), { ok: true });
+  assert.deepEqual(await setKey("  https://b.example/  "), { ok: true });
+  assert.deepEqual(await keyStore.get(), { key: "fake-key-for-service-b", origin: "https://b.example" });
+});
+
+test("Save key with no address saved and none typed keeps the key for the first address saved", async (t) => {
+  const { handlers, keyStore } = await setup(t);
+  assert.deepEqual(
+    await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "https://a.example" }),
+    {
+      ok: false,
+      message: SAVE_SETTINGS_FIRST,
+    },
+  );
+  assert.equal(await keyStore.get(), null);
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" }), {
+    ok: true,
+  });
+  assert.deepEqual(await keyStore.get(), { key: "fake-value-for-tests", origin: null });
 });
 
 test("notices are handed to the window once each", async (t) => {

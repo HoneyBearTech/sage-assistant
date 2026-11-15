@@ -44,7 +44,11 @@ function deferred<T>() {
 
 const settled = () => new Promise((resolve) => setImmediate(resolve));
 
-async function startWindow(t: TestContext, send: (text: string) => Promise<string>) {
+async function startWindow(
+  t: TestContext,
+  send: (text: string) => Promise<string>,
+  overrides: Partial<SageApi> = {},
+) {
   // The notice poll's timer is mocked, so it never fires by itself and nothing is left running.
   t.mock.timers.enable({ apis: ["setInterval"] });
   const calls = { send: [] as string[], getSettings: 0, reset: 0 };
@@ -76,6 +80,7 @@ async function startWindow(t: TestContext, send: (text: string) => Promise<strin
     chooseFolder: async () => null,
     chooseApp: async () => null,
     takeNotices: async () => [],
+    ...overrides,
   };
   const elements = installFakeDom(ids, api);
   t.after(removeFakeDom);
@@ -135,6 +140,25 @@ test("in the real window script, unsaved settings survive saving the key and swi
   assert.equal(el("local-model").value, "typed but not saved");
   assert.match(el("key-status").textContent, /A key is saved/);
   assert.equal(el("online-key").value, "", "the key field is emptied");
+});
+
+test("Save key sends the address on screen with the key, and shows a refusal", async (t) => {
+  const sent: [string, string][] = [];
+  const { el } = await startWindow(t, async () => "", {
+    setKey: async (key, baseUrl) => {
+      sent.push([key, baseUrl]);
+      return { ok: false, message: "Save settings first, then save the key." };
+    },
+  });
+  el("tab-settings").click();
+  el("online-url").value = "https://b.example/v1";
+  el("online-key").value = "fake-key-for-service-b";
+  el("save-key").click();
+  await settled();
+  assert.deepEqual(sent, [["fake-key-for-service-b", "https://b.example/v1"]]);
+  assert.equal(el("settings-status").textContent, "Key not saved: Save settings first, then save the key.");
+  assert.equal(el("online-key").value, "", "the key field is emptied either way");
+  assert.doesNotMatch(el("key-status").textContent, /A key is saved/);
 });
 
 test("settings are loaded at startup and after a successful save, and save messages are shown", () => {
