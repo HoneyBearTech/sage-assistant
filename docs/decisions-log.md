@@ -41,7 +41,7 @@ desktop assistant that runs on a Windows PC, installs as its own app, and runs f
 - **Search:** DuckDuckGo's HTML page, with no key. The source can be swapped, and results are untrusted
   text.
 - **No GitHub workflows from the team:** the checks run locally with `npm run verify`. Ready-to-paste
-  workflow text is in `docs/github-checks-to-add.md`.
+  workflow text is in `docs/github-checks.md`.
 - **Order of the next jobs:** Windows installer, then voice, then first-run setup.
 
 **Review:**

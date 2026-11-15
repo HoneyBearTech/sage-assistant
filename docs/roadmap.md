@@ -31,12 +31,13 @@ later, and what Sage will not do.
   - [x] Deleting a reminder withdraws it from the window queue.
 - [ ] **Minor:** re-collect window notices before showing them when Chat opens. This stops a just-deleted
       reminder from showing once (see the decisions log).
-- [ ] **Maintainer setup on GitHub:** add the checks from [the checks to add](github-checks-to-add.md),
-      turn on private vulnerability reporting (SECURITY.md relies on it), and run the
-      [Windows checklist](windows-checklist.md) on a Windows PC.
+- [ ] **Maintainer setup on GitHub:**
+  - [x] add the checks ([the GitHub checks](github-checks.md));
+  - [x] turn on private vulnerability reporting (SECURITY.md relies on it);
+  - [ ] run the [Windows checklist](windows-checklist.md) on a Windows PC.
 - [ ] **Windows one-click installer.** A build that produces a checksummed installer on GitHub
       Releases, with the fuses set. It needs a GitHub workflow that the maintainer adds; the
-      ready-to-paste text comes with the job. Starts with [the checks to add](github-checks-to-add.md).
+      ready-to-paste text comes with the job. Starts with [the GitHub checks](github-checks.md).
       Also test the two fuses that `src/main/fuses-config.ts` doesn't set yet, and add them if the
       packaged app still works: `GrantFileProtocolExtraPrivileges` off (the window loads from
       `file://`, so check it still loads its script and styles) and `EnableCookieEncryption` on.
