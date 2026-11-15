@@ -30,7 +30,10 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 - [ ] Turn notifications off for Sage (Settings → System → Notifications) and set another reminder for
       two minutes: within about two and a half minutes it appears in Sage's chat as a notice instead.
       Set one more for two minutes and close Sage straight away; start Sage again after three minutes:
-      the reminder appears then. Turn notifications back on.
+      the reminder appears then, once. Close Sage and start it again: it doesn't appear a second time.
+- [ ] With notifications still off, set a reminder for two minutes and, before it is due, say "Delete
+      the reminder" for it and choose **Allow**: nothing appears in the chat at the due time, nor after
+      a restart. Turn notifications back on.
 - [ ] "Delete the Shopping note": a confirmation box says *Delete the note "Shopping". This can't be
       undone.* Choose **Don't allow**: the note is still there. Ask again and choose **Allow**: it is gone.
 - [ ] Ask "Make a note called Later: test", and choose **New chat** while it still says *Thinking…*: the
@@ -59,7 +62,11 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 ## The online key
 
 - [ ] In Settings, choose the online brain, enter an address and model, paste a test key, and choose
-      **Save key**. The key field empties and the status says a key is saved.
+      **Save key** before **Save settings**: the status says "Key not saved: Save settings first, then
+      save the key." and no `online-key.bin` exists. Choose **Save settings**, paste the key again and
+      choose **Save key**: the key field empties and the status says a key is saved.
+- [ ] Type a different service's address without saving, paste a test key and choose **Save key**: it
+      is refused with the same message, and the saved key is unchanged. Put the saved address back.
 - [ ] Open `%APPDATA%\sage-assistant\settings.json` in Notepad: the key is not in it.
 - [ ] Open `%APPDATA%\sage-assistant\online-key.bin` in Notepad: it is unreadable (encrypted), and the key
       can't be found in it with Ctrl+F.

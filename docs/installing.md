@@ -102,14 +102,18 @@ If you'd rather use an online model service that offers the chat-completions for
 1. In Settings, choose **An online model service**.
 2. Enter the service's address (for example `https://api.example.com`; Sage adds `/v1/chat/completions`)
    and the model name the service gives you.
-3. Paste your key into **Online service key** and choose **Save key**. Sage encrypts it with your system's
+3. Choose **Save settings**.
+4. Paste your key into **Online service key** and choose **Save key**. Sage encrypts it with your system's
    protection and never shows it again. **Remove key** deletes it.
-4. Choose **Save settings**.
+
+Save the address before the key. If the address on screen isn't the one saved yet, Sage doesn't save
+the key and says "Save settings first, then save the key." This way a key is always tied to the
+service you typed it for.
 
 If you later change the address to a different service (a different host or port), Sage removes the
 saved key when you save, so a key is never sent to a service it wasn't entered for. Paste the new
-service's key and choose **Save key** again. A key you save before any address belongs to the first
-address you save. If Sage is answering while you change the brain or the service, that answer stops;
+service's key and choose **Save key** again. A key you save while no address is saved and the address
+box is empty belongs to the first address you save. If Sage is answering while you change the brain or the service, that answer stops;
 ask again.
 
 With an online brain, everything you type, and what Sage reads for you during the conversation (search

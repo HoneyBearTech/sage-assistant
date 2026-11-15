@@ -14,7 +14,8 @@ All notable changes to Sage are documented here. The format follows
   in plain words.
 - **Skills**: answer, web search (DuckDuckGo's HTML page, no key), notes (list, read, add), reminders (list,
   add, with a desktop notification when due, or a message in the window if a notification can't be shown; a
-  reminder that wasn't seen comes back on the next check or start),
+  reminder counts as seen only once the window confirms it is on screen, and one that wasn't seen comes back
+  on the next check or start, once; a deleted reminder is taken out of the window's queue and never appears),
   open an app from your list, open a document, picture, sound or video file in an approved folder, and
   delete a note or reminder.
 - **Plain-English notices in the window** when a settings, notes or reminders file couldn't be read: the
@@ -33,7 +34,9 @@ All notable changes to Sage are documented here. The format follows
 - **The online key is encrypted** with the operating system's protection (Electron safeStorage) and never
   written to settings, logs, the action log or the chat. A key repeated in a service's reply is replaced
   with `[redacted]`. The key is tied to the service it was entered for and only ever sent there: changing
-  the service's address removes it, and a reply still in progress for the old service is stopped.
+  the service's address removes it, and a reply still in progress for the old service is stopped. **Save key**
+  works only for the address that is saved: with a new address typed but not saved, it asks you to save the
+  settings first.
 - **A locked-down window**: sandboxed, context-isolated, no Node access, a strict Content-Security-Policy,
   only local files, no navigation or pop-ups, and the microphone as the only permission it can be given. A
   script to set Electron's hardening fuses on the packaged app.

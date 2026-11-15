@@ -42,7 +42,7 @@ strike them through with a reason.
 | `src/core/skills/` | The skill registry, the built-in skills, the ask-first `ApprovalGate`, the untrusted-text wrapper and the JSONL action log. |
 | `src/core/assistant.ts` | One conversation: sends messages to the brain, runs tool calls through the registry, caps calls per turn. |
 | `src/core/notes.ts`, `reminders.ts`, `scheduler.ts` | Notes and reminders as atomic JSON files in `userData`; the reminder scheduler with an injectable clock, which marks a reminder shown only after the notifier confirms it. |
-| `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside), delivered when the window collects them; the desktop notification, which reports only a confirmed show. |
+| `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside), delivered only when the window confirms it has shown them (`ackNotices`); the desktop notification, which reports only a confirmed show. |
 | `src/core/search/` | `SearchProvider` and the DuckDuckGo HTML provider with a small dependency-free parser. |
 | `src/core/settings.ts`, `keystore.ts` | Settings JSON (no secrets) and the `KeyStore` (encrypted file via an `Encryptor`). |
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
