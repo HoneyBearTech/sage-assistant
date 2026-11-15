@@ -25,10 +25,12 @@ later, and what Sage will not do.
 
 ## Next
 
-- [ ] **Open items from the foundation review** (see [the decisions log](decisions-log.md)):
-  - Save key must use the address on screen, or ask for Save settings first.
-  - A reminder shown in the window counts as shown only after the window confirms it.
-  - Deleting a reminder withdraws it from the window queue.
+- [x] **Open items from the foundation review** (see [the decisions log](decisions-log.md)):
+  - [x] Save key must use the address on screen, or ask for Save settings first.
+  - [x] A reminder shown in the window counts as shown only after the window confirms it.
+  - [x] Deleting a reminder withdraws it from the window queue.
+- [ ] **Minor:** re-collect window notices before showing them when Chat opens. This stops a just-deleted
+      reminder from showing once (see the decisions log).
 - [ ] **Maintainer setup on GitHub:** add the checks from [the checks to add](github-checks-to-add.md),
       turn on private vulnerability reporting (SECURITY.md relies on it), and run the
       [Windows checklist](windows-checklist.md) on a Windows PC.

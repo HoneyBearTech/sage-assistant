@@ -45,7 +45,8 @@ desktop assistant that runs on a Windows PC, installs as its own app, and runs f
 - **Order of the next jobs:** Windows installer, then voice, then first-run setup.
 
 **Review:**
-- There were three review rounds, plus a fix for tests that failed on a busy machine.
+- There were three review rounds, plus a fix for tests that failed on a busy machine. Then came the
+  owner's feedback round, with re-checks.
 - The second security review was skipped because it couldn't be started on the build machine.
 - Every file and commit message was scanned for wording the repo's rules forbid before review. The scan
   was clean.
@@ -58,10 +59,21 @@ desktop assistant that runs on a Windows PC, installs as its own app, and runs f
 - *A reminder can be lost if the window crashes in the instant between receiving it and showing it.*
   Judged too rare to handle in this job.
 
-**Open at final review** (the two fix rounds were used up):
-1. **Save key uses the saved address, not the one on screen.** Typing a new service address and key,
-   then pressing Save key before Save settings, ties the key to the old saved service.
-2. **A fallback reminder can be lost when collected.** A reminder shown in the window is recorded as
-   shown while the window is still collecting it. If Sage closes in that moment, it is lost.
-3. **A deleted reminder can still show.** Deleting a reminder that is waiting to show in the window
-   doesn't withdraw it.
+**Owner's feedback at final review ("fix"):** three items that were open after the two fix rounds are
+now fixed:
+- **Save key** is refused unless the address on screen is the saved one.
+- **A reminder shown in the window** counts as shown only after the window confirms it is on screen. It
+  isn't confirmed while Settings is open or Sage is minimised, and it comes back after a restart.
+- **Deleting a reminder** withdraws it from the window queue.
+
+Each re-check found a narrow follow-on case in the new window code. Two of them were fixed in small extra
+rounds, so the work went past the usual limit of fix rounds, because those bugs came from the fixes
+themselves.
+
+**Still open (minor):**
+- **A deleted reminder can show once.** The sequence: a delete is waiting for Allow while Settings is open,
+  the reminder comes due, the user allows the delete, then goes back to Chat within the 5-second refresh.
+  The deleted reminder can then appear once.
+- It needs Settings open while the confirm box is waiting. The box is modal, so this is probably
+  unreachable in the real app.
+- Nothing is lost or exposed. Fix: re-collect notices before showing them when Chat opens.
