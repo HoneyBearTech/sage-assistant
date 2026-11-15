@@ -107,3 +107,13 @@ test("gives up with a clear message when the runner is too slow", async (t) => {
   const reply = await new LocalBrain({ model: "m", port: server.port, timeoutMs: 50 }).chat([], tools);
   assert.deepEqual(reply, { ok: false, message: "The local model took too long to answer. Try again." });
 });
+
+test("drops a model's <think> reasoning from the reply", async (t) => {
+  const server = await fakeServer(t, (_req, res) =>
+    json(res, 200, {
+      message: { role: "assistant", content: "<think>\nhmm, maybe\n</think>\n\nIt is sunny." },
+    }),
+  );
+  const reply = await new LocalBrain({ model: "m", port: server.port }).chat([], tools);
+  assert.deepEqual(reply, { ok: true, content: "It is sunny.", toolCalls: [] });
+});

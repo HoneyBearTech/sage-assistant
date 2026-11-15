@@ -7,6 +7,7 @@ import {
   type FetchLike,
   isTimeout,
   parseArgs,
+  stripThinking,
   type ToolSpec,
 } from "./brain.js";
 
@@ -102,7 +103,7 @@ export class LocalBrain implements Brain {
     const message = parsed.data.message;
     return {
       ok: true,
-      content: message.content ?? "",
+      content: stripThinking(message.content ?? ""),
       toolCalls: (message.tool_calls ?? []).map((call) => ({
         id: randomUUID(),
         name: call.function.name,

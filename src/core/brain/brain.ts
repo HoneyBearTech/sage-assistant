@@ -59,3 +59,8 @@ export function parseArgs(raw: unknown): unknown {
     return raw;
   }
 }
+
+/** Some local models put their private reasoning in the reply between <think> tags; drop it. */
+export function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
