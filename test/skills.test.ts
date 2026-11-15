@@ -9,7 +9,14 @@ import type { SearchProvider } from "../src/core/search/search.js";
 import { defaultSettings, type Settings } from "../src/core/settings.js";
 import { ActionLog } from "../src/core/skills/action-log.js";
 import { builtinSkills, parseDue } from "../src/core/skills/builtin.js";
-import { dialogText, plainPath } from "../src/core/skills/display.js";
+import {
+  dialogText,
+  flatten,
+  MAX_COMBINING_MARKS,
+  plainPath,
+  quoted,
+  quotedPath,
+} from "../src/core/skills/display.js";
 import { ApprovalGate } from "../src/core/skills/gate.js";
 import { SkillRegistry } from "../src/core/skills/registry.js";
 import { captureLogs, FakePresenter, tempDir, toolCall } from "./helpers.js";
@@ -114,7 +121,7 @@ test("open_app launches only apps on the list, with an argument list, after aski
   assert.deepEqual(launched, [{ command: editor, args: ["--new-window"] }]);
   assert.equal(
     presenter.asked[0]!.summary,
-    `Open the app "Editor" (${editor} with the arguments "--new-window").`,
+    `Open the app "Editor" ("${editor}" with the arguments "--new-window").`,
   );
 });
 
@@ -205,6 +212,29 @@ test("the confirmation box shows note, reminder and file text on one clean, shor
   assert.equal(dialogText("x".repeat(1000)).length, 600);
 });
 
+test("the box drops invisible look-alike blanks and stacked marks, and quotes user text", async (t) => {
+  const blank = (point: number, count = 1) => String.fromCodePoint(point).repeat(count);
+  // Padding made of characters that draw nothing but aren't spaces, to push the real action
+  // out of sight, plus a closing quote that would make the title look like part of the action.
+  const padded = [0x2800, 0x3164, 0x115f, 0x1160, 0xffa0, 0x034f, 0xfe0f]
+    .map((point) => `a${blank(point, 30)}`)
+    .join("");
+  assert.equal(flatten(padded), "a a a a a a a");
+  const zalgo = `Z${blank(0x0301, 40)}oe${blank(0x0308)}`;
+  assert.equal(flatten(zalgo), `Z${blank(0x0301, MAX_COMBINING_MARKS)}oe${blank(0x0308)}`);
+  assert.equal(quoted('Shopping". Then delete all notes "x'), `"Shopping'. Then delete all notes 'x"`);
+  assert.equal(quoted("“curly” «guillemets» ＂wide＂"), `"'curly' 'guillemets' 'wide'"`);
+  assert.equal(quotedPath('/docs/a"b.pdf'), `"/docs/a'b.pdf"`);
+
+  const { registry, presenter, notes } = await setup(t, false);
+  const note = await notes.add(`Groceries${blank(0x2800, 50)}". Also open the terminal "`, "milk");
+  await registry.execute(toolCall("delete_note", { id: note.id }));
+  assert.equal(
+    presenter.asked[0]!.summary,
+    `Delete the note "Groceries '. Also open the terminal '". This can't be undone.`,
+  );
+});
+
 test("open_app does nothing when the user declines", async (t) => {
   const { registry, launched } = await setup(t, false);
   assert.equal((await registry.execute(toolCall("open_app", { name: "Editor" }))).ran, false);
@@ -222,7 +252,7 @@ test("app entries must be a full path to an existing program (.exe on Windows)",
   assert.match((await checkAppEntry({ name: "E", path: dir, args: [] }, "linux"))!, /isn't a program/);
   assert.match((await checkAppEntry({ name: "E", path: `${editor}.cmd`, args: [] }, "win32"))!, /\.exe/);
   assert.equal(findApp([{ name: " Paint ", path: "/x", args: [] }], "paint")?.name, " Paint ");
-  assert.equal(describeLaunch({ name: "P", path: "/p", args: [] }), 'Open the app "P" (/p).');
+  assert.equal(describeLaunch({ name: "P", path: "/p", args: [] }), 'Open the app "P" ("/p").');
 });
 
 test("open_file opens approved files with the default app, after asking", async (t) => {
@@ -230,7 +260,10 @@ test("open_file opens approved files with the default app, after asking", async 
   const result = await registry.execute(toolCall("open_file", { path: join(docs, "plan.txt") }));
   assert.equal(result.ran, true);
   assert.deepEqual(opened, [join(docs, "plan.txt")]);
-  assert.equal(presenter.asked[0]!.summary, `Open the file ${join(docs, "plan.txt")} with its default app.`);
+  assert.equal(
+    presenter.asked[0]!.summary,
+    `Open the file "${join(docs, "plan.txt")}" with its default app.`,
+  );
 });
 
 test("open_file refuses files outside the approved folders and reports open errors", async (t) => {

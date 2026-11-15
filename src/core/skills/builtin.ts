@@ -5,7 +5,7 @@ import { MAX_NOTE_TEXT, MAX_NOTE_TITLE, type NotesStore } from "../notes.js";
 import { MAX_REMINDER_TEXT, type RemindersStore } from "../reminders.js";
 import type { SearchProvider } from "../search/search.js";
 import type { Settings } from "../settings.js";
-import { plainPath, plainText } from "./display.js";
+import { plainPath, plainText, quoted, quotedPath } from "./display.js";
 import { defineSkill, NotWanted, type Skill } from "./registry.js";
 
 /** Opens a file with its default app. In the app: Electron shell.openPath (returns "" on success). */
@@ -103,7 +103,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       prepare: async (args) => {
         const note = await deps.notes.get(args.id);
         if (!note) return { ok: false, message: `There's no note with the id ${args.id}.` };
-        return { ok: true, summary: `Delete the note "${plainText(note.title)}". This can't be undone.` };
+        return { ok: true, summary: `Delete the note ${quoted(note.title)}. This can't be undone.` };
       },
       run: async (args) => {
         const removed = await deps.notes.remove(args.id);
@@ -162,7 +162,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
         if (!reminder) return { ok: false, message: `There's no reminder with the id ${args.id}.` };
         return {
           ok: true,
-          summary: `Delete the reminder "${plainText(reminder.text)}" (due ${when(reminder.due)}).`,
+          summary: `Delete the reminder ${quoted(reminder.text)} (due ${when(reminder.due)}).`,
         };
       },
       run: async (args) => {
@@ -214,7 +214,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
         if (!check.ok) return check;
         return {
           ok: true,
-          summary: `Open the file ${plainPath(check.path)} with its default app.`,
+          summary: `Open the file ${quotedPath(check.path)} with its default app.`,
           action: { path: check.path },
         };
       },
