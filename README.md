@@ -24,7 +24,7 @@ Its "brain" (the model that understands you and writes the replies) is your choi
 | Answer | Replies in plain words | No |
 | Web search | Searches the web (DuckDuckGo, no key needed) and reads the results | No |
 | Notes | Lists, reads and adds notes | No |
-| Reminders | Lists and adds reminders; a desktop notification pops up when one is due | No |
+| Reminders | Lists and adds reminders; a desktop notification pops up when one is due (while Sage is open; one missed while it was closed pops up when it next starts) | No |
 | Open an app | Opens an app **from the list you set up** in Settings | **Yes, every time** |
 | Open a file | Opens a file **inside a folder you approved** in Settings, with its default app | **Yes, every time** |
 | Delete a note or reminder | Deletes it | **Yes, every time** |

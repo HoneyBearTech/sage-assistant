@@ -106,3 +106,18 @@ one, so nothing is lost silently. The chat history is kept in memory only and is
 | Hardening | @electron/fuses 2.1.3 | Switches off Node entry points in the packaged app. |
 
 There are no vendor SDKs: both brains and the search use `fetch`.
+
+## Packaging notes (for the installer job)
+
+- `npm run build` writes everything the app needs into `dist/`: `main.cjs`, `preload.cjs` and
+  `renderer/` (`index.html`, `styles.css`, `renderer.js`). `package.json`'s `main` points at
+  `dist/main.cjs`. The packaged app needs `dist/` and `package.json`, and zod is bundled into
+  `main.cjs`, so no `node_modules` are needed at run time.
+- After packaging the app into an ASAR archive, run `npm run fuses -- <path to the packaged Sage
+  executable>` to set the fuses in `src/main/fuses-config.ts` (RunAsNode off, `NODE_OPTIONS` off,
+  inspect arguments off, ASAR integrity validation on, load only from ASAR). The ASAR integrity hash must
+  be embedded by the packager for the integrity fuse to pass. Never run the script on
+  `node_modules/electron`: the script refuses that path, because "only load from ASAR" would stop
+  `npm start` from working.
+- Reminders fire only while Sage is running; the scheduler checks every 15 seconds and fires reminders
+  missed while it was closed on the first check after it starts.
