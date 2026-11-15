@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":pinAllExceptPeerDependencies"],
   "timezone": "America/Chicago",
   "schedule": ["before 6am on monday"],
   "labels": ["dependencies"],
@@ -10,13 +10,18 @@
     "labels": ["security"],
     "schedule": ["at any time"]
   },
-  "rangeStrategy": "pin",
   "enabledManagers": ["npm", "github-actions"],
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 6am on the first day of the month"]
   },
   "packageRules": [
+    {
+      "description": "A just-published npm release isn't proposed for 3 days. Vulnerability-alert pull requests are exempt (Renovate's default for them is no wait).",
+      "matchManagers": ["npm"],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
     {
       "description": "Small action updates (minor, patch and moved-tag digest updates) come in one pull request.",
       "matchManagers": ["github-actions"],
