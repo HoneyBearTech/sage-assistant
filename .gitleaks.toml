@@ -1,0 +1,13 @@
+# gitleaks settings for `npm run secret-scan`: the default rules, without the folders that hold
+# downloaded or generated files.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Installed packages and build output"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\.git/''',
+]
