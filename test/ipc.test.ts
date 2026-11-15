@@ -78,6 +78,40 @@ test("settings go out without the key, and come back validated", async (t) => {
   assert.equal(await handlers[CHANNELS.chooseApp](undefined), null);
 });
 
+test("changing the online service's address removes the saved key and says so", async (t) => {
+  const { handlers, keyStore } = await setup(t);
+  const base = (await handlers[CHANNELS.getSettings](undefined)) as any;
+  const save = (baseUrl: string, model = "m") =>
+    handlers[CHANNELS.saveSettings]({ ...base, online: { baseUrl, model } });
+
+  // A key set before the first address is saved is kept: there was no earlier service.
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  assert.deepEqual(await save("https://service.example/v1"), { ok: true });
+  assert.equal(await keyStore.has(), true);
+  // The same service with a different path, trailing slash or model keeps the key.
+  assert.deepEqual(await save("https://service.example/", "other"), { ok: true });
+  assert.equal(await keyStore.has(), true);
+
+  const moved = (await save("https://elsewhere.example/v1")) as any;
+  assert.equal(moved.ok, true);
+  assert.match(moved.message, /saved key was removed\. Enter the key for the new service again\./);
+  assert.equal(await keyStore.has(), false);
+
+  // With no key saved there is nothing to remove and no message.
+  assert.deepEqual(await save("https://third.example/v1"), { ok: true });
+  // A different port is a different service; so is clearing the address.
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  assert.equal(((await save("https://third.example:8443/v1")) as any).ok, true);
+  assert.equal(await keyStore.has(), false);
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  await save("");
+  assert.equal(await keyStore.has(), false);
+  // A refused save changes nothing.
+  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" });
+  assert.equal(((await handlers[CHANNELS.saveSettings]({ brain: "elsewhere" })) as any).ok, false);
+  assert.equal(await keyStore.has(), true);
+});
+
 test("notices are handed to the window once each", async (t) => {
   const { handlers, sage } = await setup(t);
   assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);

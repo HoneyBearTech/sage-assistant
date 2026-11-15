@@ -90,7 +90,8 @@ function show(view: "chat" | "settings"): void {
     tabs[name].classList.toggle("active", name === view);
     tabs[name].setAttribute("aria-pressed", String(name === view));
   }
-  if (view === "settings") void loadSettings();
+  // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
+  // startup and again after each successful save.
 }
 tabs.chat.addEventListener("click", () => show("chat"));
 tabs.settings.addEventListener("click", () => show("settings"));
@@ -153,16 +154,29 @@ function render(): void {
   localModel.value = settings.local.model;
   onlineUrl.value = settings.online.baseUrl;
   onlineModel.value = settings.online.model;
+  renderKeyStatus();
+  brainStatus.textContent = describeBrain(settings);
+  renderLists();
+}
+
+function renderKeyStatus(): void {
+  if (!settings) return;
   keyStatus.textContent = settings.online.hasKey
     ? "A key is saved, encrypted by your system. It is never shown again."
     : "No key saved.";
-  brainStatus.textContent = describeBrain(settings);
-  renderLists();
 }
 
 async function loadSettings(): Promise<void> {
   settings = await sage.getSettings();
   render();
+}
+
+/** After saving or removing the key: updates only the key line, so unsaved form changes stay. */
+async function refreshKeyStatus(): Promise<void> {
+  const latest = await sage.getSettings();
+  if (!settings) return;
+  settings.online.hasKey = latest.online.hasKey;
+  renderKeyStatus();
 }
 
 form.addEventListener("submit", (event) => {
@@ -181,8 +195,12 @@ form.addEventListener("submit", (event) => {
       folders: settings.folders,
     })
     .then(async (result) => {
-      settingsStatus.textContent = result.ok ? "Saved." : `Not saved: ${result.message}`;
-      if (result.ok) await loadSettings();
+      if (!result.ok) {
+        settingsStatus.textContent = `Not saved: ${result.message}`;
+        return;
+      }
+      settingsStatus.textContent = result.message ? `Saved. ${result.message}` : "Saved.";
+      await loadSettings();
     });
 });
 
@@ -192,14 +210,14 @@ byId<HTMLButtonElement>("save-key").addEventListener("click", () => {
   if (!key.trim()) return;
   void sage.setKey(key).then(async (result) => {
     settingsStatus.textContent = result.ok ? "Key saved." : `Key not saved: ${result.message}`;
-    await loadSettings();
+    await refreshKeyStatus();
   });
 });
 
 byId<HTMLButtonElement>("clear-key").addEventListener("click", () => {
   void sage.clearKey().then(async () => {
     settingsStatus.textContent = "Key removed.";
-    await loadSettings();
+    await refreshKeyStatus();
   });
 });
 

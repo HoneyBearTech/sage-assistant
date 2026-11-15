@@ -33,7 +33,8 @@ export type SettingsInput = Omit<PublicSettings, "online"> & {
   online: { baseUrl: string; model: string };
 };
 
-export type Result = { ok: true } | { ok: false; message: string };
+/** `message` on success is something the user should know, such as a key that was removed. */
+export type Result = { ok: true; message?: string } | { ok: false; message: string };
 
 export interface SageApi {
   send(text: string): Promise<string>;

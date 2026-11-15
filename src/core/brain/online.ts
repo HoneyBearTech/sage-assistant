@@ -72,6 +72,12 @@ export function completionsUrl(baseUrl: string): string | null {
   return `${url.origin}${path}/v1/chat/completions`;
 }
 
+/** The scheme, host and port the key would be sent to, or null if the base URL isn't usable. */
+export function serviceOrigin(baseUrl: string): string | null {
+  const url = completionsUrl(baseUrl);
+  return url ? new URL(url).origin : null;
+}
+
 export class OnlineBrain implements Brain {
   readonly kind = "online";
   private readonly fetch: FetchLike;

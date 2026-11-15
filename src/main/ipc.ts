@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { serviceOrigin } from "../core/brain/online.js";
 import { describeError } from "../core/log.js";
 import type { Sage } from "../core/sage.js";
 import type { Settings } from "../core/settings.js";
@@ -48,8 +49,21 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.getSettings]: async () =>
       toPublicSettings(await sage.settings.load(), await sage.keyStore.has()),
     [CHANNELS.saveSettings]: async (payload): Promise<Result> => {
+      const before = serviceOrigin((await sage.settings.load()).online.baseUrl);
       const result = await sage.settings.save({ ...(payload as object), version: 1 });
-      return result.ok ? { ok: true } : fail(result.message);
+      if (!result.ok) return fail(result.message);
+      // A saved key belongs to the service it was entered for. If the address now points at a
+      // different service, the key is removed so it is never sent there.
+      const after = serviceOrigin(result.settings.online.baseUrl);
+      if (before !== null && after !== before && (await sage.keyStore.has())) {
+        await sage.keyStore.clear();
+        return {
+          ok: true,
+          message:
+            "The online service's address changed, so the saved key was removed. Enter the key for the new service again.",
+        };
+      }
+      return { ok: true };
     },
     [CHANNELS.setKey]: async (payload): Promise<Result> => {
       const parsed = keyPayload.safeParse(payload);
