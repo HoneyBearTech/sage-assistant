@@ -109,6 +109,15 @@ one more reason to use Node 24.
 - **Bug fixes come with a regression test** that fails without the fix, unless that is impractical, in
   which case the pull request says why.
 - **Security-relevant changes come with a test that proves the protection works.**
+- **Tests use mocked timers or events, never sleeps or real timeouts.** A test that waits for
+  something waits for the event itself (a promise the fake resolves, the scheduler's own queue), and
+  anything on a timer runs on `FakeClock` or node:test's mock timers (`t.mock.timers`). A short
+  real timeout is only acceptable when the outcome is the same however slow the machine is, such as
+  a fake server that never answers. The suite runs its files in parallel, so a test that passes
+  only on an idle machine fails on a busy one.
+- **No free-port tricks.** Don't pick a free port, close it and expect it to stay closed: another
+  test can take it in between. Start a fake server on port 0 and keep it open, or use
+  `REFUSED_PORT` from `test/helpers.ts` for "nothing is listening".
 
 ## Developer Certificate of Origin
 
