@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { test } from "node:test";
-import { isInside, resolveApprovedFile } from "../src/core/files.js";
+import { isAllowedFileName, isInside, resolveApprovedFile } from "../src/core/files.js";
 import { tempDir } from "./helpers.js";
 
 async function layout(t: Parameters<typeof tempDir>[0]) {
@@ -72,8 +72,9 @@ test("rejects relative paths, missing files, folders, programs and bad input", a
     ((await resolveApprovedFile(join(approved, "nope.txt"), [approved])) as any).message,
     /no file/,
   );
+  await mkdir(join(approved, "folder.pdf"));
   assert.match(
-    ((await resolveApprovedFile(join(approved, "sub"), [approved])) as any).message,
+    ((await resolveApprovedFile(join(approved, "folder.pdf"), [approved])) as any).message,
     /isn't a file/,
   );
   assert.match(
@@ -81,6 +82,38 @@ test("rejects relative paths, missing files, folders, programs and bad input", a
     /programs/,
   );
   assert.equal((await resolveApprovedFile(`${approved}/a\0b`, [approved])).ok, false);
+});
+
+test("only documents, pictures, sound and video open; everything else is refused", async (t) => {
+  const { approved } = await layout(t);
+  for (const name of ["a.pdf", "b.DOCX", "c.jpg", "d.mp3", "e.mp4", "f.csv", "g.odt", "h.md"]) {
+    await writeFile(join(approved, name), "x");
+    assert.equal((await resolveApprovedFile(join(approved, name), [approved])).ok, true, name);
+  }
+  for (const name of [
+    "run.ps1",
+    "link.lnk",
+    "page.html",
+    "macro.docm",
+    "script.js",
+    "noextension",
+    "x.url",
+  ]) {
+    await writeFile(join(approved, name), "x");
+    assert.equal((await resolveApprovedFile(join(approved, name), [approved])).ok, false, name);
+  }
+  assert.equal(isAllowedFileName("report.txt."), false, "a trailing dot");
+  assert.equal(isAllowedFileName("report.txt "), false, "a trailing space");
+  assert.equal(isAllowedFileName(".pdf"), false, "a hidden file with no extension");
+  assert.equal(isAllowedFileName("report.txt"), true);
+  assert.equal((await resolveApprovedFile(join(approved, "report.txt."), [approved])).ok, false);
+});
+
+test("a document-named symlink to a program is refused by the real file's type", async (t) => {
+  const { approved } = await layout(t);
+  await symlink(join(approved, "setup.exe"), join(approved, "looks-safe.pdf"));
+  const result = await resolveApprovedFile(join(approved, "looks-safe.pdf"), [approved]);
+  assert.equal(result.ok, false);
 });
 
 test("with no approved folders (or only missing ones) nothing can be opened", async (t) => {

@@ -1,45 +1,49 @@
 import { realpath, stat } from "node:fs/promises";
-import { extname, isAbsolute, relative, resolve } from "node:path";
+import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 
 /**
- * File types that run code when "opened". open_file refuses them even inside an approved
- * folder: opening a document should never start a program.
+ * The only file types open_file will open: documents, pictures, sound and video. Anything else,
+ * including programs, scripts, shortcuts, installers and files with no extension, is refused even
+ * inside an approved folder: opening a document should never start a program.
  */
-export const BLOCKED_EXTENSIONS = new Set([
-  ".exe",
-  ".com",
-  ".bat",
-  ".cmd",
-  ".msi",
-  ".msix",
-  ".msp",
-  ".scr",
-  ".pif",
-  ".cpl",
-  ".lnk",
-  ".url",
-  ".ps1",
-  ".psm1",
-  ".vbs",
-  ".vbe",
-  ".js",
-  ".jse",
-  ".wsf",
-  ".wsh",
-  ".hta",
-  ".jar",
-  ".reg",
-  ".appx",
-  ".appimage",
-  ".sh",
-  ".run",
-  ".desktop",
-  ".deb",
-  ".rpm",
-  ".app",
-  ".scf",
-  ".inf",
-  ".application",
+export const ALLOWED_EXTENSIONS = new Set([
+  // Text and documents
+  ".txt",
+  ".md",
+  ".pdf",
+  ".rtf",
+  ".csv",
+  ".docx",
+  ".xlsx",
+  ".pptx",
+  ".odt",
+  ".ods",
+  ".odp",
+  // Pictures
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".tif",
+  ".tiff",
+  ".heic",
+  // Sound
+  ".mp3",
+  ".wav",
+  ".flac",
+  ".ogg",
+  ".m4a",
+  ".aac",
+  ".opus",
+  // Video
+  ".mp4",
+  ".m4v",
+  ".mkv",
+  ".webm",
+  ".mov",
+  ".avi",
 ]);
 
 export type FileCheck = { ok: true; path: string } | { ok: false; message: string };
@@ -51,14 +55,29 @@ export function isInside(folder: string, child: string): boolean {
 }
 
 /**
+ * True for a file name Sage will open: an allowed extension, and not ending in a dot or a space
+ * (Windows ignores those, so "report.txt." or "x.exe " could open as something else).
+ */
+export function isAllowedFileName(name: string): boolean {
+  if (/[. ]$/.test(name)) return false;
+  return ALLOWED_EXTENSIONS.has(extname(name).toLowerCase());
+}
+
+const NOT_A_DOCUMENT =
+  "Sage only opens documents, pictures, sound and video (for example .pdf, .docx, .txt, .jpg, .mp3, .mp4), never programs, scripts or shortcuts.";
+
+/**
  * Resolves a requested path (following every symlink and "..") and accepts it only if the real
- * file is inside one of the approved folders (also resolved). Returns the real path to open.
+ * file is inside one of the approved folders (also resolved) and is an allowed type. Returns the
+ * real path to open.
  */
 export async function resolveApprovedFile(requested: string, folders: readonly string[]): Promise<FileCheck> {
   if (requested.includes("\0")) return { ok: false, message: "That isn't a valid file path." };
   if (!isAbsolute(requested)) {
     return { ok: false, message: "Give the file's full path, inside one of the approved folders." };
   }
+  // Both the name asked for and the real file it leads to must be allowed types.
+  if (!isAllowedFileName(basename(requested))) return { ok: false, message: NOT_A_DOCUMENT };
   let real: string;
   try {
     real = await realpath(resolve(requested));
@@ -67,9 +86,7 @@ export async function resolveApprovedFile(requested: string, folders: readonly s
   }
   const info = await stat(real);
   if (!info.isFile()) return { ok: false, message: `${requested} isn't a file.` };
-  if (BLOCKED_EXTENSIONS.has(extname(real).toLowerCase())) {
-    return { ok: false, message: "Sage doesn't open programs or scripts, only documents and media." };
-  }
+  if (!isAllowedFileName(basename(real))) return { ok: false, message: NOT_A_DOCUMENT };
   for (const folder of folders) {
     let realFolder: string;
     try {
