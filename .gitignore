@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output and test coverage
+/dist/
+/out/
+/coverage/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+online-key.bin
+
+# Sage's own data, if a copy ever ends up in the repo folder
+settings.json
+notes.json
+reminders.json
+action-log.jsonl
+*.log
+*.log.*
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

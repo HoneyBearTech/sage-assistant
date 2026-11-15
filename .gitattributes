@@ -1,0 +1,19 @@
+# Normalise line endings in the repo; check out with the platform's own.
+* text=auto
+
+# Shell-style files keep LF everywhere; Windows scripts keep CRLF.
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Saved search pages are compared byte for byte by the tests.
+test/fixtures/** -text linguist-vendored
+
+# Binary files
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary
+
+package-lock.json linguist-generated
