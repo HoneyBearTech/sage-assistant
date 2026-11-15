@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { test } from "node:test";
-import { isAllowedFileName, isInside, resolveApprovedFile } from "../src/core/files.js";
+import { hasStreamName, isAllowedFileName, isInside, resolveApprovedFile } from "../src/core/files.js";
 import { tempDir } from "./helpers.js";
 
 async function layout(t: Parameters<typeof tempDir>[0]) {
@@ -107,6 +107,27 @@ test("only documents, pictures, sound and video open; everything else is refused
   assert.equal(isAllowedFileName(".pdf"), false, "a hidden file with no extension");
   assert.equal(isAllowedFileName("report.txt"), true);
   assert.equal((await resolveApprovedFile(join(approved, "report.txt."), [approved])).ok, false);
+});
+
+test("on Windows a ':' after the drive (an alternate data stream) is refused", async (t) => {
+  assert.equal(hasStreamName("C:\\Docs\\report.exe:notes.txt", "win32"), true);
+  assert.equal(hasStreamName("C:\\Docs\\report.txt:hidden", "win32"), true);
+  assert.equal(hasStreamName("C:\\Do:cs\\report.txt", "win32"), true, "in a folder name too");
+  assert.equal(hasStreamName("C:\\Docs\\report.txt", "win32"), false, "the drive letter is fine");
+  assert.equal(hasStreamName("\\\\server\\share\\report.txt", "win32"), false);
+  assert.equal(hasStreamName("/docs/a:b.txt", "linux"), false, "only Windows has streams");
+  const { approved } = await layout(t);
+  // A real file with a colon in its name (legal on Linux) is refused when Sage runs on Windows.
+  await writeFile(join(approved, "notes.exe:readme.txt"), "x");
+  const onWindows = await resolveApprovedFile(join(approved, "notes.exe:readme.txt"), [approved], "win32");
+  assert.deepEqual(onWindows, { ok: false, message: 'Sage doesn\'t open file names with ":" in them.' });
+  assert.equal(
+    (await resolveApprovedFile(join(approved, "notes.exe:readme.txt"), [approved], "linux")).ok,
+    true,
+  );
+  // A link with a plain name whose real file has a colon is refused by the real name.
+  await symlink(join(approved, "notes.exe:readme.txt"), join(approved, "plain.txt"));
+  assert.equal((await resolveApprovedFile(join(approved, "plain.txt"), [approved], "win32")).ok, false);
 });
 
 test("a document-named symlink to a program is refused by the real file's type", async (t) => {

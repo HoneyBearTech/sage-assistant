@@ -210,7 +210,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       risk: "confirm",
       args: z.strictObject({ path: z.string().trim().min(1).max(1000) }),
       prepare: async ({ path }) => {
-        const check = await resolveApprovedFile(path, (await deps.settings()).folders);
+        const check = await resolveApprovedFile(path, (await deps.settings()).folders, deps.platform);
         if (!check.ok) return check;
         return {
           ok: true,
@@ -221,7 +221,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       // Opens exactly the approved real path, after checking it is still an approved file.
       run: async (_args, action, stillWanted) => {
         if (!action) throw new Error("there is no approved file to open");
-        const check = await resolveApprovedFile(action.path, (await deps.settings()).folders);
+        const check = await resolveApprovedFile(action.path, (await deps.settings()).folders, deps.platform);
         if (!check.ok) throw new Error(check.message);
         if (check.path !== action.path) throw new Error("the file changed after it was approved");
         // The checks above awaited; don't open anything for a conversation that was stopped meanwhile.

@@ -63,6 +63,15 @@ export function isAllowedFileName(name: string): boolean {
   return ALLOWED_EXTENSIONS.has(extname(name).toLowerCase());
 }
 
+/**
+ * On Windows a ":" after the drive letter names an alternate data stream ("report.exe:notes.txt"
+ * is a hidden part of report.exe, not a text file), so any path with one is refused there.
+ */
+export function hasStreamName(path: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (platform !== "win32") return false;
+  return path.replace(/^[A-Za-z]:/, "").includes(":");
+}
+
 const NOT_A_DOCUMENT =
   "Sage only opens documents, pictures, sound and video (for example .pdf, .docx, .txt, .jpg, .mp3, .mp4), never programs, scripts or shortcuts.";
 
@@ -71,8 +80,15 @@ const NOT_A_DOCUMENT =
  * file is inside one of the approved folders (also resolved) and is an allowed type. Returns the
  * real path to open.
  */
-export async function resolveApprovedFile(requested: string, folders: readonly string[]): Promise<FileCheck> {
+export async function resolveApprovedFile(
+  requested: string,
+  folders: readonly string[],
+  platform: NodeJS.Platform = process.platform,
+): Promise<FileCheck> {
   if (requested.includes("\0")) return { ok: false, message: "That isn't a valid file path." };
+  if (hasStreamName(requested, platform)) {
+    return { ok: false, message: 'Sage doesn\'t open file names with ":" in them.' };
+  }
   if (!isAbsolute(requested)) {
     return { ok: false, message: "Give the file's full path, inside one of the approved folders." };
   }
@@ -87,6 +103,9 @@ export async function resolveApprovedFile(requested: string, folders: readonly s
   const info = await stat(real);
   if (!info.isFile()) return { ok: false, message: `${requested} isn't a file.` };
   if (!isAllowedFileName(basename(real))) return { ok: false, message: NOT_A_DOCUMENT };
+  if (hasStreamName(real, platform)) {
+    return { ok: false, message: 'Sage doesn\'t open file names with ":" in them.' };
+  }
   for (const folder of folders) {
     let realFolder: string;
     try {
