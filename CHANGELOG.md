@@ -8,6 +8,8 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **Renovate** keeps the npm dependencies and the pinned GitHub Actions current, in weekly pull requests
+  that go through every check; the docs now describe the checks that run on GitHub.
 - **A text-chat assistant that runs from source** on Windows and Linux: `npm install`, then `npm start`.
 - **A switchable brain**: a local model through Ollama on `127.0.0.1` (the default), or an online model
   service that offers the chat-completions format, with your own key. If Ollama isn't running, Sage says so
