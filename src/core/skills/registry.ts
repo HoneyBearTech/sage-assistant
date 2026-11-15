@@ -37,8 +37,19 @@ export interface SkillDefinition<A, P = undefined> {
    * in an approved folder), works out exactly what will be done, and says it in plain words.
    */
   prepare?: (args: A) => Promise<Prepared<P>>;
-  /** For a confirm skill, `action` is the approved action from prepare. */
-  run: (args: A, action: P | undefined) => Promise<SkillOutput>;
+  /**
+   * For a confirm skill, `action` is the approved action from prepare. A run step that awaits
+   * anything before its effect calls `stillWanted()` right before acting, and throws NotWanted if
+   * it returns false.
+   */
+  run: (args: A, action: P | undefined, stillWanted: StillWanted) => Promise<SkillOutput>;
+}
+
+/** Thrown by a run step that finds its conversation was stopped before it acted. */
+export class NotWanted extends Error {
+  constructor() {
+    super("the conversation was stopped before this was done");
+  }
 }
 
 export interface Skill {
@@ -49,10 +60,13 @@ export interface Skill {
   parameters: Record<string, unknown>;
   parse(raw: unknown): { ok: true; args: unknown } | { ok: false; message: string };
   prepare(args: unknown): Promise<Prepared>;
-  run(args: unknown, action?: unknown): Promise<SkillOutput>;
+  run(args: unknown, action?: unknown, stillWanted?: StillWanted): Promise<SkillOutput>;
 }
 
-/** Called between steps; returns false once the conversation the call belongs to was cleared. */
+/**
+ * Called between steps; returns false once the conversation the call belongs to was cleared or
+ * stopped (New chat, or a change of brain settings).
+ */
 export type StillWanted = () => boolean;
 
 export function defineSkill<A, P = undefined>(definition: SkillDefinition<A, P>): Skill {
@@ -78,7 +92,8 @@ export function defineSkill<A, P = undefined>(definition: SkillDefinition<A, P>)
       definition.prepare
         ? definition.prepare(args as A)
         : Promise.resolve({ ok: true, summary: definition.name }),
-    run: (args, action) => definition.run(args as A, action as P | undefined),
+    run: (args, action, stillWanted = () => true) =>
+      definition.run(args as A, action as P | undefined, stillWanted),
   };
 }
 
@@ -86,6 +101,10 @@ export function defineSkill<A, P = undefined>(definition: SkillDefinition<A, P>)
 function approvalSubject(args: unknown, prepared: { summary: string; action?: unknown }): unknown {
   return { args, action: prepared.action ?? null, summary: prepared.summary };
 }
+
+/** The tool result when a call's conversation was cleared or stopped before it acted. */
+export const STOPPED_TEXT =
+  "The conversation was stopped (New chat or a settings change), so this was not done.";
 
 export interface ExecuteResult {
   /** What goes back to the model as the tool result. */
@@ -142,12 +161,21 @@ export class SkillRegistry {
     if (!parsed.ok) {
       return { text: `The arguments for ${skill.name} were not valid:\n${parsed.message}`, ran: false };
     }
-    if (skill.risk === "safe") return this.runSkill(skill, parsed.args, undefined);
+    if (skill.risk === "safe") {
+      if (!stillWanted()) return { text: STOPPED_TEXT, ran: false };
+      return this.runSkill(skill, parsed.args, undefined, stillWanted);
+    }
 
     const first = await skill.prepare(parsed.args);
     if (!first.ok) return { text: first.message, ran: false };
+    // Never show the box for a conversation that is already gone.
+    if (!stillWanted()) return { text: STOPPED_TEXT, ran: false };
     const prepared = { ...first, summary: dialogText(first.summary) };
     const subject = approvalSubject(parsed.args, prepared);
+    const notRun = async (): Promise<ExecuteResult> => {
+      await this.log(call, skill, prepared.summary, "allowed", "not run: the conversation was stopped");
+      return { text: STOPPED_TEXT, ran: false };
+    };
 
     const allowed = await this.gate.ask(call.id, skill.name, subject, prepared.summary);
     if (!allowed) {
@@ -159,8 +187,7 @@ export class SkillRegistry {
     }
     if (!stillWanted()) {
       this.gate.consume(call.id, skill.name, subject);
-      await this.log(call, skill, prepared.summary, "allowed", "not run: the chat was cleared");
-      return { text: "The chat was cleared, so this was not done.", ran: false };
+      return notRun();
     }
     if (!this.gate.consume(call.id, skill.name, subject)) {
       await this.log(call, skill, prepared.summary, "allowed", "blocked: the approval didn't match");
@@ -180,17 +207,27 @@ export class SkillRegistry {
         ran: false,
       };
     }
-    const result = await this.runSkill(skill, parsed.args, prepared.action);
+    // The second check awaited; the conversation may have been stopped meanwhile. Nothing awaits
+    // between here and the run step, which checks again itself before any later await.
+    if (!stillWanted()) return notRun();
+    const result = await this.runSkill(skill, parsed.args, prepared.action, stillWanted);
+    if (result.stopped) return notRun();
     await this.log(call, skill, prepared.summary, "allowed", result.ran ? "done" : "failed");
     return result;
   }
 
-  private async runSkill(skill: Skill, args: unknown, action: unknown): Promise<ExecuteResult> {
+  private async runSkill(
+    skill: Skill,
+    args: unknown,
+    action: unknown,
+    stillWanted: StillWanted,
+  ): Promise<ExecuteResult & { stopped?: true }> {
     try {
-      const output = await skill.run(args, action);
+      const output = await skill.run(args, action, stillWanted);
       const text = skill.untrustedSource ? wrapUntrusted(skill.untrustedSource, output.text) : output.text;
       return output.final ? { text, final: output.text, ran: true } : { text, ran: true };
     } catch (error) {
+      if (error instanceof NotWanted) return { text: STOPPED_TEXT, ran: false, stopped: true };
       this.logger.error(`Skill ${skill.name} failed`, error);
       return { text: `${skill.name} failed: ${describeError(error)}`, ran: false };
     }

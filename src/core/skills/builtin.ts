@@ -6,7 +6,7 @@ import { MAX_REMINDER_TEXT, type RemindersStore } from "../reminders.js";
 import type { SearchProvider } from "../search/search.js";
 import type { Settings } from "../settings.js";
 import { plainPath, plainText } from "./display.js";
-import { defineSkill, type Skill } from "./registry.js";
+import { defineSkill, NotWanted, type Skill } from "./registry.js";
 
 /** Opens a file with its default app. In the app: Electron shell.openPath (returns "" on success). */
 export type PathOpener = (path: string) => Promise<string>;
@@ -219,11 +219,13 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
         };
       },
       // Opens exactly the approved real path, after checking it is still an approved file.
-      run: async (_args, action) => {
+      run: async (_args, action, stillWanted) => {
         if (!action) throw new Error("there is no approved file to open");
         const check = await resolveApprovedFile(action.path, (await deps.settings()).folders);
         if (!check.ok) throw new Error(check.message);
         if (check.path !== action.path) throw new Error("the file changed after it was approved");
+        // The checks above awaited; don't open anything for a conversation that was stopped meanwhile.
+        if (!stillWanted()) throw new NotWanted();
         const error = await deps.openPath(action.path);
         if (error) throw new Error(error);
         return { text: `Opened ${plainPath(action.path)}.` };
