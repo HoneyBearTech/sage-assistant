@@ -34,22 +34,31 @@ function addMessage(role: "user" | "assistant" | "notice", text: string, pending
   return item;
 }
 
+// Goes up on New chat. A reply that arrives for an older chat is ignored: it must not write into
+// the new chat or change the Send button, which belongs to the new chat now.
+let chatGeneration = 0;
+
 async function submit(): Promise<void> {
+  // Enter also submits, so the busy check can't rely on the disabled button alone.
+  if (sendButton.disabled) return;
   const text = input.value.trim();
   if (!text) return;
+  const generation = chatGeneration;
   input.value = "";
   addMessage("user", text);
   const pending = addMessage("assistant", "Thinking…", true);
   sendButton.disabled = true;
+  let reply: string;
   try {
-    pending.textContent = await sage.send(text);
+    reply = await sage.send(text);
   } catch {
-    pending.textContent = "Something went wrong. Try again.";
-  } finally {
-    pending.classList.remove("pending");
-    sendButton.disabled = false;
-    input.focus();
+    reply = "Something went wrong. Try again.";
   }
+  if (generation !== chatGeneration) return;
+  pending.textContent = reply;
+  pending.classList.remove("pending");
+  sendButton.disabled = false;
+  input.focus();
 }
 
 composer.addEventListener("submit", (event) => {
@@ -63,7 +72,19 @@ input.addEventListener("keydown", (event) => {
   }
 });
 byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
-  void sage.resetChat().then(() => messages.replaceChildren());
+  // The old chat's pending reply is abandoned at once; Send comes back when Sage has reset.
+  chatGeneration++;
+  const generation = chatGeneration;
+  messages.replaceChildren();
+  sendButton.disabled = true;
+  void sage
+    .resetChat()
+    .catch(() => undefined)
+    .then(() => {
+      if (generation !== chatGeneration) return;
+      sendButton.disabled = false;
+      input.focus();
+    });
 });
 
 // Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data

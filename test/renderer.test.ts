@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { test } from "node:test";
+import { type TestContext, test } from "node:test";
+import type { PublicSettings, SageApi } from "../src/shared/api.js";
+import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 
-// The window has no DOM in these tests, so these check the renderer's source for the behaviour
-// that matters: unsaved settings aren't thrown away.
+// The first checks read the renderer's source for the behaviour that matters (unsaved settings
+// aren't thrown away); the later ones run the script itself against a fake DOM.
 const source = await readFile(new URL("../src/renderer/renderer.ts", import.meta.url), "utf8");
 
 function body(start: string): string {
@@ -26,6 +28,113 @@ test("saving or removing the key refreshes only the key status", () => {
   const refresh = body("async function refreshKeyStatus(");
   assert.match(refresh, /settings\.online\.hasKey = latest\.online\.hasKey/);
   assert.doesNotMatch(refresh, /render\(\)/);
+});
+
+// The real window script, run against a small fake DOM (test/fake-dom.ts) and a fake window.sage.
+const ids = [...source.matchAll(/byId<\w+>\("([\w-]+)"\)/g)].map((match) => match[1]!);
+let loads = 0;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+async function startWindow(t: TestContext, send: (text: string) => Promise<string>) {
+  // The notice poll's timer is mocked, so it never fires by itself and nothing is left running.
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const calls = { send: [] as string[], getSettings: 0, reset: 0 };
+  const settings: PublicSettings = {
+    brain: "local",
+    local: { model: "small-model" },
+    online: { baseUrl: "", model: "", hasKey: false },
+    apps: [],
+    folders: [],
+  };
+  const api: SageApi = {
+    send: (text) => {
+      calls.send.push(text);
+      return send(text);
+    },
+    resetChat: async () => {
+      calls.reset++;
+    },
+    getSettings: async () => {
+      calls.getSettings++;
+      return structuredClone(settings);
+    },
+    saveSettings: async () => ({ ok: true }),
+    setKey: async () => {
+      settings.online.hasKey = true;
+      return { ok: true };
+    },
+    clearKey: async () => ({ ok: true }),
+    chooseFolder: async () => null,
+    chooseApp: async () => null,
+    takeNotices: async () => [],
+  };
+  const elements = installFakeDom(ids, api);
+  t.after(removeFakeDom);
+  // A fresh copy of the script for each test.
+  await import(`../src/renderer/renderer.ts?window=${++loads}`);
+  await settled();
+  const el = (id: string) => elements.get(id)!;
+  const texts = () => el("messages").children.map((item) => item.textContent);
+  return { el, texts, calls };
+}
+
+test("New chat during a pending reply: Send works again, and the old reply never appears", async (t) => {
+  const first = deferred<string>();
+  const replies = [first.promise, Promise.resolve("fresh answer")];
+  const { el, texts, calls } = await startWindow(t, () => replies.shift()!);
+  el("input").value = "first question";
+  el("composer").dispatch("submit");
+  await settled();
+  assert.equal(el("send").disabled, true);
+  assert.deepEqual(texts(), ["first question", "Thinking…"]);
+
+  // Enter while busy doesn't send a second message.
+  el("input").value = "impatient";
+  el("input").dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["first question"]);
+
+  el("new-chat").click();
+  await settled();
+  assert.equal(calls.reset, 1);
+  assert.deepEqual(texts(), []);
+  assert.equal(el("send").disabled, false, "Send is usable again in the new chat");
+
+  first.resolve("old answer");
+  await settled();
+  assert.deepEqual(texts(), [], "the old chat's reply doesn't land in the new chat");
+  assert.equal(el("send").disabled, false);
+
+  el("input").value = "second question";
+  el("input").dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(texts(), ["second question", "fresh answer"]);
+  assert.equal(el("send").disabled, false);
+});
+
+test("in the real window script, unsaved settings survive saving the key and switching tabs", async (t) => {
+  const { el, calls } = await startWindow(t, async () => "");
+  assert.equal(calls.getSettings, 1, "loaded once at startup");
+  el("tab-settings").click();
+  el("local-model").value = "typed but not saved";
+  el("online-key").value = "fake-value-for-tests";
+  el("save-key").click();
+  await settled();
+  el("tab-chat").click();
+  el("tab-settings").click();
+  await settled();
+  assert.equal(el("local-model").value, "typed but not saved");
+  assert.match(el("key-status").textContent, /A key is saved/);
+  assert.equal(el("online-key").value, "", "the key field is emptied");
 });
 
 test("settings are loaded at startup and after a successful save, and save messages are shown", () => {
