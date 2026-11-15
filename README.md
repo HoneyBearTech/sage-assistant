@@ -95,10 +95,10 @@ Everything lives in Sage's folder in your user profile (Electron's `userData` fo
 
 `npm run verify` runs every check: Biome lint and format, the TypeScript typecheck, the tests with an
 80% line-coverage floor, the public-repo checker and a secret scan (skipped with a message if gitleaks
-isn't installed). `npm run verify` stays the local command. On GitHub, every pull request also gets CI (`npm run verify` on
-Ubuntu and Windows), the DCO check, a secret scan, CodeQL and dependency review, and the OpenSSF Scorecard
-runs on `main` (see [docs/github-checks.md](docs/github-checks.md)). Renovate opens the dependency update
-pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
+isn't installed). On GitHub, every pull request also gets CI (the same command on Ubuntu and Windows),
+the DCO check, a secret scan, CodeQL and dependency review, and the OpenSSF Scorecard runs on `main`
+(see [docs/github-checks.md](docs/github-checks.md)). Renovate opens the dependency update pull
+requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
 
 ## Documentation
 
