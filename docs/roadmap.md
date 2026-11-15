@@ -28,6 +28,9 @@ later, and what Sage will not do.
 - [ ] **Windows one-click installer.** A build that produces a checksummed installer on GitHub
       Releases, with the fuses set. It needs a GitHub workflow that the maintainer adds; the
       ready-to-paste text comes with the job. Starts with [the checks to add](github-checks-to-add.md).
+      Also test the two fuses that `src/main/fuses-config.ts` doesn't set yet, and add them if the
+      packaged app still works: `GrantFileProtocolExtraPrivileges` off (the window loads from
+      `file://`, so check it still loads its script and styles) and `EnableCookieEncryption` on.
 - [ ] **Voice.** Hold a key to talk, offline speech recognition, and spoken replies.
 - [ ] **First-run setup.** Checks that the local model runner is installed, downloads a model, and lets the
       user add an online-service key.

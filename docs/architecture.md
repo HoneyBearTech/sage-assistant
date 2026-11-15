@@ -26,15 +26,17 @@ service: the chat window talks only to the app's own main process, through a han
 | Part | Where | What it does |
 | --- | --- | --- |
 | Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat and the settings screen. Runs sandboxed with no Node access; inserts text only with `textContent`. |
-| Preload | `src/preload/preload.ts` | Exposes `window.sage` with eight typed methods through `contextBridge`; nothing else. |
-| IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). |
+| Preload | `src/preload/preload.ts` | Exposes `window.sage` with nine typed methods through `contextBridge`; nothing else. |
+| IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service. |
+| Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits for the system to confirm it; if notifications aren't supported, fail or aren't confirmed in time, posts it to the window instead. Reports whether it was shown. |
 | Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog, notifications, `shell.openPath`, the app launcher and the encrypted key store. Checks the sender of every IPC call. |
 | Window security | `src/main/security.ts` | The window options, the CSP and the URL and permission rules, as pure functions the tests check. |
-| Assistant | `src/core/assistant.ts` | Sends the conversation and the skill list to the brain, runs the tool calls it returns through the registry, and stops after six tool calls or six rounds per message. |
+| Assistant | `src/core/assistant.ts` | Sends the conversation and the skill list to the brain, runs the tool calls it returns through the registry, and stops after six tool calls or six rounds per message (three each for `add_note` and `add_reminder`). **New chat** abandons a turn in progress: it runs no further tool calls and writes nothing to the history. |
 | Brain | `src/core/brain/` | `LocalBrain` (Ollama's `/api/chat` on `127.0.0.1:11434`) and `OnlineBrain` (`<base>/v1/chat/completions`). Settings pick one for each message. |
 | Skills | `src/core/skills/` | The registry, the eleven built-in skills, the ask-first gate, the untrusted-text wrapper and the action log. |
 | Data stores | `src/core/notes.ts`, `reminders.ts`, `settings.ts`, `keystore.ts` | JSON files written atomically, and the encrypted key file. |
-| Scheduler | `src/core/scheduler.ts` | Checks reminders every 15 seconds and shows a notification for each one that is due, once. |
+| Scheduler | `src/core/scheduler.ts` | Checks reminders every 15 seconds and shows each one that is due, once. A reminder is marked as shown only after the notifier says it was shown; otherwise the next check tries again. |
+| Notices | `src/core/notices.ts` | Messages from Sage itself (reminders shown in the window, data files set aside), collected by the window every 5 seconds and shown in the chat. |
 | Search | `src/core/search/` | The `SearchProvider` interface and the DuckDuckGo HTML provider with its parser. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
 
@@ -67,12 +69,14 @@ service: the chat window talks only to the app's own main process, through a han
    - A **safe** skill runs. If its output comes from outside (web pages, notes), it is wrapped in a
      labelled `<<<UNTRUSTED ... UNTRUSTED>>>` block, with any markers inside it neutralised.
    - A **confirm** skill first runs its `prepare` step, which checks the call is allowed (the app is on
-     the list, the file is in an approved folder, the note exists) and writes one sentence that says
+     the list, the file is in an approved folder, the note exists), works out the exact action (the
+     program path and arguments, or the file's real path) and writes one clean sentence that says
      exactly what will happen. Then the main process shows a native dialog with that sentence and two
      buttons, **Don't allow** (the default) and **Allow**. Only **Allow** creates an approval, tied to
-     that call id and a SHA-256 hash of the skill name and arguments. The registry then uses the approval
-     up (`consume`), checks the call again, and runs the skill. The decision and the outcome are appended
-     to `action-log.jsonl`.
+     that call id and a SHA-256 hash of the skill name, the arguments, the action and the sentence. The
+     registry then uses the approval up (`consume`), runs `prepare` again (it must give the same hash),
+     and runs the skill with the approved action. If the chat was cleared while the box was open,
+     nothing runs. The decision and the outcome are appended to `action-log.jsonl`.
 5. The results go back to the brain, which answers or asks for more tools. The final text is shown in
    the window.
 
@@ -91,7 +95,8 @@ Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Win
 
 JSON files are written atomically (a temporary file in the same folder, flushed, then renamed over the
 old one). A file that can't be read is renamed to `<name>.invalid-<time>` and Sage starts with an empty
-one, so nothing is lost silently. The chat history is kept in memory only and is gone when Sage closes.
+one (or the default settings), so nothing is lost silently, and the window shows a one-time notice
+saying which file it was and where the old copy was kept. The chat history is kept in memory only and is gone when Sage closes.
 
 ## Technology
 

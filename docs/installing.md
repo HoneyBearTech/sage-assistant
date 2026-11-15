@@ -9,10 +9,21 @@ next job (see [the future installer](#the-future-windows-installer) below).
 | --- | --- | --- |
 | [Node.js 24](https://nodejs.org) and npm | about 100 MB | Builds and starts Sage. |
 | git | small | Downloads the source. |
-| Sage's dependencies and Electron's runtime | a few hundred MB | Downloaded by `npm install` and on the first `npm start`. |
+| Sage's dependencies | a few hundred MB | Downloaded by `npm install`. |
+| Electron's runtime | about 100 MB | Downloaded on the first `npm start`, not by `npm install`. |
 | [Ollama](https://ollama.com) and a model | 1.5 to 3 GB for a small model | The local brain. Not needed if you only use an online model service. |
 
 A PC with 8 GB of memory runs a small local model; 16 GB is more comfortable.
+
+### Opening PowerShell or a terminal
+
+The steps below type commands into a command window:
+
+- **Windows:** open the Start menu, type `PowerShell`, and choose **Windows PowerShell** (or **Terminal**
+  on Windows 11). Type each command and press Enter. To paste a command, right-click in the window.
+- **Linux:** open your desktop's **Terminal** app (often Ctrl+Alt+T). To paste, use Ctrl+Shift+V.
+
+Wait for each command to finish (the prompt comes back) before typing the next one.
 
 ## 1. Install Ollama and a small model
 
@@ -57,21 +68,32 @@ npm install
 npm start
 ```
 
-`npm start` builds Sage into `dist/` and opens its window. The first time, it also downloads Electron's
-runtime (about 100 MB); this is checked against the checksums that come with Electron's package.
+`git clone` makes a `sage-assistant` folder inside the folder the window is in (on Windows, usually your
+user folder), and `cd sage-assistant` moves into it. `npm install` downloads Sage's dependencies; it
+takes a minute or two and may print warnings, which are normal unless it ends with an error.
+
+`npm start` builds Sage into `dist/` and opens its window. **The first start takes a while**, from a
+minute to several on a slow connection, because it also downloads Electron's runtime (about 100 MB),
+checked against the checksums that come with Electron's package. Later starts take a few seconds. Leave
+the command window open while you use Sage: closing it closes Sage. To start Sage again later, open
+PowerShell or a terminal, `cd sage-assistant`, and run `npm start`.
 
 ## 4. Set it up
 
 Open **Settings** in Sage's window:
 
 - **Apps Sage may open:** add each app by a name you'll use ("Notepad") and the full path to its program
-  (`C:\Windows\System32\notepad.exe`; on Linux, for example, `/usr/bin/gedit`). **Browse…** opens a file
-  picker. On Windows only `.exe` files work. Sage can only open apps on this list, and asks you first
+  (`C:\Windows\System32\notepad.exe`; on Linux, for example, `/usr/bin/gedit`). Type the name, then
+  either type the path or choose **Browse…**: it opens your system's file picker, and the program you
+  pick fills in the path box. Then choose **Add**. On Windows only `.exe` files work; to find an app's
+  program, right-click its Start menu entry, choose **Open file location**, then right-click the shortcut
+  and choose **Properties** to see its target. Sage can only open apps on this list, and asks you first
   every time.
-- **Folders Sage may open files from:** add the folders you're happy for Sage to open files from, such as
-  your Documents folder. Sage can only open files inside them (not programs or shortcuts), and asks you
-  first every time.
-- Choose **Save settings**.
+- **Folders Sage may open files from:** choose **Browse…** to pick a folder, such as your Documents
+  folder, or type its full path, then choose **Add**. Sage can only open documents, pictures, music and
+  video files inside these folders (not programs, scripts or shortcuts), and asks you first every time.
+- Choose **Save settings**. Adding or removing an app or folder only takes effect after you save; you can
+  switch to the chat and back without losing unsaved changes.
 
 ### The online brain (optional)
 
@@ -83,6 +105,10 @@ If you'd rather use an online model service that offers the chat-completions for
 3. Paste your key into **Online service key** and choose **Save key**. Sage encrypts it with your system's
    protection and never shows it again. **Remove key** deletes it.
 4. Choose **Save settings**.
+
+If you later change the address to a different service (a different host or port), Sage removes the
+saved key when you save, so a key is never sent to a service it wasn't entered for. Paste the new
+service's key and choose **Save key** again.
 
 With an online brain, everything you type, and what Sage reads for you during the conversation (search
 results, notes), is sent to that service.
@@ -103,7 +129,8 @@ results, notes), is sent to that service.
   ```
 
   Do this again after reinstalling dependencies. Never start Sage with `--no-sandbox`.
-- **Notifications** need a notification service, which every common desktop has.
+- **Notifications** need a notification service, which every common desktop has. If a reminder can't be
+  shown as a desktop notification, it appears in Sage's chat window instead.
 
 ## Updating
 

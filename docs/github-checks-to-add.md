@@ -180,12 +180,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: javascript-typescript
           build-mode: none
 
-      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           category: "/language:javascript-typescript"
 ```
@@ -263,7 +263,38 @@ jobs:
           sarif_file: results.sarif
 ```
 
-## 7. CODEOWNERS
+## 7. Dependabot version updates
+
+`.github/dependabot.yml` keeps the npm dependencies and the pinned action SHAs above current, with one
+weekly pull request per ecosystem. Dependabot's pull requests still go through every required check;
+review each one like any other change (an update can carry a compromised release).
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
+```
+
+Also turn on **Settings → Code security → Dependabot alerts** and **Dependabot security updates**.
+The DCO workflow above exempts Dependabot's commits, which aren't signed off.
+
+## 8. CODEOWNERS
 
 `.github/CODEOWNERS`, one line:
 
@@ -271,7 +302,7 @@ jobs:
 * @HoneyBearTech
 ```
 
-## 8. Branch rule for `main`
+## 9. Branch rule for `main`
 
 In **Settings → Rules → Rulesets → New branch ruleset**, targeting the default branch:
 
@@ -279,7 +310,10 @@ In **Settings → Rules → Rulesets → New branch ruleset**, targeting the def
 - **Restrict deletions** and **Block force pushes**: on.
 - **Require a pull request before merging**: on, with **Require review from Code Owners** and
   **Dismiss stale pull request approvals when new commits are pushed**. With one maintainer, set the
-  required approvals to 0 so the owner can merge their own reviewed changes.
+  required approvals to 0 so the owner can merge their own reviewed changes. This is a known trade-off:
+  with 0 required approvals the OpenSSF Scorecard's **Code-Review** check scores lower (it counts
+  changes merged without an approving review from someone other than the author), and the **Branch
+  Protection** check also loses points. Raise it to 1 once there is a second maintainer.
 - **Require status checks to pass**, with **Require branches to be up to date before merging**, and these
   checks:
   - `verify (ubuntu-latest)`

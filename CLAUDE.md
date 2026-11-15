@@ -41,7 +41,8 @@ strike them through with a reason.
 | `src/core/brain/` | The `Brain` interface, `LocalBrain` (fixed to `127.0.0.1:11434`, `/api/chat`) and `OnlineBrain` (`<base>/v1/chat/completions`). Replies validated with zod. |
 | `src/core/skills/` | The skill registry, the built-in skills, the ask-first `ApprovalGate`, the untrusted-text wrapper and the JSONL action log. |
 | `src/core/assistant.ts` | One conversation: sends messages to the brain, runs tool calls through the registry, caps calls per turn. |
-| `src/core/notes.ts`, `reminders.ts`, `scheduler.ts` | Notes and reminders as atomic JSON files in `userData`; the reminder scheduler with an injectable clock. |
+| `src/core/notes.ts`, `reminders.ts`, `scheduler.ts` | Notes and reminders as atomic JSON files in `userData`; the reminder scheduler with an injectable clock, which marks a reminder shown only after the notifier confirms it. |
+| `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside); the desktop notification with its window fallback. |
 | `src/core/search/` | `SearchProvider` and the DuckDuckGo HTML provider with a small dependency-free parser. |
 | `src/core/settings.ts`, `keystore.ts` | Settings JSON (no secrets) and the `KeyStore` (encrypted file via an `Encryptor`). |
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
@@ -55,12 +56,16 @@ strike them through with a reason.
 
 - **Ask first, every time.** Any skill that opens, starts, changes or deletes something is
   `risk: "confirm"`. It runs only after the main-process dialog returns Allow for that exact call (call id
-  plus a hash of the arguments), and each approval is used once. Never add an "always allow", a bypass, or
-  a skill that runs commands.
+  plus a hash of the arguments, the exact action from `prepare` and the sentence shown), and each approval
+  is used once. `run` acts only on the approved action and never looks anything up again. Never add an
+  "always allow", a bypass, or a skill that runs commands.
+- **Skills that write without asking are capped per message** (`PER_TURN_SKILL_LIMITS` in
+  `src/core/assistant.ts`); a new safe skill that writes something gets a cap too.
 - **Skills come only from the model's tool-call output.** Text in replies, web pages, notes and files is
   never parsed for commands, and outside text goes back to the model wrapped as untrusted.
 - **Apps only from the list in Settings**, launched with an argument array and `shell: false`. **Files
-  only inside approved folders**, checked after `realpath`, opened with `shell.openPath`.
+  only inside approved folders**, checked after `realpath`, only types on the allowlist in
+  `src/core/files.ts` (documents, pictures, sound, video), opened with `shell.openPath`.
 - **The online key never leaves the key store**: not in settings, logs, the action log, the chat, the
   window or error messages. Keep `test/key-leak.test.ts` passing and extend it for new writers.
 - **The window stays locked down**: `contextIsolation`, `sandbox`, no `nodeIntegration`, `webSecurity`,
