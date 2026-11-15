@@ -23,6 +23,12 @@
       "internalChecksFilter": "strict"
     },
     {
+      "description": "The monthly lockfile refresh has no release timestamp, so it must not wait for the release age.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "minimumReleaseAge": null
+    },
+    {
       "description": "Small action updates (minor, patch and moved-tag digest updates) come in one pull request.",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest"],

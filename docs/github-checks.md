@@ -52,7 +52,8 @@ confirmed here):
   `package-lock.json`. Security fixes don't wait for the weekly slot and carry a `security` label.
 - **A 3-day wait:** a new npm release isn't proposed until it is 3 days old, so a just-published (possibly
   bad) release isn't offered at once. Security-fix pull requests are exempt: Renovate's own default for
-  them is no wait.
+  them is no wait. The monthly lockfile refresh doesn't wait either, because it has no release date to
+  count from.
 - **What:** npm versions stay exact (the `engines` line in `package.json` stays a range) and actions stay
   pinned to a full SHA. Minor, patch and digest updates of actions come in one pull request (a "digest"
   update moves the SHA behind a tag that was re-pointed), and the CodeQL actions always move together.
