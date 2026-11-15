@@ -60,17 +60,21 @@ export function parseArgs(raw: unknown): unknown {
   }
 }
 
+const LEADING_THINKING = /^\s*<think>[\s\S]*?<\/think>/i;
+
 /**
- * Some models put their private reasoning in the reply between <think> tags; drop it. An opening
- * tag that is never closed hides everything after it, and a closing tag with no opening one hides
- * everything before it.
+ * Some models put their private reasoning at the start of the reply, between <think> tags; drop
+ * it. Only reasoning at the very start is removed: a closed block (or several in a row), or an
+ * opening tag at the start that is never closed (the model was still thinking). Tags anywhere
+ * else are left as they are, so no part of a real answer is ever deleted because of them.
  */
 export function stripThinking(text: string): string {
-  let out = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
-  out = out.replace(/<think>[\s\S]*$/i, "");
-  const strayClose = out.search(/<\/think>/i);
-  if (strayClose !== -1) out = out.slice(strayClose + "</think>".length);
-  return out.replace(/<\/?think>/gi, "").trim();
+  let out = text;
+  for (let match = LEADING_THINKING.exec(out); match; match = LEADING_THINKING.exec(out)) {
+    out = out.slice(match[0].length);
+  }
+  if (/^\s*<think>/i.test(out)) return "";
+  return out.trim();
 }
 
 /** The largest reply body Sage reads from a model or the search page: about 2 MB. */

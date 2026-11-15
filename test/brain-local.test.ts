@@ -119,10 +119,27 @@ test("drops a model's <think> reasoning from the reply", async (t) => {
   assert.deepEqual(reply, { ok: true, content: "It is sunny.", toolCalls: [] });
 });
 
-test("stripThinking handles closed, unclosed and stray tags", () => {
-  assert.equal(stripThinking("<think>a</think>b<think>c</think> d"), "b d");
-  assert.equal(stripThinking("Hello <think>still thinking"), "Hello");
-  assert.equal(stripThinking("reasoning here</think>\nAnswer"), "Answer");
+test("stripThinking removes reasoning only at the start, and never deletes a real answer", () => {
+  assert.equal(stripThinking("<think>a</think>b"), "b");
+  assert.equal(
+    stripThinking("  \n<THINK>a</THINK>\n<think>b</think>\n\nAnswer"),
+    "Answer",
+    "several in a row",
+  );
+  assert.equal(stripThinking("<think>still thinking, no answer yet"), "", "unclosed at the start");
+  // Anywhere else the text stays exactly as the model wrote it.
+  assert.equal(
+    stripThinking("Use <think> and </think> tags like this."),
+    "Use <think> and </think> tags like this.",
+  );
+  assert.equal(
+    stripThinking("Step one.</think>\nStep two."),
+    "Step one.</think>\nStep two.",
+    "stray closing tag",
+  );
+  assert.equal(stripThinking("Hello <think>a note</think> world"), "Hello <think>a note</think> world");
+  assert.equal(stripThinking("Answer first <think>unclosed later"), "Answer first <think>unclosed later");
+  assert.equal(stripThinking("<think>a</think>answer <think>b</think> end"), "answer <think>b</think> end");
   assert.equal(stripThinking("plain"), "plain");
 });
 

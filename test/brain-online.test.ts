@@ -113,7 +113,8 @@ test("a successful reply that echoes the key has it removed from the text and th
   });
   const reply = await brain.chat([], tools);
   assert.ok(reply.ok);
-  assert.equal(reply.content, "Here you go: [redacted]");
+  // Only the leading thinking block goes; the later unclosed tag stays, with the key still removed.
+  assert.equal(reply.content, "Here you go: [redacted] <think>more [redacted]");
   assert.deepEqual(reply.toolCalls[0]!.args, {
     title: "[redacted]",
     text: "a [redacted] b",
