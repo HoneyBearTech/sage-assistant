@@ -88,6 +88,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     },
     [CHANNELS.chooseFolder]: () => pickers.chooseFolder(),
     [CHANNELS.chooseApp]: () => pickers.chooseApp(),
-    [CHANNELS.takeNotices]: async () => sage.notices.take(),
+    // Returning a notice to the window is what makes it delivered (a reminder counts as shown).
+    [CHANNELS.takeNotices]: () => sage.notices.take(),
   };
 }

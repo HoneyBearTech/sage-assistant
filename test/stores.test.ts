@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { z } from "zod";
 import { readJson, writeFileAtomic, writeJsonAtomic } from "../src/core/json-file.js";
+import { MAX_NOTICES, NoticeBoard } from "../src/core/notices.js";
 import { NotesStore } from "../src/core/notes.js";
 import { RemindersStore } from "../src/core/reminders.js";
 import { ReminderScheduler, systemClock } from "../src/core/scheduler.js";
@@ -170,6 +171,116 @@ test("a reminder that couldn't be shown is tried again on the next check, and th
   const first = (await reminders.list()).find((r) => r.text === "First")!;
   assert.equal(first.firedAt, "2026-11-15T09:00:15.000Z");
   assert.equal(await reminders.markFired(first.id, clock.now()), false, "already marked");
+});
+
+test("a reminder the desktop can't show waits in the window and counts as shown only once collected", async (t) => {
+  const dir = await tempDir(t);
+  const { logger } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  const board = new NoticeBoard();
+  let desktopTries = 0;
+  const noDesktop = () => {
+    desktopTries++;
+    return false;
+  };
+  const scheduler = new ReminderScheduler(reminders, noDesktop, clock, logger, board);
+  const stretch = await reminders.add("Stretch", new Date("2026-11-15T08:59:00Z"));
+
+  assert.equal(await scheduler.tick(), 0);
+  assert.equal(desktopTries, 1);
+  assert.equal((await reminders.get(stretch.id))!.firedAt, null, "queued for the window isn't shown yet");
+  clock.advance(15_000);
+  await scheduler.tick();
+  assert.equal(desktopTries, 1, "while it waits in the window it isn't offered again");
+
+  // Sage closes before the window collects it: after a restart the reminder comes back.
+  const restartedBoard = new NoticeBoard();
+  const restarted = new ReminderScheduler(
+    new RemindersStore(dir, logger, () => clock.now()),
+    noDesktop,
+    clock,
+    logger,
+    restartedBoard,
+  );
+  await restarted.tick();
+  assert.equal(desktopTries, 2);
+  assert.deepEqual(await restartedBoard.take(), ["Sage reminder: Stretch"]);
+  assert.equal((await reminders.get(stretch.id))!.firedAt, "2026-11-15T09:00:15.000Z");
+  await restarted.tick();
+  assert.equal(desktopTries, 2, "collected once, never offered again");
+});
+
+test("more due reminders than the window holds: none is lost, and the window is told how many wait", async (t) => {
+  const dir = await tempDir(t);
+  const { logger } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  const board = new NoticeBoard();
+  const scheduler = new ReminderScheduler(reminders, () => false, clock, logger, board);
+  for (let i = 0; i < MAX_NOTICES + 2; i++) {
+    await reminders.add(`R${i}`, new Date(Date.parse("2026-11-15T08:00:00Z") + i * 1000));
+  }
+  await scheduler.tick();
+  const first = await board.take();
+  assert.equal(first.length, MAX_NOTICES + 1);
+  assert.equal(first[0], "Sage reminder: R0", "the oldest are kept");
+  assert.equal(first.at(-1), "2 more reminders are waiting and will appear here in a moment.");
+  await scheduler.tick();
+  assert.deepEqual(await board.take(), [
+    `Sage reminder: R${MAX_NOTICES}`,
+    `Sage reminder: R${MAX_NOTICES + 1}`,
+  ]);
+  assert.ok((await reminders.list()).every((r) => r.firedAt !== null));
+});
+
+test("one reminder failing doesn't stop the others, and a shown one isn't shown again", async (t) => {
+  const dir = await tempDir(t);
+  const { logger, lines } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  const a = await reminders.add("A", new Date("2026-11-15T08:00:00Z"));
+  await reminders.add("B", new Date("2026-11-15T08:01:00Z"));
+  // Recording reminder A fails twice (a locked file, say), then works.
+  let failures = 2;
+  const markFired = reminders.markFired.bind(reminders);
+  reminders.markFired = async (id, at) => {
+    if (id === a.id && failures-- > 0) throw new Error("file locked");
+    return markFired(id, at);
+  };
+  const shown: string[] = [];
+  const scheduler = new ReminderScheduler(
+    reminders,
+    (_title, body) => {
+      shown.push(body);
+      return true;
+    },
+    clock,
+    logger,
+  );
+  assert.equal(await scheduler.tick(), 2, "B is still shown in the same check");
+  assert.ok(lines.some((line) => line.includes("Couldn't record that a reminder was shown")));
+  assert.equal((await reminders.get(a.id))!.firedAt, null);
+  await scheduler.tick();
+  await scheduler.tick();
+  assert.deepEqual(shown, ["A", "B"], "A is shown once, however often its record is retried");
+  assert.notEqual((await reminders.get(a.id))!.firedAt, null, "the record succeeds on a later check");
+
+  // A crashing notification for one reminder doesn't stop the next one either.
+  const c = await reminders.add("C", new Date("2026-11-15T08:02:00Z"));
+  const d = await reminders.add("D", new Date("2026-11-15T08:03:00Z"));
+  const failing = new ReminderScheduler(
+    reminders,
+    (_title, body) => {
+      if (body === "C") throw new Error("notification crashed");
+      return true;
+    },
+    clock,
+    logger,
+  );
+  assert.equal(await failing.tick(), 1);
+  assert.equal((await reminders.get(c.id))!.firedAt, null);
+  assert.notEqual((await reminders.get(d.id))!.firedAt, null);
 });
 
 test("the system clock and the serial queue behave", async () => {

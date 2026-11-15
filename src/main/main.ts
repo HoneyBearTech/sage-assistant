@@ -115,15 +115,11 @@ async function start(): Promise<void> {
   Menu.setApplicationMenu(null);
 
   const dataDir = app.getPath("userData");
+  // A reminder that isn't confirmed here goes to the window's notice board; it counts as shown
+  // only once the window has collected it.
   const notify = createNotifier({
     isSupported: () => Notification.isSupported(),
     create: (title, body) => new Notification({ title, body }),
-    // Without a window there is nowhere to show it; the scheduler tries again on its next check.
-    postToWindow: (title, body) => {
-      if (!mainWindow) return false;
-      sage.notices.post(`${title}: ${body}`);
-      return true;
-    },
   });
   const sage = createSage({
     dataDir,

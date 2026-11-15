@@ -11,8 +11,6 @@ export interface NotifyParts {
   isSupported(): boolean;
   /** new Notification({ title, body }). */
   create(title: string, body: string): DesktopNotification;
-  /** Puts the reminder in Sage's window; false when there is no window to show it in. */
-  postToWindow(title: string, body: string): boolean;
   /** How long to wait for the system to say the notification was shown. */
   timeoutMs?: number;
 }
@@ -20,16 +18,13 @@ export interface NotifyParts {
 export const NOTIFY_TIMEOUT_MS = 5_000;
 
 /**
- * A desktop notification that reports whether it was shown. If notifications aren't supported,
- * fail, or the system doesn't confirm in time, the reminder goes into Sage's window instead. If
- * there is no window either, it reports false and the scheduler tries again on its next check.
+ * A desktop notification that reports whether the system confirmed it was shown. It reports false
+ * when notifications aren't supported, fail, or aren't confirmed in time; the scheduler then puts
+ * the reminder in Sage's window instead (src/core/scheduler.ts).
  */
 export function createNotifier(parts: NotifyParts): Notifier {
   const timeoutMs = parts.timeoutMs ?? NOTIFY_TIMEOUT_MS;
-  return async (title, body) => {
-    if (parts.isSupported() && (await showDesktop(parts, title, body, timeoutMs))) return true;
-    return parts.postToWindow(title, body);
-  };
+  return async (title, body) => parts.isSupported() && (await showDesktop(parts, title, body, timeoutMs));
 }
 
 function showDesktop(parts: NotifyParts, title: string, body: string, timeoutMs: number): Promise<boolean> {

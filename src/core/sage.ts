@@ -79,7 +79,7 @@ export function createSage(deps: SageDeps): Sage {
     now,
     corrupt("reminders", "started an empty reminders list"),
   );
-  const scheduler = new ReminderScheduler(reminders, deps.notify, clock, logger);
+  const scheduler = new ReminderScheduler(reminders, deps.notify, clock, logger, notices);
   const gate = new ApprovalGate(deps.presenter);
   const actionLog = new ActionLog(join(deps.dataDir, "action-log.jsonl"), (text) => redactor.redact(text));
   const registry = new SkillRegistry(gate, actionLog, logger, now);
