@@ -1,0 +1,119 @@
+import { join } from "node:path";
+import { Assistant } from "./assistant.js";
+import type { Brain, FetchLike } from "./brain/brain.js";
+import { LocalBrain } from "./brain/local.js";
+import { OnlineBrain } from "./brain/online.js";
+import type { Launcher } from "./apps.js";
+import { type KeyStore, validateKey } from "./keystore.js";
+import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
+import { NotesStore } from "./notes.js";
+import { RemindersStore } from "./reminders.js";
+import { type Clock, type Notifier, ReminderScheduler, systemClock } from "./scheduler.js";
+import { DuckDuckGoProvider } from "./search/duckduckgo.js";
+import type { SearchProvider } from "./search/search.js";
+import { type Settings, SettingsStore } from "./settings.js";
+import { ActionLog } from "./skills/action-log.js";
+import { builtinSkills, type PathOpener } from "./skills/builtin.js";
+import { ApprovalGate, type ConfirmPresenter } from "./skills/gate.js";
+import { SkillRegistry } from "./skills/registry.js";
+
+/** Everything Sage needs from the outside world. The Electron main process supplies the real ones. */
+export interface SageDeps {
+  /** Sage's own folder: Electron's app.getPath("userData"). */
+  dataDir: string;
+  keyStore: KeyStore;
+  presenter: ConfirmPresenter;
+  notify: Notifier;
+  openPath: PathOpener;
+  launch: Launcher;
+  logSink: LogSink;
+  fetch?: FetchLike;
+  search?: SearchProvider;
+  clock?: Clock;
+  platform?: NodeJS.Platform;
+  /** For tests only: the port of a fake local model runner on 127.0.0.1. */
+  localPort?: number;
+}
+
+export interface Sage {
+  assistant: Assistant;
+  settings: SettingsStore;
+  keyStore: KeyStore;
+  notes: NotesStore;
+  reminders: RemindersStore;
+  scheduler: ReminderScheduler;
+  registry: SkillRegistry;
+  gate: ApprovalGate;
+  logger: Logger;
+  redactor: SecretRedactor;
+}
+
+export function createSage(deps: SageDeps): Sage {
+  const clock = deps.clock ?? systemClock;
+  const now = () => clock.now();
+  const redactor = new SecretRedactor();
+  const logger = createLogger(deps.logSink, redactor);
+
+  // Every key that passes through Sage is registered with the redactor, so even an unexpected
+  // log line or action-log entry can't contain it.
+  const keyStore: KeyStore = {
+    has: () => deps.keyStore.has(),
+    get: async () => {
+      const key = await deps.keyStore.get();
+      if (key) redactor.add(key);
+      return key;
+    },
+    set: async (key) => {
+      redactor.add(key.trim());
+      await deps.keyStore.set(validateKey(key));
+    },
+    clear: () => deps.keyStore.clear(),
+  };
+
+  const settings = new SettingsStore(deps.dataDir, logger);
+  const notes = new NotesStore(deps.dataDir, logger, now);
+  const reminders = new RemindersStore(deps.dataDir, logger, now);
+  const scheduler = new ReminderScheduler(reminders, deps.notify, clock, logger);
+  const gate = new ApprovalGate(deps.presenter);
+  const actionLog = new ActionLog(join(deps.dataDir, "action-log.jsonl"), (text) => redactor.redact(text));
+  const registry = new SkillRegistry(gate, actionLog, logger, now);
+  const search = deps.search ?? new DuckDuckGoProvider(deps.fetch ? { fetch: deps.fetch } : {});
+
+  for (const skill of builtinSkills({
+    notes,
+    reminders,
+    search,
+    settings: () => settings.load(),
+    openPath: deps.openPath,
+    launch: deps.launch,
+    now,
+    ...(deps.platform ? { platform: deps.platform } : {}),
+  })) {
+    registry.register(skill);
+  }
+
+  const getBrain = async (): Promise<Brain> => brainFor(await settings.load(), keyStore, deps);
+  const assistant = new Assistant({ getBrain, registry, logger, now });
+
+  return { assistant, settings, keyStore, notes, reminders, scheduler, registry, gate, logger, redactor };
+}
+
+export function brainFor(
+  settings: Settings,
+  keyStore: KeyStore,
+  deps: Pick<SageDeps, "fetch" | "localPort">,
+): Brain {
+  if (settings.brain === "online") {
+    return new OnlineBrain({
+      baseUrl: settings.online.baseUrl,
+      model: settings.online.model,
+      getKey: () => keyStore.get(),
+      ...(deps.fetch ? { fetch: deps.fetch } : {}),
+    });
+  }
+  return new LocalBrain({
+    model: settings.local.model,
+    ...(deps.localPort ? { port: deps.localPort } : {}),
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
+}
