@@ -13,7 +13,7 @@ async function setup(t: Parameters<typeof tempDir>[0]) {
     dataDir: dir,
     keyStore,
     presenter: new FakePresenter(false),
-    notify: () => {},
+    notify: () => true,
     openPath: async () => "",
     launch: async () => {},
     logSink: () => {},
@@ -76,6 +76,15 @@ test("settings go out without the key, and come back validated", async (t) => {
   assert.equal(((await handlers[CHANNELS.getSettings](undefined)) as any).brain, "online");
   assert.equal(await handlers[CHANNELS.chooseFolder](undefined), "/picked/folder");
   assert.equal(await handlers[CHANNELS.chooseApp](undefined), null);
+});
+
+test("notices are handed to the window once each", async (t) => {
+  const { handlers, sage } = await setup(t);
+  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
+  sage.notices.post("Sage reminder: Stand up");
+  sage.notices.post("Second");
+  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), ["Sage reminder: Stand up", "Second"]);
+  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
 });
 
 test("toPublicSettings copies only the public fields", () => {

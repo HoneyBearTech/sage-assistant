@@ -6,6 +6,7 @@ import { OnlineBrain } from "./brain/online.js";
 import type { Launcher } from "./apps.js";
 import { type KeyStore, validateKey } from "./keystore.js";
 import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
+import { NoticeBoard } from "./notices.js";
 import { NotesStore } from "./notes.js";
 import { RemindersStore } from "./reminders.js";
 import { type Clock, type Notifier, ReminderScheduler, systemClock } from "./scheduler.js";
@@ -42,6 +43,8 @@ export interface Sage {
   notes: NotesStore;
   reminders: RemindersStore;
   scheduler: ReminderScheduler;
+  /** Messages from Sage itself waiting to be shown in the window. */
+  notices: NoticeBoard;
   registry: SkillRegistry;
   gate: ApprovalGate;
   logger: Logger;
@@ -70,6 +73,7 @@ export function createSage(deps: SageDeps): Sage {
     clear: () => deps.keyStore.clear(),
   };
 
+  const notices = new NoticeBoard();
   const settings = new SettingsStore(deps.dataDir, logger);
   const notes = new NotesStore(deps.dataDir, logger, now);
   const reminders = new RemindersStore(deps.dataDir, logger, now);
@@ -96,7 +100,19 @@ export function createSage(deps: SageDeps): Sage {
     brainFor(await settings.load(), keyStore, deps, (text) => redactor.redact(text));
   const assistant = new Assistant({ getBrain, registry, logger, now });
 
-  return { assistant, settings, keyStore, notes, reminders, scheduler, registry, gate, logger, redactor };
+  return {
+    assistant,
+    settings,
+    keyStore,
+    notes,
+    reminders,
+    scheduler,
+    notices,
+    registry,
+    gate,
+    logger,
+    redactor,
+  };
 }
 
 export function brainFor(

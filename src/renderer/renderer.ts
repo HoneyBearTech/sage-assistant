@@ -25,7 +25,7 @@ const composer = byId<HTMLFormElement>("composer");
 const input = byId<HTMLTextAreaElement>("input");
 const sendButton = byId<HTMLButtonElement>("send");
 
-function addMessage(role: "user" | "assistant", text: string, pending = false): HTMLLIElement {
+function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
   const item = document.createElement("li");
   item.className = `message ${role}${pending ? " pending" : ""}`;
   item.textContent = text;
@@ -65,6 +65,19 @@ input.addEventListener("keydown", (event) => {
 byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
   void sage.resetChat().then(() => messages.replaceChildren());
 });
+
+// Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data
+// files that had to be set aside. Collected on load and every few seconds.
+const NOTICE_POLL_MS = 5_000;
+async function collectNotices(): Promise<void> {
+  try {
+    for (const notice of await sage.takeNotices()) addMessage("notice", notice);
+  } catch {
+    // The next poll tries again.
+  }
+}
+void collectNotices();
+setInterval(() => void collectNotices(), NOTICE_POLL_MS);
 
 // --- Tabs ---
 

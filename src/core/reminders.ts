@@ -64,18 +64,25 @@ export class RemindersStore {
     });
   }
 
-  /** Marks every reminder due at `at` or earlier as fired, and returns the ones it marked. */
-  takeDue(at: Date): Promise<Reminder[]> {
+  /** The reminders due at `at` or earlier that haven't been shown yet, oldest first. */
+  async due(at: Date): Promise<Reminder[]> {
+    return (await this.list())
+      .filter((reminder) => reminder.firedAt === null && Date.parse(reminder.due) <= at.getTime())
+      .sort((a, b) => Date.parse(a.due) - Date.parse(b.due));
+  }
+
+  /**
+   * Records that a reminder was shown. Called only after the notification (or the window notice)
+   * was actually shown, so a failure leaves the reminder due for the next check.
+   */
+  markFired(id: string, at: Date): Promise<boolean> {
     return this.serial.run(async () => {
       const reminders = await this.load();
-      const due = reminders.filter(
-        (reminder) => reminder.firedAt === null && Date.parse(reminder.due) <= at.getTime(),
-      );
-      if (due.length === 0) return [];
-      const firedAt = at.toISOString();
-      for (const reminder of due) reminder.firedAt = firedAt;
+      const reminder = reminders.find((r) => r.id === id);
+      if (!reminder || reminder.firedAt !== null) return false;
+      reminder.firedAt = at.toISOString();
       await this.save(reminders);
-      return due;
+      return true;
     });
   }
 

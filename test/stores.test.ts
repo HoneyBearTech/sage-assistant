@@ -70,7 +70,11 @@ test("the scheduler fires each due reminder once, using the injected clock", asy
   const clock = new FakeClock(new Date("2026-11-15T08:00:00Z"));
   const reminders = new RemindersStore(dir, logger, () => clock.now());
   const shown: string[] = [];
-  const scheduler = new ReminderScheduler(reminders, (_title, body) => shown.push(body), clock, logger);
+  const show = (_title: string, body: string) => {
+    shown.push(body);
+    return true;
+  };
+  const scheduler = new ReminderScheduler(reminders, show, clock, logger);
 
   await reminders.add("Stand up", new Date("2026-11-15T09:00:00Z"));
   await reminders.add("Lunch", new Date("2026-11-15T12:00:00Z"));
@@ -84,7 +88,7 @@ test("the scheduler fires each due reminder once, using the injected clock", asy
   clock.set(new Date("2026-11-15T15:00:00Z"));
   const restarted = new ReminderScheduler(
     new RemindersStore(dir, logger, () => clock.now()),
-    (_title, body) => shown.push(body),
+    show,
     clock,
     logger,
   );
@@ -118,15 +122,53 @@ test("start and stop use the clock's timer; failures are logged, not thrown", as
   scheduler.stop();
   scheduler.stop();
   assert.equal(clock.scheduled, false);
+  assert.equal(
+    (await reminders.list())[0]!.firedAt,
+    null,
+    "a failed notification doesn't use up the reminder",
+  );
 
   const broken = new ReminderScheduler(
-    { takeDue: async () => Promise.reject(new Error("disk gone")) } as unknown as RemindersStore,
-    () => {},
+    { due: async () => Promise.reject(new Error("disk gone")) } as unknown as RemindersStore,
+    () => true,
     clock,
     logger,
   );
   assert.equal(await broken.tick(), 0);
   assert.ok(lines.some((line) => line.includes("Couldn't check reminders")));
+});
+
+test("a reminder that couldn't be shown is tried again on the next check, and then only once", async (t) => {
+  const dir = await tempDir(t);
+  const { logger, lines } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  await reminders.add("Second", new Date("2026-11-15T08:30:00Z"));
+  await reminders.add("First", new Date("2026-11-15T08:00:00Z"));
+  const outcomes: Array<boolean | Error> = [false, new Error("service gone"), true, true];
+  const shown: string[] = [];
+  const scheduler = new ReminderScheduler(
+    reminders,
+    async (_title, body) => {
+      const outcome = outcomes.shift();
+      if (outcome instanceof Error) throw outcome;
+      if (outcome) shown.push(body);
+      return outcome ?? false;
+    },
+    clock,
+    logger,
+  );
+  assert.equal(await scheduler.tick(), 0, "the first check fails for both");
+  assert.ok(lines.some((line) => line.includes("try again on the next check")));
+  assert.ok((await reminders.list()).every((r) => r.firedAt === null));
+  clock.advance(15_000);
+  assert.equal(await scheduler.tick(), 2);
+  assert.deepEqual(shown, ["First", "Second"], "oldest first");
+  assert.equal(await scheduler.tick(), 0, "never twice");
+  assert.equal(await reminders.markFired("nope", clock.now()), false);
+  const first = (await reminders.list()).find((r) => r.text === "First")!;
+  assert.equal(first.firedAt, "2026-11-15T09:00:15.000Z");
+  assert.equal(await reminders.markFired(first.id, clock.now()), false, "already marked");
 });
 
 test("the system clock and the serial queue behave", async () => {

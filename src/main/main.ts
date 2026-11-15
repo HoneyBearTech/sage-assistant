@@ -19,6 +19,7 @@ import { createSage } from "../core/sage.js";
 import type { ConfirmPresenter } from "../core/skills/gate.js";
 import { CHANNELS } from "../shared/api.js";
 import { createIpcHandlers } from "./ipc.js";
+import { createNotifier } from "./notify.js";
 import {
   isAllowedRequest,
   isAppPage,
@@ -114,13 +115,21 @@ async function start(): Promise<void> {
   Menu.setApplicationMenu(null);
 
   const dataDir = app.getPath("userData");
+  const notify = createNotifier({
+    isSupported: () => Notification.isSupported(),
+    create: (title, body) => new Notification({ title, body }),
+    // Without a window there is nowhere to show it; the scheduler tries again on its next check.
+    postToWindow: (title, body) => {
+      if (!mainWindow) return false;
+      sage.notices.post(`${title}: ${body}`);
+      return true;
+    },
+  });
   const sage = createSage({
     dataDir,
     keyStore: new EncryptedFileKeyStore(join(dataDir, "online-key.bin"), encryptor),
     presenter,
-    notify: (title, body) => {
-      if (Notification.isSupported()) new Notification({ title, body }).show();
-    },
+    notify,
     openPath: (path) => shell.openPath(path),
     launch,
     logSink: consoleSink,

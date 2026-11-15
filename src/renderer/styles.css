@@ -127,6 +127,12 @@ button:disabled {
   font-style: italic;
 }
 
+.message.notice {
+  align-self: center;
+  border-color: var(--accent);
+  border-style: dashed;
+}
+
 textarea,
 input[type="text"],
 input[type="url"],

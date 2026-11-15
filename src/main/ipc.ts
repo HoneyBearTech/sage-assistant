@@ -67,5 +67,6 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     },
     [CHANNELS.chooseFolder]: () => pickers.chooseFolder(),
     [CHANNELS.chooseApp]: () => pickers.chooseApp(),
+    [CHANNELS.takeNotices]: async () => sage.notices.take(),
   };
 }

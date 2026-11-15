@@ -9,6 +9,7 @@ export const CHANNELS = {
   clearKey: "sage:key-clear",
   chooseFolder: "sage:choose-folder",
   chooseApp: "sage:choose-app",
+  takeNotices: "sage:notices-take",
 } as const;
 
 export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
@@ -43,4 +44,6 @@ export interface SageApi {
   clearKey(): Promise<Result>;
   chooseFolder(): Promise<string | null>;
   chooseApp(): Promise<string | null>;
+  /** Messages from Sage itself (reminders, data-file problems), each handed out once. */
+  takeNotices(): Promise<string[]>;
 }

@@ -14,10 +14,16 @@ export const systemClock: Clock = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-/** Shows a desktop notification. In the app this is Electron's Notification. */
-export type Notifier = (title: string, body: string) => void;
+/**
+ * Shows a reminder to the user and says whether it was actually shown. In the app this is a
+ * desktop notification, with a message in Sage's window as the fallback (src/main/notify.ts).
+ */
+export type Notifier = (title: string, body: string) => boolean | Promise<boolean>;
 
-/** Checks for due reminders on a timer and shows a notification for each one, once. */
+/**
+ * Checks for due reminders on a timer and shows each one once. A reminder is marked as shown only
+ * after the notifier says it was shown; otherwise it stays due and the next check tries again.
+ */
 export class ReminderScheduler {
   private handle: unknown;
   private readonly serial = new Serial();
@@ -43,25 +49,35 @@ export class ReminderScheduler {
     this.handle = undefined;
   }
 
-  /** Fires every reminder that is due now (including ones missed while Sage was closed). */
+  /**
+   * Shows every reminder that is due now (including ones missed while Sage was closed) and returns
+   * how many were shown.
+   */
   tick(): Promise<number> {
     return this.serial.run(() => this.fireDue());
   }
 
   private async fireDue(): Promise<number> {
+    let shown = 0;
     try {
-      const due = await this.store.takeDue(this.clock.now());
+      const due = await this.store.due(this.clock.now());
       for (const reminder of due) {
+        let ok = false;
         try {
-          this.notify("Sage reminder", reminder.text);
+          ok = await this.notify("Sage reminder", reminder.text);
         } catch (error) {
           this.logger.error("Couldn't show a reminder notification", error);
         }
+        if (!ok) {
+          this.logger.warn("A reminder couldn't be shown yet; Sage will try again on the next check");
+          continue;
+        }
+        await this.store.markFired(reminder.id, this.clock.now());
+        shown++;
       }
-      return due.length;
     } catch (error) {
       this.logger.error("Couldn't check reminders", error);
-      return 0;
     }
+    return shown;
   }
 }

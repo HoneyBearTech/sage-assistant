@@ -108,7 +108,7 @@ test("the online key never appears in any file, log line, reply or the chat hist
     dataDir: dir,
     keyStore: new EncryptedFileKeyStore(join(dir, "online-key.bin"), fakeEncryptor()),
     presenter,
-    notify: () => {},
+    notify: () => true,
     openPath: async () => "",
     launch: async () => {},
     logSink: (_level, line) => logLines.push(line),
