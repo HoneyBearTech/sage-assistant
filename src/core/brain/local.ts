@@ -92,7 +92,17 @@ export class LocalBrain implements Brain {
         message: `The local model runner returned an error (HTTP ${response.status}). Try again, or check Ollama.`,
       };
     }
-    const parsed = runnerReply.safeParse(await readJsonCapped(response));
+    let replyBody: unknown;
+    try {
+      replyBody = await readJsonCapped(response);
+    } catch (error) {
+      // The reply started but its body stalled past the timeout or the connection dropped.
+      if (isTimeout(error)) {
+        return { ok: false, message: "The local model took too long to answer. Try again." };
+      }
+      replyBody = undefined;
+    }
+    const parsed = runnerReply.safeParse(replyBody);
     if (!parsed.success) {
       return { ok: false, message: "The local model runner sent a reply Sage couldn't read." };
     }

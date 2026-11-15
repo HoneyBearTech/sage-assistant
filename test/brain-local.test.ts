@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MAX_RESPONSE_BYTES, readTextCapped, stripThinking } from "../src/core/brain/brain.js";
 import { LOCAL_HOST, LOCAL_PORT, LocalBrain, UNREACHABLE_MESSAGE } from "../src/core/brain/local.js";
-import { fakeServer, json, REFUSED_PORT } from "./helpers.js";
+import { failingBody, fakeServer, json, REFUSED_PORT, stallAfterHeaders } from "./helpers.js";
 
 const tools = [{ name: "add_note", description: "Add a note", parameters: { type: "object" } }];
 
@@ -158,6 +158,29 @@ test("refuses replies larger than about 2 MB, declared or streamed", async (t) =
   declare = false;
   const streamed = await brain.chat([], tools);
   assert.ok(!streamed.ok && /couldn't read/.test(streamed.message));
+});
+
+test("a reply body that drops or stalls gives the plain unreadable or too-slow message", async (t) => {
+  const dropped = new LocalBrain({
+    model: "m",
+    fetch: async () => failingBody(new TypeError("terminated")),
+  });
+  assert.deepEqual(await dropped.chat([], tools), {
+    ok: false,
+    message: "The local model runner sent a reply Sage couldn't read.",
+  });
+  const timedOut = new LocalBrain({
+    model: "m",
+    fetch: async () => failingBody(new DOMException("The operation timed out.", "TimeoutError")),
+  });
+  const slowMessage = { ok: false, message: "The local model took too long to answer. Try again." };
+  assert.deepEqual(await timedOut.chat([], tools), slowMessage);
+  // A real server that sends the start of a reply and then stalls: the body read times out.
+  const server = await fakeServer(t, stallAfterHeaders);
+  assert.deepEqual(
+    await new LocalBrain({ model: "m", port: server.port, timeoutMs: 50 }).chat([], tools),
+    slowMessage,
+  );
 });
 
 test("readTextCapped returns the text of a small body, and an empty string for no body", async () => {

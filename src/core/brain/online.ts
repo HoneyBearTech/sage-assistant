@@ -154,7 +154,17 @@ export class OnlineBrain implements Brain {
         message: `The online service returned an error (HTTP ${response.status}). Try again later.`,
       };
     }
-    const parsed = completionReply.safeParse(await readJsonCapped(response));
+    let replyBody: unknown;
+    try {
+      replyBody = await readJsonCapped(response);
+    } catch (error) {
+      // The reply started but its body stalled past the timeout or the connection dropped.
+      if (isTimeout(error)) {
+        return { ok: false, message: "The online service took too long to answer. Try again." };
+      }
+      replyBody = undefined;
+    }
+    const parsed = completionReply.safeParse(replyBody);
     if (!parsed.success) {
       return { ok: false, message: "The online service sent a reply Sage couldn't read." };
     }

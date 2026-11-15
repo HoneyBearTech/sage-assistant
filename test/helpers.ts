@@ -54,6 +54,28 @@ export async function fakeServer(
   return { port, url: `http://127.0.0.1:${port}`, requests };
 }
 
+/** A 200 reply whose body starts, then fails with `error` (a dropped connection, a timeout). */
+export function failingBody(error: Error): Response {
+  let sent = false;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (!sent) {
+        sent = true;
+        controller.enqueue(new TextEncoder().encode('{"message":'));
+        return;
+      }
+      controller.error(error);
+    },
+  });
+  return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+}
+
+/** A server that sends the start of a reply and then nothing more, ever. */
+export function stallAfterHeaders(_request: Recorded, res: ServerResponse): void {
+  res.writeHead(200, { "content-type": "application/json" });
+  res.write('{"choices":');
+}
+
 export function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));

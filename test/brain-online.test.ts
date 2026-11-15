@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isConnectionRefused, parseArgs } from "../src/core/brain/brain.js";
 import { completionsUrl, OnlineBrain } from "../src/core/brain/online.js";
-import { fakeServer, json, REFUSED_PORT } from "./helpers.js";
+import { failingBody, fakeServer, json, REFUSED_PORT, stallAfterHeaders } from "./helpers.js";
 
 const tools = [{ name: "web_search", description: "Search", parameters: { type: "object" } }];
 const KEY = "fake-test-value";
@@ -229,6 +229,28 @@ test("reports unreadable replies, timeouts and unreachable services", async (t) 
   });
   const noNet = await offline.chat([], tools);
   assert.ok(!noNet.ok && /internet connection/.test(noNet.message));
+});
+
+test("a reply body that drops or stalls gives the plain unreadable or too-slow message", async (t) => {
+  const options = { baseUrl: "https://api.example.com", model: "m", getKey: async () => KEY };
+  const dropped = new OnlineBrain({
+    ...options,
+    fetch: async () => failingBody(new TypeError("terminated")),
+  });
+  assert.deepEqual(await dropped.chat([], tools), {
+    ok: false,
+    message: "The online service sent a reply Sage couldn't read.",
+  });
+  const slowMessage = { ok: false, message: "The online service took too long to answer. Try again." };
+  const timedOut = new OnlineBrain({
+    ...options,
+    fetch: async () => failingBody(new DOMException("The operation timed out.", "TimeoutError")),
+  });
+  assert.deepEqual(await timedOut.chat([], tools), slowMessage);
+  // A real server that sends the start of a reply and then stalls: the body read times out.
+  const server = await fakeServer(t, stallAfterHeaders);
+  const stalled = new OnlineBrain({ ...options, baseUrl: server.url, timeoutMs: 50 });
+  assert.deepEqual(await stalled.chat([], tools), slowMessage);
 });
 
 test("helpers: argument parsing and connection-refused detection", () => {
