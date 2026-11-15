@@ -1,4 +1,4 @@
-import type { FetchLike } from "../brain/brain.js";
+import { type FetchLike, readTextCapped } from "../brain/brain.js";
 import { elements, hasClass, textOf } from "./html.js";
 import { SEARCH_UNAVAILABLE, type SearchOutcome, type SearchProvider, type SearchResult } from "./search.js";
 
@@ -29,8 +29,8 @@ export class DuckDuckGoProvider implements SearchProvider {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (!response.ok) return { ok: false, message: SEARCH_UNAVAILABLE };
-      const page = await response.text();
-      if (looksBlocked(page)) return { ok: false, message: SEARCH_UNAVAILABLE };
+      const page = await readTextCapped(response);
+      if (page === null || looksBlocked(page)) return { ok: false, message: SEARCH_UNAVAILABLE };
       return { ok: true, results: parseResults(page).slice(0, MAX_RESULTS) };
     } catch {
       return { ok: false, message: SEARCH_UNAVAILABLE };

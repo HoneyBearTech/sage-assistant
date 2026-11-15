@@ -83,6 +83,57 @@ test("parses tool calls, giving each one Sage's own id instead of the service's"
   assert.notEqual(reply.toolCalls[0]!.id, reply.toolCalls[1]!.id);
 });
 
+test("a successful reply that echoes the key has it removed from the text and the arguments", async (t) => {
+  const server = await fakeServer(t, (_req, res) =>
+    json(res, 200, {
+      choices: [
+        {
+          message: {
+            content: `<think>${KEY}</think>Here you go: ${KEY} <think>more ${KEY}`,
+            tool_calls: [
+              {
+                id: "x",
+                type: "function",
+                function: {
+                  name: "add_note",
+                  arguments: JSON.stringify({ title: KEY, text: `a ${KEY} b`, nested: [{ [KEY]: KEY }] }),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    }),
+  );
+  const brain = new OnlineBrain({
+    baseUrl: server.url,
+    model: "m",
+    getKey: async () => KEY,
+    redact: (text) => text.replace("other-secret", "[redacted]"),
+  });
+  const reply = await brain.chat([], tools);
+  assert.ok(reply.ok);
+  assert.equal(reply.content, "Here you go: [redacted]");
+  assert.deepEqual(reply.toolCalls[0]!.args, {
+    title: "[redacted]",
+    text: "a [redacted] b",
+    nested: [{ "[redacted]": "[redacted]" }],
+  });
+  assert.ok(!JSON.stringify(reply).includes(KEY));
+});
+
+test("refuses online replies larger than about 2 MB", async (t) => {
+  const server = await fakeServer(t, (_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(`{"choices":[{"message":{"content":"${"y".repeat(2 * 1024 * 1024 + 1)}"}}]}`);
+  });
+  const reply = await new OnlineBrain({ baseUrl: server.url, model: "m", getKey: async () => KEY }).chat(
+    [],
+    tools,
+  );
+  assert.ok(!reply.ok && /couldn't read/.test(reply.message));
+});
+
 test("leaves tools out when there are none to offer", async (t) => {
   const server = await fakeServer(t, (_req, res) =>
     json(res, 200, { choices: [{ message: { content: "x" } }] }),

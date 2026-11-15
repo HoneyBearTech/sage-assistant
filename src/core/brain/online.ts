@@ -8,6 +8,9 @@ import {
   isConnectionRefused,
   isTimeout,
   parseArgs,
+  readJsonCapped,
+  scrubStrings,
+  stripThinking,
   type ToolSpec,
 } from "./brain.js";
 
@@ -45,6 +48,8 @@ export interface OnlineBrainOptions {
   model: string;
   /** Reads the key from the key store at call time; the brain never keeps it. */
   getKey: () => Promise<string | null>;
+  /** Removes known secrets from text (Sage's redactor). The key itself is always removed. */
+  redact?: (text: string) => string;
   fetch?: FetchLike;
   timeoutMs?: number;
 }
@@ -143,25 +148,23 @@ export class OnlineBrain implements Brain {
         message: `The online service returned an error (HTTP ${response.status}). Try again later.`,
       };
     }
-    let json: unknown;
-    try {
-      json = await response.json();
-    } catch {
-      return { ok: false, message: "The online service sent a reply Sage couldn't read." };
-    }
-    const parsed = completionReply.safeParse(json);
+    const parsed = completionReply.safeParse(await readJsonCapped(response));
     if (!parsed.success) {
       return { ok: false, message: "The online service sent a reply Sage couldn't read." };
     }
+    // A service can echo the key back even in a successful reply. Remove it (and any other secret
+    // the redactor knows) from the text and the tool-call arguments before anything else sees them.
+    const redact = this.options.redact ?? ((text: string) => text);
+    const clean = (text: string) => redact(text.split(key).join("[redacted]"));
     // min(1) above guarantees a first choice.
     const message = parsed.data.choices[0]?.message;
     return {
       ok: true,
-      content: message?.content ?? "",
+      content: clean(stripThinking(message?.content ?? "")),
       toolCalls: (message?.tool_calls ?? []).map((call) => ({
         id: randomUUID(),
-        name: call.function.name,
-        args: parseArgs(call.function.arguments),
+        name: clean(call.function.name),
+        args: scrubStrings(parseArgs(call.function.arguments), clean),
       })),
     };
   }

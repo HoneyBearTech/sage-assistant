@@ -7,6 +7,7 @@ import {
   type FetchLike,
   isTimeout,
   parseArgs,
+  readJsonCapped,
   stripThinking,
   type ToolSpec,
 } from "./brain.js";
@@ -18,7 +19,7 @@ export const LOCAL_PORT = 11434;
 export const UNREACHABLE_MESSAGE =
   "Sage can't reach the local model runner. Is Ollama running? Start it, then try again.";
 
-const ollamaReply = z.object({
+const runnerReply = z.object({
   message: z.object({
     role: z.string(),
     content: z.string().nullish(),
@@ -59,7 +60,7 @@ export class LocalBrain implements Brain {
     const body = {
       model: this.options.model,
       stream: false,
-      messages: messages.map(toOllamaMessage),
+      messages: messages.map(toRunnerMessage),
       tools: tools.map((tool) => ({ type: "function", function: tool })),
     };
     let response: Response;
@@ -68,6 +69,7 @@ export class LocalBrain implements Brain {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
+        redirect: "error",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
@@ -90,13 +92,7 @@ export class LocalBrain implements Brain {
         message: `The local model runner returned an error (HTTP ${response.status}). Try again, or check Ollama.`,
       };
     }
-    let json: unknown;
-    try {
-      json = await response.json();
-    } catch {
-      return { ok: false, message: "The local model runner sent a reply Sage couldn't read." };
-    }
-    const parsed = ollamaReply.safeParse(json);
+    const parsed = runnerReply.safeParse(await readJsonCapped(response));
     if (!parsed.success) {
       return { ok: false, message: "The local model runner sent a reply Sage couldn't read." };
     }
@@ -113,7 +109,7 @@ export class LocalBrain implements Brain {
   }
 }
 
-function toOllamaMessage(message: ChatMessage): Record<string, unknown> {
+function toRunnerMessage(message: ChatMessage): Record<string, unknown> {
   switch (message.role) {
     case "assistant":
       return {

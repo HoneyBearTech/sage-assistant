@@ -60,7 +60,71 @@ export function parseArgs(raw: unknown): unknown {
   }
 }
 
-/** Some local models put their private reasoning in the reply between <think> tags; drop it. */
+/**
+ * Some models put their private reasoning in the reply between <think> tags; drop it. An opening
+ * tag that is never closed hides everything after it, and a closing tag with no opening one hides
+ * everything before it.
+ */
 export function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  let out = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  out = out.replace(/<think>[\s\S]*$/i, "");
+  const strayClose = out.search(/<\/think>/i);
+  if (strayClose !== -1) out = out.slice(strayClose + "</think>".length);
+  return out.replace(/<\/?think>/gi, "").trim();
+}
+
+/** The largest reply body Sage reads from a model or the search page: about 2 MB. */
+export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Reads a response body as text, but stops and returns null once it is larger than `maxBytes`, so
+ * a misbehaving server can't make Sage hold or parse an enormous reply.
+ */
+export async function readTextCapped(
+  response: Response,
+  maxBytes = MAX_RESPONSE_BYTES,
+): Promise<string | null> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/** Reads a capped body and parses it as JSON. Returns undefined for too large or not JSON. */
+export async function readJsonCapped(response: Response, maxBytes = MAX_RESPONSE_BYTES): Promise<unknown> {
+  const text = await readTextCapped(response, maxBytes);
+  if (text === null) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Applies `clean` to every string inside a value (strings, arrays and plain objects, keys too). */
+export function scrubStrings(value: unknown, clean: (text: string) => string): unknown {
+  if (typeof value === "string") return clean(value);
+  if (Array.isArray(value)) return value.map((item) => scrubStrings(item, clean));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [clean(k), scrubStrings(v, clean)]),
+    );
+  }
+  return value;
 }

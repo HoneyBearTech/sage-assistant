@@ -92,7 +92,8 @@ export function createSage(deps: SageDeps): Sage {
     registry.register(skill);
   }
 
-  const getBrain = async (): Promise<Brain> => brainFor(await settings.load(), keyStore, deps);
+  const getBrain = async (): Promise<Brain> =>
+    brainFor(await settings.load(), keyStore, deps, (text) => redactor.redact(text));
   const assistant = new Assistant({ getBrain, registry, logger, now });
 
   return { assistant, settings, keyStore, notes, reminders, scheduler, registry, gate, logger, redactor };
@@ -102,12 +103,14 @@ export function brainFor(
   settings: Settings,
   keyStore: KeyStore,
   deps: Pick<SageDeps, "fetch" | "localPort">,
+  redact?: (text: string) => string,
 ): Brain {
   if (settings.brain === "online") {
     return new OnlineBrain({
       baseUrl: settings.online.baseUrl,
       model: settings.online.model,
       getKey: () => keyStore.get(),
+      ...(redact ? { redact } : {}),
       ...(deps.fetch ? { fetch: deps.fetch } : {}),
     });
   }

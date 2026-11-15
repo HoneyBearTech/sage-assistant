@@ -90,6 +90,8 @@ test("any failure becomes 'search is unavailable right now'", async () => {
   const cases: (() => Promise<Response>)[] = [
     async () => new Response("busy", { status: 503 }),
     async () => new Response(blocked, { status: 200 }),
+    // A page over the 2 MB cap is never parsed.
+    async () => new Response(`<html><body>${"z".repeat(2 * 1024 * 1024 + 1)}</body></html>`, { status: 200 }),
     async () => {
       throw new TypeError("fetch failed");
     },

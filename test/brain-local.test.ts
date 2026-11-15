@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { MAX_RESPONSE_BYTES, readTextCapped, stripThinking } from "../src/core/brain/brain.js";
 import { LOCAL_HOST, LOCAL_PORT, LocalBrain, UNREACHABLE_MESSAGE } from "../src/core/brain/local.js";
 import { closedPort, fakeServer, json } from "./helpers.js";
 
@@ -116,4 +117,51 @@ test("drops a model's <think> reasoning from the reply", async (t) => {
   );
   const reply = await new LocalBrain({ model: "m", port: server.port }).chat([], tools);
   assert.deepEqual(reply, { ok: true, content: "It is sunny.", toolCalls: [] });
+});
+
+test("stripThinking handles closed, unclosed and stray tags", () => {
+  assert.equal(stripThinking("<think>a</think>b<think>c</think> d"), "b d");
+  assert.equal(stripThinking("Hello <think>still thinking"), "Hello");
+  assert.equal(stripThinking("reasoning here</think>\nAnswer"), "Answer");
+  assert.equal(stripThinking("plain"), "plain");
+});
+
+test("refuses to follow a redirect away from the local runner", async (t) => {
+  const elsewhere = await fakeServer(t, (_req, res) =>
+    json(res, 200, { message: { role: "assistant", content: "hijacked" } }),
+  );
+  const server = await fakeServer(t, (_req, res) => {
+    res.writeHead(307, { location: `${elsewhere.url}/api/chat` });
+    res.end();
+  });
+  const reply = await new LocalBrain({ model: "m", port: server.port }).chat([], tools);
+  assert.deepEqual(reply, { ok: false, message: UNREACHABLE_MESSAGE });
+  assert.equal(elsewhere.requests.length, 0);
+});
+
+test("refuses replies larger than about 2 MB, declared or streamed", async (t) => {
+  const huge = "x".repeat(MAX_RESPONSE_BYTES + 10);
+  let declare = true;
+  const server = await fakeServer(t, (_req, res) => {
+    if (declare) {
+      res.writeHead(200, { "content-type": "application/json", "content-length": String(huge.length + 30) });
+      return res.end(`{"message":{"role":"a","content":"${huge}"}}`);
+    }
+    res.writeHead(200, { "content-type": "application/json", "transfer-encoding": "chunked" });
+    res.write(`{"message":{"role":"a","content":"`);
+    res.write(huge);
+    res.end(`"}}`);
+  });
+  const brain = new LocalBrain({ model: "m", port: server.port });
+  const declared = await brain.chat([], tools);
+  assert.ok(!declared.ok && /couldn't read/.test(declared.message));
+  declare = false;
+  const streamed = await brain.chat([], tools);
+  assert.ok(!streamed.ok && /couldn't read/.test(streamed.message));
+});
+
+test("readTextCapped returns the text of a small body, and an empty string for no body", async () => {
+  assert.equal(await readTextCapped(new Response("hello")), "hello");
+  assert.equal(await readTextCapped(new Response(null)), "");
+  assert.equal(await readTextCapped(new Response("hello"), 3), null);
 });

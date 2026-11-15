@@ -46,7 +46,10 @@ test("the online key never appears in any file, log line, reply or the chat hist
                 {
                   id: "1",
                   type: "function",
-                  function: { name: "add_note", arguments: JSON.stringify({ title: "k", text: "note" }) },
+                  function: {
+                    name: "add_note",
+                    arguments: JSON.stringify({ title: `key ${SENTINEL}`, text: `the key is ${SENTINEL}` }),
+                  },
                 },
                 {
                   id: "2",
@@ -78,7 +81,26 @@ test("the online key never appears in any file, log line, reply or the chat hist
       });
     }
     if (round === 2) return json(res, 401, { error: `invalid key ${SENTINEL}` });
-    return json(res, 200, { choices: [{ message: { content: "All done." } }] });
+    // A successful reply that echoes the key in its text, its <think> block and a tool call.
+    if (round === 3) {
+      return json(res, 200, {
+        choices: [
+          {
+            message: {
+              content: `<think>${SENTINEL}</think>Your key is ${SENTINEL}.`,
+              tool_calls: [
+                {
+                  id: "6",
+                  type: "function",
+                  function: { name: "add_reminder", arguments: { text: SENTINEL, due: "2099-01-01T00:00" } },
+                },
+              ],
+            },
+          },
+        ],
+      });
+    }
+    return json(res, 200, { choices: [{ message: { content: `All done. Your key is ${SENTINEL}` } }] });
   });
 
   const presenter = new FakePresenter(true);
@@ -117,7 +139,11 @@ test("the online key never appears in any file, log line, reply or the chat hist
   assert.equal((publicSettings as any).online.hasKey, true);
 
   // Make sure the flows really ran (otherwise the scan proves nothing).
-  assert.ok(round >= 3);
+  assert.ok(round >= 4);
+  const [note] = await sage.notes.list();
+  assert.equal(note?.text, "the key is [redacted]", "the add_note handler got the cleaned arguments");
+  assert.equal(note?.title, "key [redacted]");
+  assert.match(String(replies.at(-1)), /All done\. Your key is \[redacted\]/);
   assert.ok((await readdir(dir)).includes("notes.json"));
   assert.ok((await readdir(dir)).includes("action-log.jsonl"));
   sage.logger.error(`a log line that mentions ${SENTINEL} by accident`);
