@@ -43,7 +43,7 @@ Keep it that way.
 | Typecheck | TypeScript in strict mode: `tsconfig.json` (main process, preload, tests, scripts) and `src/renderer/tsconfig.json` (the window) | `npm run typecheck` | CI, every pull request |
 | Tests and coverage | Node's built-in test runner through `tsx`, with an 80% line-coverage floor | `npm run test:coverage` (`npm test` without coverage) | CI, every pull request |
 | Public-repo check | No private IP addresses, LAN host names, home folders or personal e-mail addresses in any file | `npm run check:public` | CI, every pull request |
-| Secret scan | gitleaks over the git history and the working tree; skipped with a message if gitleaks isn't installed | `npm run secret-scan` | CI, plus a gitleaks workflow on every pull request |
+| Secret scan | gitleaks over the git history and the working tree; skipped with a message if gitleaks isn't installed | `npm run secret-scan` | a gitleaks workflow on every pull request (history only); the local scan inside CI's verify step is skipped, because gitleaks isn't installed on those runners |
 
 `npm run verify` runs all five, in that order, and stays the command to run locally. On GitHub, every pull
 request gets CI (`npm run verify` on Ubuntu and Windows, plus a dependency audit), the DCO check, the
@@ -128,8 +128,16 @@ Renovate opens the dependency update pull requests (see [renovate.json](renovate
 like any other change, because an update can carry a compromised release:
 
 - It runs every check on GitHub, like any other pull request. Don't merge it until they pass.
+- New releases wait 3 days before Renovate proposes them. Security fixes don't wait.
 - After an esbuild update, or any update of a package that runs an install script, inspect the new
-  script and update the `allowScripts` entry in `package.json`.
+  script and update the `allowScripts` entry in `package.json` (the list of packages allowed to run
+  install scripts). Entries are keyed by exact version, such as `esbuild@0.28.2`, so each esbuild update
+  needs a new key.
+- Look for new or changed install scripts in every update pull request, including the monthly lockfile
+  refresh: in the `package-lock.json` diff, look for `"hasInstallScript": true` on new or changed
+  entries; or run `npm install-scripts ls` locally, which lists packages whose install scripts aren't
+  reviewed yet (npm 11.19.1, which comes with Node 24.22, has it; if your npm lacks the command, use the
+  lockfile diff).
 - After a Biome update, update the version in the `$schema` line of `biome.jsonc` and fix any new
   warnings.
 - Push those changes as a signed-off commit (`git commit -s`) on the same pull request.
