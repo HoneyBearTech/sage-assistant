@@ -53,17 +53,23 @@ async function setup(t: Parameters<typeof tempDir>[0], brain: Brain, presenter: 
 
 test("New chat while a reply is pending: the old turn writes nothing and runs no tools", async (t) => {
   const pending = deferred<BrainReply>();
+  const firstCall = deferred<void>();
   let calls = 0;
   const brain: Brain = {
     kind: "local",
     chat: async () => {
       calls++;
-      return calls === 1 ? pending.promise : textReply("fresh answer");
+      if (calls === 1) {
+        firstCall.resolve();
+        return pending.promise;
+      }
+      return textReply("fresh answer");
     },
   };
   const { assistant, ran } = await setup(t, brain, { ask: async () => true });
   const old = assistant.send("first message");
-  await new Promise((resolve) => setImmediate(resolve));
+  // Wait until the first message has really reached the model, then clear the chat.
+  await firstCall.promise;
   assistant.reset();
   // A new message can be sent at once, without waiting for the old reply.
   assert.equal(await assistant.send("second message"), "fresh answer");
@@ -81,10 +87,17 @@ test("New chat while a reply is pending: the old turn writes nothing and runs no
 
 test("New chat while the confirmation box is open: Allow then does nothing", async (t) => {
   const answer = deferred<boolean>();
+  const boxOpen = deferred<void>();
   const brain = new ScriptedBrain([toolReply(toolCall("risky", {})), textReply("after")]);
-  const { assistant, ran } = await setup(t, brain, { ask: () => answer.promise });
+  const { assistant, ran } = await setup(t, brain, {
+    ask: () => {
+      boxOpen.resolve();
+      return answer.promise;
+    },
+  });
   const old = assistant.send("do it");
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  // Wait until the box is really open, then clear the chat.
+  await boxOpen.promise;
   assistant.reset();
   answer.resolve(true);
   assert.equal(await old, CLEARED_REPLY);

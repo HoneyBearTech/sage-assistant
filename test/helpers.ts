@@ -59,14 +59,13 @@ export function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-/** A port on 127.0.0.1 with nothing listening on it. */
-export async function closedPort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as AddressInfo;
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-  return port;
-}
+/**
+ * A port on 127.0.0.1 with nothing listening on it. Picking a free port and closing it again is a
+ * race: another test running in parallel can start a server on it in between. Port 3 is below 1024,
+ * so no test (and no program without administrator rights) can listen on it, it has no service in
+ * use today, and it isn't on fetch's list of blocked ports.
+ */
+export const REFUSED_PORT = 3;
 
 export function captureLogs(): { logger: Logger; lines: string[]; redactor: SecretRedactor } {
   const lines: string[] = [];

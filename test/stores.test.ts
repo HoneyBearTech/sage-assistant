@@ -117,7 +117,8 @@ test("start and stop use the clock's timer; failures are logged, not thrown", as
   assert.equal(clock.scheduled, true);
   clock.advance(60_000);
   clock.fire();
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // Checks run one at a time, so this one finishes only after the timer's check has (no sleeping).
+  await scheduler.tick();
   assert.ok(lines.some((line) => line.includes("Couldn't show a reminder notification")));
   scheduler.stop();
   scheduler.stop();
@@ -172,14 +173,21 @@ test("a reminder that couldn't be shown is tried again on the next check, and th
 });
 
 test("the system clock and the serial queue behave", async () => {
-  assert.ok(Math.abs(systemClock.now().getTime() - Date.now()) < 1000);
+  const before = Date.now();
+  const now = systemClock.now().getTime();
+  assert.ok(now >= before && now <= Date.now());
   const handle = systemClock.setInterval(() => {}, 10_000);
   systemClock.clearInterval(handle);
   const serial = new Serial();
   const order: number[] = [];
-  await Promise.all([
+  // The first task waits until the others are queued, so they are queued while it is still running.
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = Promise.all([
     serial.run(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await gate;
       order.push(1);
     }),
     serial
@@ -190,5 +198,9 @@ test("the system clock and the serial queue behave", async () => {
       .catch(() => undefined),
     serial.run(async () => order.push(3)),
   ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(order, [], "nothing runs past the first task while it is still going");
+  release();
+  await queued;
   assert.deepEqual(order, [1, 2, 3]);
 });

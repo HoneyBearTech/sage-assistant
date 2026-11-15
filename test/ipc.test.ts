@@ -6,7 +6,7 @@ import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers, toPublicSettings } from "../src/main/ipc.js";
 import { CHANNELS } from "../src/shared/api.js";
-import { closedPort, FakePresenter, MemoryKeyStore, tempDir } from "./helpers.js";
+import { FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir } from "./helpers.js";
 
 async function setup(t: Parameters<typeof tempDir>[0]) {
   const dir = await tempDir(t);
@@ -19,7 +19,7 @@ async function setup(t: Parameters<typeof tempDir>[0]) {
     openPath: async () => "",
     launch: async () => {},
     logSink: () => {},
-    localPort: await closedPort(),
+    localPort: REFUSED_PORT,
   });
   const handlers = createIpcHandlers(sage, {
     chooseFolder: async () => "/picked/folder",

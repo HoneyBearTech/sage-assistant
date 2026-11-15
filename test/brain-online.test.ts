@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isConnectionRefused, parseArgs } from "../src/core/brain/brain.js";
 import { completionsUrl, OnlineBrain } from "../src/core/brain/online.js";
-import { closedPort, fakeServer, json } from "./helpers.js";
+import { fakeServer, json, REFUSED_PORT } from "./helpers.js";
 
 const tools = [{ name: "web_search", description: "Search", parameters: { type: "object" } }];
 const KEY = "fake-test-value";
@@ -193,18 +193,26 @@ test("reports unreadable replies, timeouts and unreachable services", async (t) 
     }
     // "slow": never answers
   });
-  const brain = new OnlineBrain({ baseUrl: server.url, model: "m", getKey: async () => KEY, timeoutMs: 50 });
+  // Replies that do arrive get the normal timeout, so a busy machine can't turn them into "too long".
+  const brain = new OnlineBrain({ baseUrl: server.url, model: "m", getKey: async () => KEY });
   const shape = await brain.chat([], tools);
-  assert.ok(!shape.ok && /couldn't read/.test(shape.message));
+  assert.ok(!shape.ok && /couldn't read/.test(shape.message), shape.ok ? "ok" : shape.message);
   mode = "json";
   const notJson = await brain.chat([], tools);
-  assert.ok(!notJson.ok && /couldn't read/.test(notJson.message));
+  assert.ok(!notJson.ok && /couldn't read/.test(notJson.message), notJson.ok ? "ok" : notJson.message);
+  // Only the server that never answers meets a short timeout; it times out however slow the machine is.
   mode = "slow";
-  const slow = await brain.chat([], tools);
+  const impatient = new OnlineBrain({
+    baseUrl: server.url,
+    model: "m",
+    getKey: async () => KEY,
+    timeoutMs: 50,
+  });
+  const slow = await impatient.chat([], tools);
   assert.ok(!slow.ok && /too long/.test(slow.message));
 
   const refused = new OnlineBrain({
-    baseUrl: `http://127.0.0.1:${await closedPort()}`,
+    baseUrl: `http://127.0.0.1:${REFUSED_PORT}`,
     model: "m",
     getKey: async () => KEY,
   });

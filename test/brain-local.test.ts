@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MAX_RESPONSE_BYTES, readTextCapped, stripThinking } from "../src/core/brain/brain.js";
 import { LOCAL_HOST, LOCAL_PORT, LocalBrain, UNREACHABLE_MESSAGE } from "../src/core/brain/local.js";
-import { closedPort, fakeServer, json } from "./helpers.js";
+import { fakeServer, json, REFUSED_PORT } from "./helpers.js";
 
 const tools = [{ name: "add_note", description: "Add a note", parameters: { type: "object" } }];
 
@@ -66,7 +66,7 @@ test("tool calls get Sage's own ids, and string arguments are parsed", async (t)
 });
 
 test("says Ollama isn't running when nothing answers", async () => {
-  const brain = new LocalBrain({ model: "m", port: await closedPort() });
+  const brain = new LocalBrain({ model: "m", port: REFUSED_PORT });
   assert.deepEqual(await brain.chat([], tools), { ok: false, message: UNREACHABLE_MESSAGE });
   assert.match(UNREACHABLE_MESSAGE, /Is Ollama running\?/);
 });

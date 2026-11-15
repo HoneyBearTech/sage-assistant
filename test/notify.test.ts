@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { type TestContext, test } from "node:test";
 import { MAX_NOTICE_TEXT, MAX_NOTICES, NoticeBoard } from "../src/core/notices.js";
-import { createNotifier, type DesktopNotification, type NotifyParts } from "../src/main/notify.js";
+import {
+  createNotifier,
+  type DesktopNotification,
+  NOTIFY_TIMEOUT_MS,
+  type NotifyParts,
+} from "../src/main/notify.js";
 
 type Behaviour = "show" | "failed" | "silent" | "throw";
 
@@ -28,20 +33,28 @@ function parts(behaviour: Behaviour, options: { supported?: boolean; window?: bo
       posted.push(`${title}: ${body}`);
       return true;
     },
-    timeoutMs: 20,
   };
   return { notifyParts, posted, created };
 }
 
-test("a desktop notification that the system shows counts as shown, with no window copy", async () => {
+// The timeout runs on mocked timers: it fires only when a test moves the clock, so how busy the
+// machine is can't decide the outcome. The system's "show" and "failed" events still arrive on
+// setImmediate, which isn't mocked.
+function mockTimeouts(t: TestContext): void {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+}
+
+test("a desktop notification that the system shows counts as shown, with no window copy", async (t) => {
+  mockTimeouts(t);
   const { notifyParts, posted, created } = parts("show");
   assert.equal(await createNotifier(notifyParts)("Sage reminder", "Stand up"), true);
   assert.deepEqual(created, ["Sage reminder: Stand up"]);
   assert.deepEqual(posted, []);
 });
 
-test("failed, unconfirmed, throwing or unsupported notifications fall back to the window", async () => {
-  for (const behaviour of ["failed", "silent", "throw"] as const) {
+test("failed, throwing or unsupported notifications fall back to the window", async (t) => {
+  mockTimeouts(t);
+  for (const behaviour of ["failed", "throw"] as const) {
     const { notifyParts, posted } = parts(behaviour);
     assert.equal(await createNotifier(notifyParts)("Sage reminder", "Stand up"), true, behaviour);
     assert.deepEqual(posted, ["Sage reminder: Stand up"], behaviour);
@@ -52,7 +65,26 @@ test("failed, unconfirmed, throwing or unsupported notifications fall back to th
   assert.deepEqual(unsupported.posted, ["Sage reminder: Stand up"]);
 });
 
-test("with no desktop notification and no window, it reports not shown so the scheduler retries", async () => {
+test("a notification the system never confirms goes to the window after the timeout, not before", async (t) => {
+  mockTimeouts(t);
+  const { notifyParts, posted } = parts("silent");
+  let settled: boolean | undefined;
+  const pending = Promise.resolve(createNotifier(notifyParts)("Sage reminder", "Stand up")).then((shown) => {
+    settled = shown;
+    return shown;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  t.mock.timers.tick(NOTIFY_TIMEOUT_MS - 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, undefined, "still waiting just before the timeout");
+  assert.deepEqual(posted, []);
+  t.mock.timers.tick(1);
+  assert.equal(await pending, true);
+  assert.deepEqual(posted, ["Sage reminder: Stand up"]);
+});
+
+test("with no desktop notification and no window, it reports not shown so the scheduler retries", async (t) => {
+  mockTimeouts(t);
   const { notifyParts } = parts("failed", { window: false });
   assert.equal(await createNotifier(notifyParts)("Sage reminder", "Stand up"), false);
 });
