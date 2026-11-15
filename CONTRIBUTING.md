@@ -77,9 +77,30 @@ It must pass. If you changed the window, also start the app (`npm start`) and tr
   stored files.
 - **No telemetry**, analytics or crash reporting of any kind, and no remote content in the window.
 - **Dependencies**: pin exact versions, keep them few, and only with permissive licences. No vendor SDKs;
-  use `fetch`.
+  use `fetch`. See [install scripts](#install-scripts-and-allowscripts) below.
 - Formatting and lint are Biome's job; if you must silence a rule, use a `biome-ignore` comment with the
   reason.
+
+### Install scripts and `allowScripts`
+
+A package's install script runs code on your computer during `npm install`, so Sage keeps a reviewed
+list of them in the `allowScripts` field of `package.json`. Today it has one entry, pinned to a
+version: `esbuild@0.28.2`, whose script picks the right prebuilt binary for your system. Electron has no
+install script; it downloads its runtime on the first `npm start`.
+
+The field is read by npm 11.19 and later (the version that comes with Node 24):
+
+- `npm install` prints *"… install scripts not yet covered by allowScripts"* for any package with an
+  install script that isn't on the list. Treat that warning as a review request, not noise.
+- `npm install-scripts ls` lists them; `npm install-scripts approve <package>` adds a pinned entry after
+  you've read the script; `npm install-scripts deny <package>` writes `false`, which stops that script
+  from running.
+- `npm install --strict-allow-scripts` refuses to install while any script is unreviewed.
+
+Keep the field when you change dependencies: don't delete it to quiet the warning. When a dependency
+update changes a reviewed package's version, read its new install script and update the pinned entry
+in the same pull request. Older npm versions ignore the field and run every install script, which is
+one more reason to use Node 24.
 
 ## Test policy
 
