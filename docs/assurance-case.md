@@ -250,7 +250,9 @@ chose.
   allowlist keeps out types that run code, but a document app with its own flaws (or macros allowed in
   its settings) is still a risk.
 - **A reminder counts as shown only when it was.** That means a desktop notification the system
-  confirmed, or the window confirming that it put the notice on screen (collecting it isn't enough).
+  confirmed, or the window confirming that the notice is where the user can see it (collecting it
+  isn't enough). The window confirms only while the Chat view is open and the window isn't hidden or
+  minimised; a notice that arrives while Settings is open is confirmed when the user returns to Chat.
   Until then it stays due: it comes back on the next check, or the next time Sage starts if Sage or
   the window closed or crashed first. A notice not yet confirmed is handed out again with the same
   id, and the window skips ids it already shows, so it isn't shown twice in one window. Each

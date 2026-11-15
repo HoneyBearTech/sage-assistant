@@ -31,6 +31,9 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
       two minutes: within about two and a half minutes it appears in Sage's chat as a notice instead.
       Set one more for two minutes and close Sage straight away; start Sage again after three minutes:
       the reminder appears then, once. Close Sage and start it again: it doesn't appear a second time.
+- [ ] With notifications still off, set a reminder for two minutes and open **Settings**. Stay there for
+      three minutes, then close Sage without opening the chat. Start Sage again: the reminder appears
+      in the chat.
 - [ ] With notifications still off, set a reminder for two minutes and, before it is due, say "Delete
       the reminder" for it and choose **Allow**: nothing appears in the chat at the due time, nor after
       a restart. Turn notifications back on.

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { type TestContext, test } from "node:test";
-import type { Notice, PublicSettings, SageApi } from "../src/shared/api.js";
-import { installFakeDom, removeFakeDom } from "./fake-dom.js";
+import { createSage } from "../src/core/sage.js";
+import { createIpcHandlers } from "../src/main/ipc.js";
+import { CHANNELS, MAX_ACK_IDS, type Notice, type PublicSettings, type SageApi } from "../src/shared/api.js";
+import { installFakeDom, removeFakeDom, setWindowVisibility } from "./fake-dom.js";
+import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir } from "./helpers.js";
 
 // The first checks read the renderer's source for the behaviour that matters (unsaved settings
 // aren't thrown away); the later ones run the script itself against a fake DOM.
@@ -199,6 +202,134 @@ test("notices are confirmed only after they are on screen, and never shown twice
   t.mock.timers.tick(5_000);
   await settled();
   assert.equal(acks.length, 2);
+});
+
+test("a notice collected while Settings is open or the window is hidden is confirmed only once seen", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  const poll = async () => {
+    t.mock.timers.tick(5_000);
+    await settled();
+  };
+
+  el("tab-settings").click();
+  waiting.push({ id: "n1", text: "Sage reminder: Stretch" });
+  await poll();
+  assert.deepEqual(texts(), ["Sage reminder: Stretch"], "added to the chat, behind Settings");
+  assert.deepEqual(acks, [], "not confirmed while the Chat view is hidden");
+  await poll();
+  assert.deepEqual(texts(), ["Sage reminder: Stretch"], "handed out again, not added twice");
+  assert.deepEqual(acks, []);
+
+  el("tab-chat").click();
+  await settled();
+  assert.deepEqual(acks, [["n1"]], "confirmed when the user switches back to Chat");
+  waiting.length = 0;
+
+  // The window is minimised: Chat is the open view, but nobody can see it.
+  setWindowVisibility("hidden");
+  waiting.push({ id: "n2", text: "Second" });
+  await poll();
+  assert.deepEqual(acks, [["n1"]], "not confirmed while the window is hidden");
+  el("tab-settings").click();
+  setWindowVisibility("visible");
+  await settled();
+  assert.deepEqual(acks, [["n1"]], "the window is back, but Settings is open");
+  el("tab-chat").click();
+  await settled();
+  assert.deepEqual(acks, [["n1"], ["n2"]]);
+  setWindowVisibility("hidden");
+  setWindowVisibility("visible");
+  await settled();
+  assert.equal(acks.length, 2, "nothing left to confirm");
+});
+
+test("many notices held while Settings is open are confirmed in batches the channel accepts", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  const { el } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  el("tab-settings").click();
+  for (let i = 0; i < MAX_ACK_IDS + 7; i++) waiting.push({ id: `n${i}`, text: `R${i}` });
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.equal(acks.length, 0, "held while Settings is open");
+  el("tab-chat").click();
+  await settled();
+  assert.deepEqual(
+    acks.map((batch) => batch.length),
+    [MAX_ACK_IDS, 7],
+  );
+  assert.deepEqual(
+    acks.flat(),
+    waiting.map((n) => n.id),
+  );
+});
+
+test("Settings open, a fallback reminder is collected, Sage restarts before Chat is opened: it comes back", async (t) => {
+  const dataDir = await tempDir(t);
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const start = () => {
+    const sage = createSage({
+      dataDir,
+      keyStore: new MemoryKeyStore(),
+      presenter: new FakePresenter(false),
+      notify: () => false, // no desktop notifications: reminders go to the window
+      openPath: async () => "",
+      launch: async () => {},
+      logSink: () => {},
+      localPort: REFUSED_PORT,
+      clock,
+    });
+    return {
+      sage,
+      handlers: createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null }),
+    };
+  };
+  const first = start();
+  let taking: Promise<unknown> = Promise.resolve();
+  let acked = 0;
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => {
+      const result = first.handlers[CHANNELS.takeNotices](undefined) as Promise<Notice[]>;
+      taking = result;
+      return result;
+    },
+    ackNotices: async (ids) => {
+      acked++;
+      await first.handlers[CHANNELS.ackNotices]({ ids });
+    },
+  });
+
+  el("tab-settings").click();
+  const reminder = await first.sage.reminders.add("Take the bins out", new Date("2026-11-15T08:59:00Z"));
+  await first.sage.scheduler.tick();
+  t.mock.timers.tick(5_000);
+  await taking;
+  await settled();
+  assert.deepEqual(texts(), ["Sage reminder: Take the bins out"], "the window collected it");
+  assert.equal(acked, 0);
+  assert.equal((await first.sage.reminders.get(reminder.id))!.firedAt, null, "not recorded as shown");
+
+  // Sage closes before the user opens Chat, and starts again.
+  const second = start();
+  await second.sage.scheduler.tick();
+  const again = (await second.handlers[CHANNELS.takeNotices](undefined)) as Notice[];
+  assert.deepEqual(
+    again.map((n) => n.text),
+    ["Sage reminder: Take the bins out"],
+    "the reminder comes back",
+  );
 });
 
 test("settings are loaded at startup and after a successful save, and save messages are shown", () => {

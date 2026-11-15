@@ -5,8 +5,7 @@ import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings } from "../src/main/ipc.js";
-import { MAX_NOTICES } from "../src/core/notices.js";
-import { CHANNELS, type Notice } from "../src/shared/api.js";
+import { CHANNELS, MAX_ACK_IDS, type Notice } from "../src/shared/api.js";
 import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
 
 async function setup(t: Parameters<typeof tempDir>[0]) {
@@ -242,7 +241,7 @@ test("notice confirmations are validated: a short list of short ids, nothing els
     { ids: [id, 5] },
     { ids: [id, ""] },
     { ids: [id, "x".repeat(33)] },
-    { ids: [id, ...Array.from({ length: MAX_NOTICES + 1 }, (_, i) => `n${i + 100}`)] },
+    { ids: [id, ...Array.from({ length: MAX_ACK_IDS }, (_, i) => `n${i + 100}`)] },
   ]) {
     assert.equal(await handlers[CHANNELS.ackNotices](payload), undefined);
   }

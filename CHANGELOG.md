@@ -14,7 +14,7 @@ All notable changes to Sage are documented here. The format follows
   in plain words.
 - **Skills**: answer, web search (DuckDuckGo's HTML page, no key), notes (list, read, add), reminders (list,
   add, with a desktop notification when due, or a message in the window if a notification can't be shown; a
-  reminder counts as seen only once the window confirms it is on screen, and one that wasn't seen comes back
+  reminder counts as seen only once it is in the chat with the Chat view open, and one that wasn't seen comes back
   on the next check or start, once; a deleted reminder is taken out of the window's queue and never appears),
   open an app from your list, open a document, picture, sound or video file in an approved folder, and
   delete a note or reminder.

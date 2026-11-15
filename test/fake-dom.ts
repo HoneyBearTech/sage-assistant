@@ -84,12 +84,28 @@ export function installFakeDom(ids: readonly string[], sage: unknown): Map<strin
     });
   }
   const globals = globalThis as Record<string, unknown>;
-  globals.document = {
-    getElementById: (id: string) => elements.get(id) ?? null,
-    createElement: (tag: string) => new FakeElement(tag),
-  };
+  globals.document = fakeDocument(elements);
   globals.window = { sage };
   return elements;
+}
+
+function fakeDocument(elements: Map<string, FakeElement>) {
+  const listeners = new FakeElement("document");
+  return {
+    visibilityState: "visible" as "visible" | "hidden",
+    getElementById: (id: string) => elements.get(id) ?? null,
+    createElement: (tag: string) => new FakeElement(tag),
+    addEventListener: (type: string, listener: Listener) => listeners.addEventListener(type, listener),
+    dispatch: (type: string) => listeners.dispatch(type),
+  };
+}
+
+/** Hides or shows the whole window (minimised, or behind another one), as the browser reports it. */
+export function setWindowVisibility(state: "visible" | "hidden"): void {
+  const document = (globalThis as { document?: ReturnType<typeof fakeDocument> }).document;
+  if (!document) throw new Error("the fake DOM isn't installed");
+  document.visibilityState = state;
+  document.dispatch("visibilitychange");
 }
 
 export function removeFakeDom(): void {

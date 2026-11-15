@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { serviceOrigin } from "../core/brain/online.js";
 import { describeError } from "../core/log.js";
-import { MAX_NOTICES } from "../core/notices.js";
 import type { Sage } from "../core/sage.js";
 import type { Settings } from "../core/settings.js";
-import { CHANNELS, type Channel, type PublicSettings, type Result } from "../shared/api.js";
+import { CHANNELS, type Channel, MAX_ACK_IDS, type PublicSettings, type Result } from "../shared/api.js";
 
 /** Native pickers, supplied by the main process (Electron's dialog module). */
 export interface Pickers {
@@ -21,10 +20,10 @@ const keyPayload = z.strictObject({
   baseUrl: z.string().trim().max(500),
 });
 
-// Notice ids are short (see NoticeBoard); the board never holds more than MAX_NOTICES, plus one
-// "more waiting" line.
+// Notice ids are short (see NoticeBoard). The window sends at most MAX_ACK_IDS per call, in
+// batches, since confirmations can pile up while the Chat view is hidden.
 const ackPayload = z.strictObject({
-  ids: z.array(z.string().min(1).max(32)).max(MAX_NOTICES + 1),
+  ids: z.array(z.string().min(1).max(32)).max(MAX_ACK_IDS),
 });
 
 export const SAVE_SETTINGS_FIRST = "Save settings first, then save the key.";

@@ -13,6 +13,9 @@ export const CHANNELS = {
   ackNotices: "sage:notices-ack",
 } as const;
 
+/** The most notice ids one `ackNotices` call may carry; the window sends more in batches. */
+export const MAX_ACK_IDS = 50;
+
 /** A message from Sage itself for the window. The id is what the window confirms with. */
 export interface Notice {
   id: string;

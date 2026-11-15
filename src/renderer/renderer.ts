@@ -1,4 +1,4 @@
-import type { PublicAppEntry, PublicSettings, SageApi } from "../shared/api.js";
+import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
 
 // The chat window. It runs sandboxed with no Node access; `window.sage` (from the preload) is its
 // only way to reach the rest of Sage. Text is always inserted with textContent, never as HTML.
@@ -87,27 +87,6 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
     });
 });
 
-// Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data
-// files that had to be set aside. Collected on load and every few seconds. Each one is confirmed
-// after it is on screen; until then Sage hands it out again, so ids already shown are skipped.
-const NOTICE_POLL_MS = 5_000;
-const shownNotices = new Set<string>();
-async function collectNotices(): Promise<void> {
-  try {
-    const notices = await sage.takeNotices();
-    for (const notice of notices) {
-      if (shownNotices.has(notice.id)) continue;
-      addMessage("notice", notice.text);
-      shownNotices.add(notice.id);
-    }
-    if (notices.length > 0) await sage.ackNotices(notices.map((notice) => notice.id));
-  } catch {
-    // The next poll tries again.
-  }
-}
-void collectNotices();
-setInterval(() => void collectNotices(), NOTICE_POLL_MS);
-
 // --- Tabs ---
 
 const tabs = { chat: byId<HTMLButtonElement>("tab-chat"), settings: byId<HTMLButtonElement>("tab-settings") };
@@ -122,8 +101,61 @@ function show(view: "chat" | "settings"): void {
   // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
   // startup and again after each successful save.
 }
-tabs.chat.addEventListener("click", () => show("chat"));
+tabs.chat.addEventListener("click", () => {
+  show("chat");
+  void confirmShown();
+});
 tabs.settings.addEventListener("click", () => show("settings"));
+
+// --- Notices ---
+
+// Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data
+// files that had to be set aside. Collected on load and every few seconds and added to the chat.
+// Sage hands a notice out again until the window confirms it, so ids already in the chat are
+// skipped. A notice is confirmed only once the user can actually see it: the Chat view is open and
+// the window isn't hidden or minimised. Until then the confirmation is held, so a reminder that
+// arrives while Settings is open still comes back if Sage closes before Chat is opened.
+const NOTICE_POLL_MS = 5_000;
+const shownNotices = new Set<string>();
+/** In the chat, but not yet confirmed to Sage. */
+const unconfirmed = new Set<string>();
+
+function chatVisible(): boolean {
+  return !views.chat.hidden && document.visibilityState !== "hidden";
+}
+
+async function confirmShown(): Promise<void> {
+  if (unconfirmed.size === 0 || !chatVisible()) return;
+  const ids = [...unconfirmed];
+  try {
+    for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
+      const batch = ids.slice(start, start + MAX_ACK_IDS);
+      await sage.ackNotices(batch);
+      for (const id of batch) unconfirmed.delete(id);
+    }
+  } catch {
+    // Kept for the next try; Sage hands the notice out again meanwhile.
+  }
+}
+
+async function collectNotices(): Promise<void> {
+  try {
+    for (const notice of await sage.takeNotices()) {
+      if (!shownNotices.has(notice.id)) {
+        addMessage("notice", notice.text);
+        shownNotices.add(notice.id);
+      }
+      unconfirmed.add(notice.id);
+    }
+  } catch {
+    // The next poll tries again.
+  }
+  await confirmShown();
+}
+
+document.addEventListener("visibilitychange", () => void confirmShown());
+void collectNotices();
+setInterval(() => void collectNotices(), NOTICE_POLL_MS);
 
 // --- Settings ---
 
