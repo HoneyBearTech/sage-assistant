@@ -42,7 +42,7 @@ strike them through with a reason.
 | `src/core/skills/` | The skill registry, the built-in skills, the ask-first `ApprovalGate`, the untrusted-text wrapper and the JSONL action log. |
 | `src/core/assistant.ts` | One conversation: sends messages to the brain, runs tool calls through the registry, caps calls per turn. |
 | `src/core/notes.ts`, `reminders.ts`, `scheduler.ts` | Notes and reminders as atomic JSON files in `userData`; the reminder scheduler with an injectable clock, which marks a reminder shown only after the notifier confirms it. |
-| `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside); the desktop notification with its window fallback. |
+| `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside), delivered when the window collects them; the desktop notification, which reports only a confirmed show. |
 | `src/core/search/` | `SearchProvider` and the DuckDuckGo HTML provider with a small dependency-free parser. |
 | `src/core/settings.ts`, `keystore.ts` | Settings JSON (no secrets) and the `KeyStore` (encrypted file via an `Encryptor`). |
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
@@ -67,7 +67,11 @@ strike them through with a reason.
   only inside approved folders**, checked after `realpath`, only types on the allowlist in
   `src/core/files.ts` (documents, pictures, sound, video), opened with `shell.openPath`.
 - **The online key never leaves the key store**: not in settings, logs, the action log, the chat, the
-  window or error messages. Keep `test/key-leak.test.ts` passing and extend it for new writers.
+  window or error messages. It is tied to the service (origin) it was entered for and handed out only
+  for that one (`ServiceKeys.keyFor`). Keep `test/key-leak.test.ts` and `test/key-binding.test.ts`
+  passing and extend them for new writers.
+- **Tests never sleep or use real timeouts or free-port tricks**: mocked timers, `FakeClock` or events
+  (see CONTRIBUTING.md; `test/test-rules.test.ts` checks it).
 - **The window stays locked down**: `contextIsolation`, `sandbox`, no `nodeIntegration`, `webSecurity`,
   the strict CSP, local files only, no navigation, no pop-ups, no permissions except the microphone, the
   sender checked on every IPC handler. Change `src/main/security.ts` and its tests together.

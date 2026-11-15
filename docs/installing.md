@@ -108,7 +108,9 @@ If you'd rather use an online model service that offers the chat-completions for
 
 If you later change the address to a different service (a different host or port), Sage removes the
 saved key when you save, so a key is never sent to a service it wasn't entered for. Paste the new
-service's key and choose **Save key** again.
+service's key and choose **Save key** again. A key you save before any address belongs to the first
+address you save. If Sage is answering while you change the brain or the service, that answer stops;
+ask again.
 
 With an online brain, everything you type, and what Sage reads for you during the conversation (search
 results, notes), is sent to that service.

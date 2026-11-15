@@ -27,16 +27,17 @@ service: the chat window talks only to the app's own main process, through a han
 | --- | --- | --- |
 | Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat and the settings screen. Runs sandboxed with no Node access; inserts text only with `textContent`. |
 | Preload | `src/preload/preload.ts` | Exposes `window.sage` with nine typed methods through `contextBridge`; nothing else. |
-| IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service. |
-| Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits for the system to confirm it; if notifications aren't supported, fail or aren't confirmed in time, posts it to the window instead. Reports whether it was shown. |
+| IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service, and stops a turn in progress when the brain or the service changes. |
+| Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits up to 5 seconds for the system to confirm it. Reports whether it was confirmed; it never reports a guess. |
 | Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog, notifications, `shell.openPath`, the app launcher and the encrypted key store. Checks the sender of every IPC call. |
 | Window security | `src/main/security.ts` | The window options, the CSP and the URL and permission rules, as pure functions the tests check. |
 | Assistant | `src/core/assistant.ts` | Sends the conversation and the skill list to the brain, runs the tool calls it returns through the registry, and stops after six tool calls or six rounds per message (three each for `add_note` and `add_reminder`). **New chat** abandons a turn in progress: it runs no further tool calls and writes nothing to the history. |
 | Brain | `src/core/brain/` | `LocalBrain` (Ollama's `/api/chat` on `127.0.0.1:11434`) and `OnlineBrain` (`<base>/v1/chat/completions`). Settings pick one for each message. |
 | Skills | `src/core/skills/` | The registry, the eleven built-in skills, the ask-first gate, the untrusted-text wrapper and the action log. |
 | Data stores | `src/core/notes.ts`, `reminders.ts`, `settings.ts`, `keystore.ts` | JSON files written atomically, and the encrypted key file. |
-| Scheduler | `src/core/scheduler.ts` | Checks reminders every 15 seconds and shows each one that is due, once. A reminder is marked as shown only after the notifier says it was shown; otherwise the next check tries again. |
-| Notices | `src/core/notices.ts` | Messages from Sage itself (reminders shown in the window, data files set aside), collected by the window every 5 seconds and shown in the chat. |
+| Scheduler | `src/core/scheduler.ts` | Checks reminders every 15 seconds and shows each one that is due, once. If the desktop notification isn't confirmed, the reminder goes to the notice board. It is marked as shown only when the desktop confirmed it or the window collected it; until then it stays due and comes back on the next check or the next start. Each reminder is handled on its own, and one that was shown but couldn't be recorded is never shown again. |
+| Notices | `src/core/notices.ts` | Messages from Sage itself (reminders for the window, data files set aside), collected by the window every 5 seconds and shown in the chat. Collecting a notice is what delivers it. At most 50 wait at once: the oldest are kept, and the window is told how many more are waiting. |
+| Service keys | `src/core/keystore.ts` | The key is saved together with the service (origin) it was entered for, and each turn's online brain asks only for the key of its own service. |
 | Search | `src/core/search/` | The `SearchProvider` interface and the DuckDuckGo HTML provider with its parser. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
 
@@ -75,8 +76,9 @@ service: the chat window talks only to the app's own main process, through a han
      buttons, **Don't allow** (the default) and **Allow**. Only **Allow** creates an approval, tied to
      that call id and a SHA-256 hash of the skill name, the arguments, the action and the sentence. The
      registry then uses the approval up (`consume`), runs `prepare` again (it must give the same hash),
-     and runs the skill with the approved action. If the chat was cleared while the box was open,
-     nothing runs. The decision and the outcome are appended to `action-log.jsonl`.
+     and runs the skill with the approved action. If the chat was cleared or the brain settings
+     changed at any point between the box and the action, nothing runs. The decision and the outcome
+     are appended to `action-log.jsonl`.
 5. The results go back to the brain, which answers or asks for more tools. The final text is shown in
    the window.
 

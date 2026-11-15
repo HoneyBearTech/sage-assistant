@@ -13,7 +13,8 @@ All notable changes to Sage are documented here. The format follows
   service that offers the chat-completions format, with your own key. If Ollama isn't running, Sage says so
   in plain words.
 - **Skills**: answer, web search (DuckDuckGo's HTML page, no key), notes (list, read, add), reminders (list,
-  add, with a desktop notification when due, or a message in the window if a notification can't be shown),
+  add, with a desktop notification when due, or a message in the window if a notification can't be shown; a
+  reminder that wasn't seen comes back on the next check or start),
   open an app from your list, open a document, picture, sound or video file in an approved folder, and
   delete a note or reminder.
 - **Plain-English notices in the window** when a settings, notes or reminders file couldn't be read: the
@@ -21,7 +22,9 @@ All notable changes to Sage are documented here. The format follows
 - **The ask-first rule**: opening an app or a file and deleting a note or reminder always show a
   confirmation box that says exactly what will happen, on one clean line. Each approval works once, for that
   exact action: the approved program or file is what runs, and a change while the box is open blocks it.
-  **New chat** drops a reply still in progress, including any action waiting for the box.
+  **New chat** drops a reply still in progress, including any action waiting for the box, and Send works
+  again at once. Text in the box is quoted and cleaned of invisible look-alike characters. On Windows, file
+  names with `:` (alternate data streams) are refused.
   There is no run-a-command skill and no "always allow" mode. Every action you allow or decline is written
   to a local action log.
 - **Untrusted text stays data**: web results and notes go back to the model labelled as untrusted, and skills
@@ -29,7 +32,8 @@ All notable changes to Sage are documented here. The format follows
   new reminders).
 - **The online key is encrypted** with the operating system's protection (Electron safeStorage) and never
   written to settings, logs, the action log or the chat. A key repeated in a service's reply is replaced
-  with `[redacted]`, and changing the service's address removes the saved key.
+  with `[redacted]`. The key is tied to the service it was entered for and only ever sent there: changing
+  the service's address removes it, and a reply still in progress for the old service is stopped.
 - **A locked-down window**: sandboxed, context-isolated, no Node access, a strict Content-Security-Policy,
   only local files, no navigation or pop-ups, and the microphone as the only permission it can be given. A
   script to set Electron's hardening fuses on the packaged app.
