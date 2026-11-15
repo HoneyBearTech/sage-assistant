@@ -74,9 +74,23 @@ export function createSage(deps: SageDeps): Sage {
   };
 
   const notices = new NoticeBoard();
-  const settings = new SettingsStore(deps.dataDir, logger);
-  const notes = new NotesStore(deps.dataDir, logger, now);
-  const reminders = new RemindersStore(deps.dataDir, logger, now);
+  // An unreadable data file is moved aside, never deleted; the user is told once, in the window.
+  const corrupt = (what: string, fresh: string) => (movedTo: string) =>
+    notices.post(
+      `Sage couldn't read its ${what} file, so it ${fresh}. The old file wasn't deleted; it was kept here: ${movedTo}`,
+    );
+  const settings = new SettingsStore(
+    deps.dataDir,
+    logger,
+    corrupt("settings", "went back to the default settings"),
+  );
+  const notes = new NotesStore(deps.dataDir, logger, now, corrupt("notes", "started an empty notes list"));
+  const reminders = new RemindersStore(
+    deps.dataDir,
+    logger,
+    now,
+    corrupt("reminders", "started an empty reminders list"),
+  );
   const scheduler = new ReminderScheduler(reminders, deps.notify, clock, logger);
   const gate = new ApprovalGate(deps.presenter);
   const actionLog = new ActionLog(join(deps.dataDir, "action-log.jsonl"), (text) => redactor.redact(text));

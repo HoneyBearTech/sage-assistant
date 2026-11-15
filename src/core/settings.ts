@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { readJson, writeJsonAtomic } from "./json-file.js";
+import { type CorruptFileHandler, readJson, writeJsonAtomic } from "./json-file.js";
 import type { Logger } from "./log.js";
 import { Serial } from "./serial.js";
 
@@ -55,6 +55,7 @@ export class SettingsStore {
   constructor(
     dataDir: string,
     private readonly logger: Logger,
+    private readonly onCorrupt?: CorruptFileHandler,
   ) {
     this.path = join(dataDir, "settings.json");
   }
@@ -65,6 +66,7 @@ export class SettingsStore {
       if (result.status === "ok") return result.value;
       if (result.status === "invalid") {
         this.logger.warn(`settings.json couldn't be read; it was kept as ${result.movedTo}`);
+        this.onCorrupt?.(result.movedTo);
       }
       return defaultSettings();
     });

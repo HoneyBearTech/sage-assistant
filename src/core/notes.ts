@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
-import { readJson, writeJsonAtomic } from "./json-file.js";
+import { type CorruptFileHandler, readJson, writeJsonAtomic } from "./json-file.js";
 import type { Logger } from "./log.js";
 import { Serial } from "./serial.js";
 
@@ -28,6 +28,7 @@ export class NotesStore {
     dataDir: string,
     private readonly logger: Logger,
     private readonly now: () => Date = () => new Date(),
+    private readonly onCorrupt?: CorruptFileHandler,
   ) {
     this.path = join(dataDir, "notes.json");
   }
@@ -72,6 +73,7 @@ export class NotesStore {
     if (result.status === "ok") return result.value.notes;
     if (result.status === "invalid") {
       this.logger.warn(`notes.json couldn't be read; it was kept as ${result.movedTo}`);
+      this.onCorrupt?.(result.movedTo);
     }
     return [];
   }

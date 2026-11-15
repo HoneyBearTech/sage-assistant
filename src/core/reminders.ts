@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
-import { readJson, writeJsonAtomic } from "./json-file.js";
+import { type CorruptFileHandler, readJson, writeJsonAtomic } from "./json-file.js";
 import type { Logger } from "./log.js";
 import { Serial } from "./serial.js";
 
@@ -26,6 +26,7 @@ export class RemindersStore {
     dataDir: string,
     private readonly logger: Logger,
     private readonly now: () => Date = () => new Date(),
+    private readonly onCorrupt?: CorruptFileHandler,
   ) {
     this.path = join(dataDir, "reminders.json");
   }
@@ -91,6 +92,7 @@ export class RemindersStore {
     if (result.status === "ok") return result.value.reminders;
     if (result.status === "invalid") {
       this.logger.warn(`reminders.json couldn't be read; it was kept as ${result.movedTo}`);
+      this.onCorrupt?.(result.movedTo);
     }
     return [];
   }

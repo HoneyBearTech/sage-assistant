@@ -46,6 +46,9 @@ export async function writeJsonAtomic(path: string, value: unknown): Promise<voi
   await writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** Told where an unreadable data file was moved, so the user can be told too. */
+export type CorruptFileHandler = (movedTo: string) => void;
+
 export type ReadJsonResult<T> =
   | { status: "ok"; value: T }
   | { status: "missing" }

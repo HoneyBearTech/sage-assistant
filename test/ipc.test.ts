@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
@@ -118,6 +120,43 @@ test("notices are handed to the window once each", async (t) => {
   sage.notices.post("Sage reminder: Stand up");
   sage.notices.post("Second");
   assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), ["Sage reminder: Stand up", "Second"]);
+  assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
+});
+
+test("an unreadable settings, notes or reminders file is kept aside and the window is told once", async (t) => {
+  const dir = await tempDir(t);
+  for (const name of ["settings.json", "notes.json", "reminders.json"]) {
+    await writeFile(join(dir, name), "{not json");
+  }
+  const sage = createSage({
+    dataDir: dir,
+    keyStore: new MemoryKeyStore(),
+    presenter: new FakePresenter(false),
+    notify: () => true,
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  assert.equal(((await handlers[CHANNELS.getSettings](undefined)) as any).brain, "local");
+  assert.deepEqual(await sage.notes.list(), []);
+  assert.deepEqual(await sage.reminders.list(), []);
+  await sage.notes.list();
+  const notices = (await handlers[CHANNELS.takeNotices](undefined)) as string[];
+  assert.equal(notices.length, 3, "one notice per file, not one per read");
+  const files = await readdir(dir);
+  for (const [what, name] of [
+    ["settings", "settings.json"],
+    ["notes", "notes.json"],
+    ["reminders", "reminders.json"],
+  ] as const) {
+    const notice = notices.find((n) => n.includes(`its ${what} file`));
+    assert.ok(notice, what);
+    assert.match(notice, /The old file wasn't deleted; it was kept here: /);
+    const kept = files.find((file) => file.startsWith(`${name}.invalid-`));
+    assert.ok(kept && notice.endsWith(join(dir, kept)), `${what} names the kept file`);
+    assert.equal(await readFile(join(dir, kept), "utf8"), "{not json");
+  }
   assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
 });
 
