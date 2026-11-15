@@ -36,7 +36,9 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
       in the chat.
 - [ ] With notifications still off, set a reminder for two minutes and, before it is due, say "Delete
       the reminder" for it and choose **Allow**: nothing appears in the chat at the due time, nor after
-      a restart. Turn notifications back on.
+      a restart. Turn notifications back on. (A reminder deleted while its notice waits behind
+      Settings is taken out of the chat before it is seen; the box is modal, so that case is left to
+      the tests.)
 - [ ] "Delete the Shopping note": a confirmation box says *Delete the note "Shopping". This can't be
       undone.* Choose **Don't allow**: the note is still there. Ask again and choose **Allow**: it is gone.
 - [ ] Ask "Make a note called Later: test", and choose **New chat** while it still says *Thinking…*: the

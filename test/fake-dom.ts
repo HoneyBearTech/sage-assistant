@@ -43,11 +43,21 @@ export class FakeElement {
 
   constructor(readonly tag: string) {}
 
+  parent: FakeElement | undefined;
+
   append(...items: FakeElement[]) {
+    for (const item of items) item.parent = this;
     this.children.push(...items);
   }
   replaceChildren() {
+    for (const child of this.children) child.parent = undefined;
     this.children.length = 0;
+  }
+  remove() {
+    const siblings = this.parent?.children;
+    const index = siblings?.indexOf(this) ?? -1;
+    if (index >= 0) siblings!.splice(index, 1);
+    this.parent = undefined;
   }
   addEventListener(type: string, listener: Listener) {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);

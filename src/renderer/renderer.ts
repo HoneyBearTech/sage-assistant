@@ -115,37 +115,54 @@ tabs.settings.addEventListener("click", () => show("settings"));
 // skipped. A notice is confirmed only once the user can actually see it: the Chat view is open and
 // the window isn't hidden or minimised. Until then the confirmation is held, so a reminder that
 // arrives while Settings is open still comes back if Sage closes before Chat is opened.
+//
+// While a notice is held, each collection is the source of truth: a held notice that Sage no
+// longer hands out (its reminder was deleted, say) is taken out of the chat before anyone sees it.
+// A notice already confirmed is never taken out.
 const NOTICE_POLL_MS = 5_000;
 const shownNotices = new Set<string>();
-/** In the chat, but not yet confirmed to Sage. */
-const unconfirmed = new Set<string>();
+/** In the chat but not yet confirmed to Sage, with the chat line that shows each one. */
+const held = new Map<string, HTMLLIElement>();
+/** Held notices whose confirmation is on its way; Sage may already have stopped handing them out. */
+const confirming = new Set<string>();
 
 function chatVisible(): boolean {
   return !views.chat.hidden && document.visibilityState !== "hidden";
 }
 
 async function confirmShown(): Promise<void> {
-  if (unconfirmed.size === 0 || !chatVisible()) return;
-  const ids = [...unconfirmed];
-  try {
-    for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
-      const batch = ids.slice(start, start + MAX_ACK_IDS);
+  if (!chatVisible()) return;
+  const ids = [...held.keys()].filter((id) => !confirming.has(id));
+  for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
+    const batch = ids.slice(start, start + MAX_ACK_IDS);
+    for (const id of batch) confirming.add(id);
+    try {
       await sage.ackNotices(batch);
-      for (const id of batch) unconfirmed.delete(id);
+      for (const id of batch) held.delete(id);
+    } catch {
+      // Still held, for the next try; Sage hands the notice out again meanwhile.
+      return;
+    } finally {
+      for (const id of batch) confirming.delete(id);
     }
-  } catch {
-    // Kept for the next try; Sage hands the notice out again meanwhile.
   }
 }
 
 async function collectNotices(): Promise<void> {
   try {
-    for (const notice of await sage.takeNotices()) {
-      if (!shownNotices.has(notice.id)) {
-        addMessage("notice", notice.text);
-        shownNotices.add(notice.id);
-      }
-      unconfirmed.add(notice.id);
+    const notices = await sage.takeNotices();
+    const current = new Set(notices.map((notice) => notice.id));
+    for (const [id, item] of held) {
+      if (current.has(id) || confirming.has(id)) continue;
+      // Withdrawn by Sage before it was seen.
+      item.remove();
+      held.delete(id);
+      shownNotices.delete(id);
+    }
+    for (const notice of notices) {
+      if (shownNotices.has(notice.id)) continue;
+      held.set(notice.id, addMessage("notice", notice.text));
+      shownNotices.add(notice.id);
     }
   } catch {
     // The next poll tries again.

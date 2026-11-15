@@ -5,7 +5,7 @@ import { createSage } from "../src/core/sage.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS, MAX_ACK_IDS, type Notice, type PublicSettings, type SageApi } from "../src/shared/api.js";
 import { installFakeDom, removeFakeDom, setWindowVisibility } from "./fake-dom.js";
-import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir } from "./helpers.js";
+import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
 
 // The first checks read the renderer's source for the behaviour that matters (unsaved settings
 // aren't thrown away); the later ones run the script itself against a fake DOM.
@@ -330,6 +330,125 @@ test("Settings open, a fallback reminder is collected, Sage restarts before Chat
     ["Sage reminder: Take the bins out"],
     "the reminder comes back",
   );
+});
+
+test("a reminder deleted while its notice is held behind Settings never appears in the chat", async (t) => {
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  // The confirmation box for the delete stays open until the test answers it.
+  const decision = deferred<boolean>();
+  const asked = deferred<void>();
+  const sage = createSage({
+    dataDir: await tempDir(t),
+    keyStore: new MemoryKeyStore(),
+    presenter: {
+      ask: () => {
+        asked.resolve();
+        return decision.promise;
+      },
+    },
+    notify: () => false, // no desktop notifications: reminders go to the window
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+    localPort: REFUSED_PORT,
+    clock,
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  let taking: Promise<unknown> = Promise.resolve();
+  const acked: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => {
+      const result = handlers[CHANNELS.takeNotices](undefined) as Promise<Notice[]>;
+      taking = result;
+      return result;
+    },
+    ackNotices: async (ids) => {
+      acked.push(ids);
+      await handlers[CHANNELS.ackNotices]({ ids });
+    },
+  });
+  const poll = async () => {
+    t.mock.timers.tick(5_000);
+    await taking;
+    await settled();
+  };
+
+  // A delete is waiting for Allow, and the user has Settings open.
+  const reminder = await sage.reminders.add("Water the plants", new Date("2026-11-15T09:01:00Z"));
+  const deleting = sage.registry.execute(toolCall("delete_reminder", { id: reminder.id }));
+  await asked.promise;
+  el("tab-settings").click();
+
+  // The reminder comes due and the window collects it, behind Settings.
+  clock.advance(120_000);
+  await sage.scheduler.tick();
+  await poll();
+  assert.deepEqual(texts(), ["Sage reminder: Water the plants"]);
+  assert.deepEqual(acked, []);
+
+  // Allow the delete; the next collection no longer has the notice, so the window drops it.
+  decision.resolve(true);
+  assert.equal((await deleting).ran, true);
+  await poll();
+  assert.deepEqual(texts(), [], "taken out of the hidden chat");
+
+  el("tab-chat").click();
+  await settled();
+  assert.deepEqual(texts(), [], "the deleted reminder never appears");
+  assert.deepEqual(acked, [], "and nothing is confirmed for it");
+  assert.deepEqual(await sage.reminders.list(), []);
+});
+
+test("only held notices are taken out of the chat; confirmed ones, or ones being confirmed, stay", async (t) => {
+  const waiting: Notice[] = [];
+  let ackGate: ReturnType<typeof deferred<void>> | undefined;
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+      // Sage stops handing a notice out as soon as it is confirmed.
+      for (const id of ids) {
+        const index = waiting.findIndex((n) => n.id === id);
+        if (index >= 0) waiting.splice(index, 1);
+      }
+      await ackGate?.promise;
+    },
+  });
+  const poll = async () => {
+    t.mock.timers.tick(5_000);
+    await settled();
+  };
+
+  // Seen and confirmed with Chat open: a later collection without it leaves it in the chat.
+  waiting.push({ id: "n1", text: "Seen" });
+  await poll();
+  assert.deepEqual(acks, [["n1"]]);
+  await poll();
+  assert.deepEqual(texts(), ["Seen"]);
+
+  // Its confirmation is still on its way when the next collection no longer has it: it stays.
+  ackGate = deferred<void>();
+  waiting.push({ id: "n2", text: "Being confirmed" });
+  await poll();
+  assert.deepEqual(acks, [["n1"], ["n2"]]);
+  await poll();
+  assert.deepEqual(texts(), ["Seen", "Being confirmed"]);
+  ackGate.resolve();
+  ackGate = undefined;
+  await settled();
+
+  // Held behind Settings, then withdrawn: taken out; another one still handed out stays.
+  el("tab-settings").click();
+  waiting.push({ id: "n3", text: "Withdrawn" }, { id: "n4", text: "Still waiting" });
+  await poll();
+  assert.deepEqual(texts(), ["Seen", "Being confirmed", "Withdrawn", "Still waiting"]);
+  waiting.splice(0, 1);
+  await poll();
+  assert.deepEqual(texts(), ["Seen", "Being confirmed", "Still waiting"]);
+  el("tab-chat").click();
+  await settled();
+  assert.deepEqual(acks, [["n1"], ["n2"], ["n4"]]);
 });
 
 test("settings are loaded at startup and after a successful save, and save messages are shown", () => {

@@ -253,6 +253,9 @@ chose.
   confirmed, or the window confirming that the notice is where the user can see it (collecting it
   isn't enough). The window confirms only while the Chat view is open and the window isn't hidden or
   minimised; a notice that arrives while Settings is open is confirmed when the user returns to Chat.
+  While a notice is held like that, each collection decides: if Sage no longer hands it out (its
+  reminder was deleted), the window takes it out of the chat before it is seen. A notice already
+  confirmed is never taken out.
   Until then it stays due: it comes back on the next check, or the next time Sage starts if Sage or
   the window closed or crashed first. A notice not yet confirmed is handed out again with the same
   id, and the window skips ids it already shows, so it isn't shown twice in one window. Each
