@@ -140,9 +140,20 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       }),
       run: async ({ text, due }) => {
         const at = parseDue(due);
-        if (!at) return { text: `"${due}" isn't a date and time Sage understands. Use ISO 8601.` };
+        if (!at) {
+          return {
+            text: `"${due}" isn't a date and time Sage understands. Use ISO 8601, for example 2026-11-16T09:00.`,
+          };
+        }
         const now = deps.now().getTime();
-        if (at.getTime() < now - 60_000) return { text: "That time has already passed. Pick a later one." };
+        if (at.getTime() < now - 60_000) {
+          // A year before this one gets its own plain message (a model sometimes writes last year).
+          const thisYear = deps.now().getFullYear();
+          if (Number(due.slice(0, 4)) < thisYear) {
+            return { text: `The year ${due.slice(0, 4)} has already gone. Use ${thisYear} or later.` };
+          }
+          return { text: "That time has already passed. Pick a later one." };
+        }
         if (at.getTime() > now + 5 * 365 * 24 * 3600_000)
           return { text: "That's too far ahead. Pick a nearer date." };
         const reminder = await deps.reminders.add(text, at);
@@ -257,6 +268,8 @@ export function parseDue(text: string): Date | null {
     number,
     number,
   ];
+  // There is no year 0000 in the calendar people use (1 BC is followed by AD 1).
+  if (year === 0) return null;
   if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
   if (hour > 23 || minute > 59 || second > 59) return null;
   const zone = match[7];

@@ -313,6 +313,20 @@ test("reminders: add checks the time, list shows pending ones, delete asks first
     (await registry.execute(toolCall("add_reminder", { text: "x", due: "2026-11-14T09:00:00Z" }))).text,
     /already passed/,
   );
+  // An earlier year, and the year 0000 that doesn't exist, get plain messages.
+  assert.equal(
+    (await registry.execute(toolCall("add_reminder", { text: "x", due: "2025-11-16T09:00:00Z" }))).text,
+    "The year 2025 has already gone. Use 2026 or later.",
+  );
+  assert.equal(
+    (await registry.execute(toolCall("add_reminder", { text: "x", due: "0999-11-16T09:00" }))).text,
+    "The year 0999 has already gone. Use 2026 or later.",
+  );
+  assert.equal(
+    (await registry.execute(toolCall("add_reminder", { text: "x", due: "0000-01-01T09:00" }))).text,
+    '"0000-01-01T09:00" isn\'t a date and time Sage understands. Use ISO 8601, for example 2026-11-16T09:00.',
+  );
+  assert.equal(parseDue("0000-03-01T09:00Z"), null);
   assert.match(
     (await registry.execute(toolCall("add_reminder", { text: "x", due: "2040-01-01T09:00:00Z" }))).text,
     /too far/,
