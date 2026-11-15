@@ -41,8 +41,14 @@ Renovate GitHub app is installed on this repository.
   of actions come in one pull request, and the CodeQL actions always move together. Each new Electron major
   version gets its own pull request.
 - **Merging:** Renovate never merges its own pull requests. Review each one like any other change (an
-  update can carry a compromised release); [CONTRIBUTING.md](../CONTRIBUTING.md#reviewing-a-renovate-update)
-  has the checklist.
+  update can carry a compromised release):
+  - it runs every check on GitHub;
+  - after an esbuild (or any install-script package) update, inspect the new script and update the
+    `allowScripts` entry in `package.json`;
+  - after a Biome update, update the `$schema` line in `biome.jsonc` and fix any new warnings;
+  - push those changes as a signed-off commit on the same pull request.
+
+  The same checklist is in [CONTRIBUTING.md](../CONTRIBUTING.md#reviewing-a-renovate-update).
 
 ## Still open
 
