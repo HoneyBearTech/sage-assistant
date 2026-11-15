@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest something Sage could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Sage has one maintainer, so it helps to know the problem you want solved, not
+        only the solution you have in mind. Please read "What Sage will not do" in the
+        [roadmap](https://github.com/HoneyBearTech/sage-assistant/blob/main/docs/roadmap.md) first. Don't
+        include keys or tokens.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: The job you want Sage to do, and why it matters to you.
+      placeholder: |
+        I'd like to ask Sage "what's on my calendar today?" because...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: How might it work?
+      description: A new skill, a change to an existing one, something in Settings...
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Would it open, start, change or delete anything?
+      description: If so, Sage will ask first every time it does it.
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and this hasn't been suggested yet.
+          required: true
+        - label: I'd be willing to open a pull request for this (see CONTRIBUTING.md).

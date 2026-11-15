@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sage</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="renderer.js" defer></script>
+  </head>
+  <body>
+    <header class="bar">
+      <h1 class="brand">Sage</h1>
+      <span id="brain-status" class="status"></span>
+      <nav class="tabs">
+        <button type="button" id="tab-chat" class="tab active" aria-pressed="true">Chat</button>
+        <button type="button" id="tab-settings" class="tab" aria-pressed="false">Settings</button>
+      </nav>
+    </header>
+
+    <main id="view-chat" class="view">
+      <ol id="messages" class="messages" aria-live="polite"></ol>
+      <form id="composer" class="composer">
+        <label for="input" class="visually-hidden">Message</label>
+        <textarea id="input" rows="2" maxlength="8000" placeholder="Ask Sage something…" required></textarea>
+        <div class="composer-actions">
+          <button type="submit" id="send" class="primary">Send</button>
+          <button type="button" id="new-chat">New chat</button>
+        </div>
+      </form>
+    </main>
+
+    <main id="view-settings" class="view" hidden>
+      <form id="settings-form" class="settings">
+        <fieldset>
+          <legend>Brain</legend>
+          <p class="hint">Where Sage does its thinking. "On this computer" keeps everything local.</p>
+          <label class="choice">
+            <input type="radio" name="brain" value="local" /> On this computer (Ollama)
+          </label>
+          <label class="choice">
+            <input type="radio" name="brain" value="online" /> An online model service
+          </label>
+          <label for="local-model">Local model</label>
+          <input id="local-model" type="text" maxlength="200" />
+          <label for="online-url">Online service address</label>
+          <input id="online-url" type="url" maxlength="500" placeholder="https://api.example.com" />
+          <label for="online-model">Online model name</label>
+          <input id="online-model" type="text" maxlength="200" />
+          <label for="online-key">Online service key</label>
+          <div class="row">
+            <input id="online-key" type="password" maxlength="1000" autocomplete="off" placeholder="Paste a new key" />
+            <button type="button" id="save-key">Save key</button>
+            <button type="button" id="clear-key">Remove key</button>
+          </div>
+          <p id="key-status" class="hint"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Apps Sage may open</legend>
+          <p class="hint">Sage can only open apps on this list, and always asks you first.</p>
+          <ul id="apps" class="list"></ul>
+          <div class="row">
+            <input id="app-name" type="text" maxlength="60" placeholder="Name, e.g. Notepad" />
+            <input id="app-path" type="text" maxlength="1000" placeholder="Full path to the program" />
+            <button type="button" id="browse-app">Browse…</button>
+            <button type="button" id="add-app">Add</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Folders Sage may open files from</legend>
+          <p class="hint">Sage can only open files inside these folders, and always asks you first.</p>
+          <ul id="folders" class="list"></ul>
+          <div class="row">
+            <input id="folder-path" type="text" maxlength="1000" placeholder="Full path to a folder" />
+            <button type="button" id="browse-folder">Browse…</button>
+            <button type="button" id="add-folder">Add</button>
+          </div>
+        </fieldset>
+
+        <div class="row">
+          <button type="submit" class="primary">Save settings</button>
+          <span id="settings-status" class="hint" role="status"></span>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

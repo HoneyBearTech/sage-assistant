@@ -1,0 +1,20 @@
+# Text files are stored and checked out with LF on every platform, so the format check (Biome) gives
+# the same answer on Windows and Linux. Windows tools all read LF files.
+* text=auto eol=lf
+
+# Shell-style files keep LF everywhere; Windows scripts keep CRLF.
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Saved search pages are compared byte for byte by the tests.
+test/fixtures/** -text linguist-vendored
+
+# Binary files
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary
+
+package-lock.json linguist-generated

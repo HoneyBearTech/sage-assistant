@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/HoneyBearTech/sage-assistant/security/advisories/new
+    about: Please report security problems privately through GitHub's private vulnerability reporting, as described in SECURITY.md, never in a public issue.
+  - name: Security policy
+    url: https://github.com/HoneyBearTech/sage-assistant/blob/main/SECURITY.md
+    about: How vulnerabilities are handled, and what is in scope.
+  - name: Setup and usage guide
+    url: https://github.com/HoneyBearTech/sage-assistant#readme
+    about: Running Sage from source on Windows and Linux, the brain switch, and what each skill does.

@@ -1,0 +1,49 @@
+import type { Notifier } from "../core/scheduler.js";
+
+/** The parts of Electron's Notification that Sage uses. */
+export interface DesktopNotification {
+  once(event: "show" | "failed", listener: () => void): unknown;
+  show(): void;
+}
+
+export interface NotifyParts {
+  /** Electron's Notification.isSupported(). */
+  isSupported(): boolean;
+  /** new Notification({ title, body }). */
+  create(title: string, body: string): DesktopNotification;
+  /** How long to wait for the system to say the notification was shown. */
+  timeoutMs?: number;
+}
+
+export const NOTIFY_TIMEOUT_MS = 5_000;
+
+/**
+ * A desktop notification that reports whether the system confirmed it was shown. It reports false
+ * when notifications aren't supported, fail, or aren't confirmed in time; the scheduler then puts
+ * the reminder in Sage's window instead (src/core/scheduler.ts).
+ */
+export function createNotifier(parts: NotifyParts): Notifier {
+  const timeoutMs = parts.timeoutMs ?? NOTIFY_TIMEOUT_MS;
+  return async (title, body) => parts.isSupported() && (await showDesktop(parts, title, body, timeoutMs));
+}
+
+function showDesktop(parts: NotifyParts, title: string, body: string, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (shown: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(shown);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    try {
+      const notification = parts.create(title, body);
+      notification.once("show", () => finish(true));
+      notification.once("failed", () => finish(false));
+      notification.show();
+    } catch {
+      finish(false);
+    }
+  });
+}

@@ -1,0 +1,99 @@
+name: Bug report
+description: Something in Sage doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        **Never paste your online service key here.** Redact it from logs and screenshots (replace it with
+        `REDACTED`). If it has been posted by mistake, revoke it with the service it belongs to.
+
+        **Found a security problem?** Don't open an issue. Report it privately, as described in
+        [SECURITY.md](https://github.com/HoneyBearTech/sage-assistant/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        I asked Sage "remind me to call the dentist at 9 tomorrow" and expected a reminder, but...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows the problem.
+      placeholder: |
+        1. Open Settings
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit you run (`git rev-parse --short HEAD`).
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: brain
+    attributes:
+      label: Which brain?
+      options:
+        - On this computer (local model runner)
+        - An online model service
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: The local model name (for example `qwen3:4b`) or the online model name, if it matters.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Chat replies
+        - Web search
+        - Notes
+        - Reminders and notifications
+        - Opening an app
+        - Opening a file
+        - The confirmation box
+        - Settings or the key
+        - Installing or starting Sage
+        - Not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        The terminal output from `npm start`, or the error you saw. **Redact your key first.** This is
+        rendered as code, so no backticks are needed.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed any key or token from this report.
+          required: true
+        - label: I searched the existing issues and this hasn't been reported yet.
+          required: true
