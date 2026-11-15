@@ -5,6 +5,7 @@ import { MAX_NOTE_TEXT, MAX_NOTE_TITLE, type NotesStore } from "../notes.js";
 import { MAX_REMINDER_TEXT, type RemindersStore } from "../reminders.js";
 import type { SearchProvider } from "../search/search.js";
 import type { Settings } from "../settings.js";
+import { plainPath, plainText } from "./display.js";
 import { defineSkill, type Skill } from "./registry.js";
 
 /** Opens a file with its default app. In the app: Electron shell.openPath (returns "" on success). */
@@ -102,7 +103,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       prepare: async (args) => {
         const note = await deps.notes.get(args.id);
         if (!note) return { ok: false, message: `There's no note with the id ${args.id}.` };
-        return { ok: true, summary: `Delete the note "${note.title}". This can't be undone.` };
+        return { ok: true, summary: `Delete the note "${plainText(note.title)}". This can't be undone.` };
       },
       run: async (args) => {
         const removed = await deps.notes.remove(args.id);
@@ -161,7 +162,7 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
         if (!reminder) return { ok: false, message: `There's no reminder with the id ${args.id}.` };
         return {
           ok: true,
-          summary: `Delete the reminder "${reminder.text}" (due ${when(reminder.due)}).`,
+          summary: `Delete the reminder "${plainText(reminder.text)}" (due ${when(reminder.due)}).`,
         };
       },
       run: async (args) => {
@@ -188,13 +189,18 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
         }
         const problem = await checkAppEntry(app, deps.platform);
         if (problem) return { ok: false, message: problem };
-        return { ok: true, summary: describeLaunch(app) };
+        // The exact program and arguments become part of the approval.
+        return {
+          ok: true,
+          summary: describeLaunch(app),
+          action: { name: app.name, path: app.path, args: [...app.args] },
+        };
       },
-      run: async ({ name }) => {
-        const app = findApp((await deps.settings()).apps, name);
-        if (!app) throw new Error("the app is no longer on the list");
-        await deps.launch(app.path, app.args);
-        return { text: `Opened ${app.name}.` };
+      // Launches exactly the approved program; it never looks the name up again.
+      run: async (_args, action) => {
+        if (!action) throw new Error("there is no approved program to open");
+        await deps.launch(action.path, action.args);
+        return { text: `Opened ${plainText(action.name)}.` };
       },
     }),
 
@@ -206,23 +212,56 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       prepare: async ({ path }) => {
         const check = await resolveApprovedFile(path, (await deps.settings()).folders);
         if (!check.ok) return check;
-        return { ok: true, summary: `Open the file ${check.path} with its default app.` };
+        return {
+          ok: true,
+          summary: `Open the file ${plainPath(check.path)} with its default app.`,
+          action: { path: check.path },
+        };
       },
-      run: async ({ path }) => {
-        const check = await resolveApprovedFile(path, (await deps.settings()).folders);
+      // Opens exactly the approved real path, after checking it is still an approved file.
+      run: async (_args, action) => {
+        if (!action) throw new Error("there is no approved file to open");
+        const check = await resolveApprovedFile(action.path, (await deps.settings()).folders);
         if (!check.ok) throw new Error(check.message);
-        const error = await deps.openPath(check.path);
+        if (check.path !== action.path) throw new Error("the file changed after it was approved");
+        const error = await deps.openPath(action.path);
         if (error) throw new Error(error);
-        return { text: `Opened ${check.path}.` };
+        return { text: `Opened ${plainPath(action.path)}.` };
       },
     }),
   ];
 }
 
-/** Accepts ISO 8601 with or without a time zone (without one means local time). */
+const ISO_DUE =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/i;
+
+function daysInMonth(year: number, month: number): number {
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] ?? 0;
+}
+
+/**
+ * Accepts ISO 8601 with or without a time zone (without one means local time). Impossible dates
+ * and times, such as 2027-02-30 or 25:00, are refused instead of rolling over into the next month.
+ */
 export function parseDue(text: string): Date | null {
-  const iso = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/i;
-  if (!iso.test(text)) return null;
+  const match = ISO_DUE.exec(text);
+  if (!match) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map((part) => Number(part ?? 0)) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  const zone = match[7];
+  if (zone && !/^z$/i.test(zone)) {
+    const [, zh = "", zm = ""] = /^[+-](\d{2}):?(\d{2})$/.exec(zone) ?? [];
+    if (Number(zh) > 14 || Number(zm) > 59) return null;
+  }
   const date = new Date(text.replace(" ", "T"));
   return Number.isNaN(date.getTime()) ? null : date;
 }

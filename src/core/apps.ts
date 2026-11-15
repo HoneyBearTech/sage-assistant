@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
 import { extname, isAbsolute } from "node:path";
 import type { AppEntry } from "./settings.js";
+import { plainPath, plainText } from "./skills/display.js";
 
 /** Starts a program with an argument list. In the app: child_process.spawn with shell: false. */
 export type Launcher = (command: string, args: readonly string[]) => Promise<void>;
@@ -34,7 +35,7 @@ export async function checkAppEntry(
 
 export function describeLaunch(app: AppEntry): string {
   const args = app.args.length
-    ? ` with the arguments ${app.args.map((a) => JSON.stringify(a)).join(" ")}`
+    ? ` with the arguments ${app.args.map((a) => JSON.stringify(plainText(a, 60))).join(" ")}`
     : "";
-  return `Open the app "${app.name}" (${app.path}${args}).`;
+  return `Open the app "${plainText(app.name, 60)}" (${plainPath(app.path)}${args}).`;
 }

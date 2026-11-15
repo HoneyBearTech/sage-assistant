@@ -9,6 +9,7 @@ import type { SearchProvider } from "../src/core/search/search.js";
 import { defaultSettings, type Settings } from "../src/core/settings.js";
 import { ActionLog } from "../src/core/skills/action-log.js";
 import { builtinSkills, parseDue } from "../src/core/skills/builtin.js";
+import { dialogText, plainPath } from "../src/core/skills/display.js";
 import { ApprovalGate } from "../src/core/skills/gate.js";
 import { SkillRegistry } from "../src/core/skills/registry.js";
 import { captureLogs, FakePresenter, tempDir, toolCall } from "./helpers.js";
@@ -127,6 +128,79 @@ test("open_app rejects names that aren't on the list, without asking or launchin
   assert.equal((await registry.execute(toolCall("open_app", { name: "Editor", args: ["-x"] }))).ran, false);
   assert.deepEqual(launched, []);
   assert.equal(presenter.asked.length, 0);
+});
+
+test("open_app: a settings change while the box is open is refused, never a different program", async (t) => {
+  const { registry, launched, settings, dir, editor, presenter } = await setup(t, true);
+  const other = join(dir, "bin", "other");
+  await writeFile(other, "#!/bin/sh\n");
+  presenter.answer = () => {
+    // While the box is open, the entry is pointed at another program.
+    settings.apps = [{ name: "Editor", path: other, args: [] }];
+    return true;
+  };
+  const result = await registry.execute(toolCall("open_app", { name: "Editor" }));
+  assert.equal(result.ran, false);
+  assert.match(result.text, /changed after approval/);
+  assert.deepEqual(launched, []);
+  settings.apps = [{ name: "Editor", path: editor, args: ["--new-window"] }];
+});
+
+test("open_app launches exactly the approved program and never looks the name up again", async (t) => {
+  const dir = await tempDir(t);
+  const approved = join(dir, "approved-program");
+  const swapped = join(dir, "swapped-program");
+  await writeFile(approved, "x");
+  await writeFile(swapped, "x");
+  let lookups = 0;
+  const launched: string[] = [];
+  const { logger } = captureLogs();
+  const registry = new SkillRegistry(
+    new ApprovalGate(new FakePresenter(true)),
+    new ActionLog(join(dir, "log.jsonl")),
+    logger,
+  );
+  for (const skill of builtinSkills({
+    notes: new NotesStore(dir, logger),
+    reminders: new RemindersStore(dir, logger),
+    search: { name: "none", search: async () => ({ ok: true, results: [] }) },
+    // The first two lookups (prepare, and the check after approval) see the approved program;
+    // any later lookup would see a different one.
+    settings: async () => ({
+      ...defaultSettings(),
+      apps: [{ name: "Editor", path: ++lookups <= 2 ? approved : swapped, args: ["--a"] }],
+    }),
+    openPath: async () => "",
+    launch: async (command) => {
+      launched.push(command);
+    },
+    now: () => NOW,
+    platform: "linux",
+  })) {
+    registry.register(skill);
+  }
+  assert.equal((await registry.execute(toolCall("open_app", { name: "Editor" }))).ran, true);
+  assert.deepEqual(launched, [approved]);
+  assert.equal(lookups, 2);
+  // The run step uses only the approved action it is given.
+  await assert.rejects(registry.get("open_app")!.run({ name: "Editor" }, undefined), /no approved program/);
+});
+
+test("the confirmation box shows note, reminder and file text on one clean, short line", async (t) => {
+  const { registry, presenter, notes, reminders } = await setup(t, false);
+  const sneaky = `Shopping\n\nAllow this: it is safe‮\u0007${"x".repeat(300)}`;
+  const note = await notes.add(sneaky, "milk");
+  await registry.execute(toolCall("delete_note", { id: note.id }));
+  const summary = presenter.asked[0]!.summary;
+  assert.doesNotMatch(summary, /[\n\r\u0007‮]/);
+  assert.match(summary, /^Delete the note "Shopping Allow this: it is safe x+…"\. This can't be undone\.$/);
+  assert.ok(summary.length < 150);
+  const reminder = await reminders.add("Call\r\nmum", new Date("2026-11-16T09:00:00Z"));
+  await registry.execute(toolCall("delete_reminder", { id: reminder.id }));
+  assert.match(presenter.asked[1]!.summary, /^Delete the reminder "Call mum" \(due /);
+  assert.equal(plainPath(`/a/${"b".repeat(300)}/file.pdf`, 40).length, 40);
+  assert.match(plainPath(`/a/${"b".repeat(300)}/file.pdf`, 40), /^\/a\/b+…b+\/file\.pdf$/);
+  assert.equal(dialogText("x".repeat(1000)).length, 600);
 });
 
 test("open_app does nothing when the user declines", async (t) => {
@@ -249,4 +323,25 @@ test("parseDue accepts ISO 8601 with or without a zone, and nothing else", () =>
   assert.ok(parseDue("2026-11-16 09:00"));
   assert.equal(parseDue("2026-13-45T99:00"), null);
   assert.equal(parseDue("next tuesday"), null);
+});
+
+test("parseDue refuses impossible calendar dates and times instead of rolling over", () => {
+  for (const bad of [
+    "2027-02-30T09:00",
+    "2027-02-29T09:00",
+    "2026-04-31T09:00",
+    "2100-02-29T09:00",
+    "2026-00-10T09:00",
+    "2026-11-00T09:00",
+    "2026-11-16T24:00",
+    "2026-11-16T09:60",
+    "2026-11-16T09:00:60",
+    "2026-11-16T09:00+15:00",
+    "2026-11-16T09:00+02:75",
+  ]) {
+    assert.equal(parseDue(bad), null, bad);
+  }
+  assert.ok(parseDue("2028-02-29T09:00"), "a leap year");
+  assert.ok(parseDue("2000-02-29T09:00"), "a leap century");
+  assert.ok(parseDue("2026-12-31T23:59:59Z"));
 });

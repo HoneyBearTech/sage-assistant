@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { ToolCall, ToolSpec } from "../brain/brain.js";
 import { describeError, type Logger } from "../log.js";
 import type { ActionLog } from "./action-log.js";
-import type { ApprovalGate } from "./gate.js";
+import { dialogText } from "./display.js";
+import { type ApprovalGate, hashCall } from "./gate.js";
 import { wrapUntrusted } from "./untrusted.js";
 
 /** "safe" skills run straight away. "confirm" skills ask the user first, every time. */
@@ -14,9 +15,17 @@ export interface SkillOutput {
   final?: boolean;
 }
 
-export type Prepared = { ok: true; summary: string } | { ok: false; message: string };
+/**
+ * What a confirm skill's prepare step found. `summary` is the sentence the user sees. `action` is
+ * exactly what will be done (for example the program path and arguments looked up from Settings);
+ * it is part of the approval, and the skill's run step receives that approved action and must do
+ * only that.
+ */
+export type Prepared<P = unknown> =
+  | { ok: true; summary: string; action?: P }
+  | { ok: false; message: string };
 
-export interface SkillDefinition<A> {
+export interface SkillDefinition<A, P = undefined> {
   name: string;
   description: string;
   risk: Risk;
@@ -25,10 +34,11 @@ export interface SkillDefinition<A> {
   untrustedSource?: string;
   /**
    * Required for "confirm" skills: checks the call is allowed (the app is on the list, the file is
-   * in an approved folder) and says in plain words exactly what will happen.
+   * in an approved folder), works out exactly what will be done, and says it in plain words.
    */
-  prepare?: (args: A) => Promise<Prepared>;
-  run: (args: A) => Promise<SkillOutput>;
+  prepare?: (args: A) => Promise<Prepared<P>>;
+  /** For a confirm skill, `action` is the approved action from prepare. */
+  run: (args: A, action: P | undefined) => Promise<SkillOutput>;
 }
 
 export interface Skill {
@@ -39,10 +49,13 @@ export interface Skill {
   parameters: Record<string, unknown>;
   parse(raw: unknown): { ok: true; args: unknown } | { ok: false; message: string };
   prepare(args: unknown): Promise<Prepared>;
-  run(args: unknown): Promise<SkillOutput>;
+  run(args: unknown, action?: unknown): Promise<SkillOutput>;
 }
 
-export function defineSkill<A>(definition: SkillDefinition<A>): Skill {
+/** Called between steps; returns false once the conversation the call belongs to was cleared. */
+export type StillWanted = () => boolean;
+
+export function defineSkill<A, P = undefined>(definition: SkillDefinition<A, P>): Skill {
   if (definition.risk === "confirm" && !definition.prepare) {
     throw new Error(`Skill ${definition.name} asks first, so it needs a prepare step`);
   }
@@ -60,13 +73,18 @@ export function defineSkill<A>(definition: SkillDefinition<A>): Skill {
       if (result.success) return { ok: true, args: result.data };
       return { ok: false, message: z.prettifyError(result.error) };
     },
-    // Only values returned by parse() reach these two, so the cast is safe.
+    // Only values returned by parse() and prepare() reach these two, so the casts are safe.
     prepare: (args) =>
       definition.prepare
         ? definition.prepare(args as A)
         : Promise.resolve({ ok: true, summary: definition.name }),
-    run: (args) => definition.run(args as A),
+    run: (args, action) => definition.run(args as A, action as P | undefined),
   };
+}
+
+/** What the approval covers: the arguments, the exact action, and the sentence that was shown. */
+function approvalSubject(args: unknown, prepared: { summary: string; action?: unknown }): unknown {
+  return { args, action: prepared.action ?? null, summary: prepared.summary };
 }
 
 export interface ExecuteResult {
@@ -115,7 +133,7 @@ export class SkillRegistry {
    * Runs one tool call from the model. A "confirm" skill reaches its handler only through the
    * gate: the user is asked, and the handler runs only if `consume` finds the matching approval.
    */
-  async execute(call: ToolCall): Promise<ExecuteResult> {
+  async execute(call: ToolCall, stillWanted: StillWanted = () => true): Promise<ExecuteResult> {
     const skill = this.skills.get(call.name);
     if (!skill) {
       return { text: `There is no skill called "${call.name}". Use only the listed tools.`, ran: false };
@@ -124,12 +142,14 @@ export class SkillRegistry {
     if (!parsed.ok) {
       return { text: `The arguments for ${skill.name} were not valid:\n${parsed.message}`, ran: false };
     }
-    if (skill.risk === "safe") return this.runSkill(skill, parsed.args);
+    if (skill.risk === "safe") return this.runSkill(skill, parsed.args, undefined);
 
-    const prepared = await skill.prepare(parsed.args);
-    if (!prepared.ok) return { text: prepared.message, ran: false };
+    const first = await skill.prepare(parsed.args);
+    if (!first.ok) return { text: first.message, ran: false };
+    const prepared = { ...first, summary: dialogText(first.summary) };
+    const subject = approvalSubject(parsed.args, prepared);
 
-    const allowed = await this.gate.ask(call.id, skill.name, parsed.args, prepared.summary);
+    const allowed = await this.gate.ask(call.id, skill.name, subject, prepared.summary);
     if (!allowed) {
       await this.log(call, skill, prepared.summary, "declined", "not run");
       return {
@@ -137,27 +157,37 @@ export class SkillRegistry {
         ran: false,
       };
     }
-    if (!this.gate.consume(call.id, skill.name, parsed.args)) {
+    if (!stillWanted()) {
+      this.gate.consume(call.id, skill.name, subject);
+      await this.log(call, skill, prepared.summary, "allowed", "not run: the chat was cleared");
+      return { text: "The chat was cleared, so this was not done.", ran: false };
+    }
+    if (!this.gate.consume(call.id, skill.name, subject)) {
       await this.log(call, skill, prepared.summary, "allowed", "blocked: the approval didn't match");
       return { text: "This action was not approved, so it was not done.", ran: false };
     }
-    // Check again just before acting, in case something changed while the dialog was open.
+    // Check again just before acting, in case something changed while the dialog was open. The
+    // action must be exactly the approved one; the skill then runs with the approved action.
     const again = await skill.prepare(parsed.args);
-    if (!again.ok || again.summary !== prepared.summary) {
+    const sameAction =
+      again.ok &&
+      hashCall(skill.name, approvalSubject(parsed.args, { ...again, summary: dialogText(again.summary) })) ===
+        hashCall(skill.name, subject);
+    if (!sameAction) {
       await this.log(call, skill, prepared.summary, "allowed", "blocked: changed after approval");
       return {
         text: again.ok ? "Something changed after approval, so it was not done." : again.message,
         ran: false,
       };
     }
-    const result = await this.runSkill(skill, parsed.args);
+    const result = await this.runSkill(skill, parsed.args, prepared.action);
     await this.log(call, skill, prepared.summary, "allowed", result.ran ? "done" : "failed");
     return result;
   }
 
-  private async runSkill(skill: Skill, args: unknown): Promise<ExecuteResult> {
+  private async runSkill(skill: Skill, args: unknown, action: unknown): Promise<ExecuteResult> {
     try {
-      const output = await skill.run(args);
+      const output = await skill.run(args, action);
       const text = skill.untrustedSource ? wrapUntrusted(skill.untrustedSource, output.text) : output.text;
       return output.final ? { text, final: output.text, ran: true } : { text, ran: true };
     } catch (error) {
