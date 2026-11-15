@@ -20,6 +20,8 @@ export interface BuiltinDeps {
   launch: Launcher;
   now: () => Date;
   platform?: NodeJS.Platform;
+  /** Told when a reminder is deleted, so a notice for it waiting for the window is withdrawn. */
+  reminderDeleted?: (id: string) => void;
 }
 
 const id = z.string().trim().min(1).max(64);
@@ -178,6 +180,8 @@ export function builtinSkills(deps: BuiltinDeps): Skill[] {
       },
       run: async (args) => {
         const removed = await deps.reminders.remove(args.id);
+        // Gone either way: a notice for it still waiting for the window must not appear.
+        deps.reminderDeleted?.(args.id);
         if (!removed) throw new Error("the reminder was already gone");
         return { text: "Deleted the reminder." };
       },

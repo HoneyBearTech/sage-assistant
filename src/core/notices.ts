@@ -13,6 +13,12 @@ export interface NoticeOptions {
    * delivered. Never called for a notice that was only handed out.
    */
   onDelivered?: () => Promise<void> | void;
+  /**
+   * Asked each time before the notice is handed out. False means it is no longer wanted (for
+   * example its reminder was deleted), and it is dropped instead of shown. If the check fails,
+   * the notice is shown: better shown than lost.
+   */
+  stillWanted?: () => Promise<boolean> | boolean;
 }
 
 interface Entry {
@@ -21,6 +27,7 @@ interface Entry {
   text: string;
   handedOut: boolean;
   onDelivered: NoticeOptions["onDelivered"];
+  stillWanted: NoticeOptions["stillWanted"];
 }
 
 /**
@@ -61,8 +68,20 @@ export class NoticeBoard {
       text: text.slice(0, MAX_NOTICE_TEXT),
       handedOut: false,
       onDelivered: options.onDelivered,
+      stillWanted: options.stillWanted,
     });
     return true;
+  }
+
+  /**
+   * Removes a notice that is no longer wanted (its reminder was deleted). It isn't handed out
+   * again, and a late confirmation for it does nothing. Returns true if one was removed.
+   */
+  withdraw(key: string): boolean {
+    this.refused.delete(key);
+    const before = this.entries.length;
+    this.entries = this.entries.filter((entry) => entry.key !== key);
+    return this.entries.length < before;
   }
 
   /** True while a notice with this key waits for the window or is being delivered. */
@@ -75,7 +94,19 @@ export class NoticeBoard {
    * counts as delivered here; see `ack`.
    */
   async take(): Promise<Notice[]> {
-    const current = [...this.entries];
+    const candidates = [...this.entries];
+    const unwanted = new Set<Entry>();
+    for (const entry of candidates) {
+      if (!entry.stillWanted) continue;
+      try {
+        if (!(await entry.stillWanted())) unwanted.add(entry);
+      } catch {
+        // Better shown than lost: a failed check doesn't hide the notice.
+      }
+    }
+    this.entries = this.entries.filter((entry) => !unwanted.has(entry));
+    // A notice confirmed or withdrawn during the checks above isn't handed out.
+    const current = candidates.filter((entry) => this.entries.includes(entry));
     for (const entry of current) entry.handedOut = true;
     const notices: Notice[] = current.map((entry) => ({ id: entry.id, text: entry.text }));
     if (this.refused.size > 0) {
@@ -91,8 +122,9 @@ export class NoticeBoard {
 
   /**
    * The window confirms these notices are on screen. Each one is delivered once: its callback
-   * runs, and it is removed. Ids that are unknown, already confirmed or never handed out are
-   * ignored.
+   * runs, and it is removed. Ids that are unknown, already confirmed, withdrawn or never handed
+   * out are ignored. A reminder deleted after it was handed out isn't recorded: there is nothing
+   * left to record it on.
    */
   async ack(ids: readonly string[]): Promise<void> {
     const wanted = new Set(ids);

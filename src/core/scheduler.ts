@@ -114,6 +114,8 @@ export class ReminderScheduler {
     const id = reminder.id;
     const queued = this.board?.post(`Sage reminder: ${reminder.text}`, {
       key,
+      // A reminder deleted (or shown some other way) since it was queued isn't handed out.
+      stillWanted: async () => (await this.store.get(id))?.firedAt === null,
       // Runs when the window confirms the notice is on screen. It waits for any check in
       // progress, so that check can't offer the same reminder again while it is recorded.
       onDelivered: () => this.serial.run(() => this.record(id)),
@@ -122,6 +124,12 @@ export class ReminderScheduler {
       this.logger.warn("A reminder couldn't be shown yet; Sage will try again on the next check");
     }
     return false;
+  }
+
+  /** A reminder was deleted: its notice waiting for the window is withdrawn and never shown. */
+  withdraw(id: string): void {
+    this.board?.withdraw(reminderNoticeKey(id));
+    this.unrecorded.delete(id);
   }
 
   /** Records that a reminder was shown. If that fails it is remembered, so it isn't shown again. */

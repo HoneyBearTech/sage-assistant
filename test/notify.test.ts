@@ -168,3 +168,74 @@ test("while a notice's delivery is being recorded it still counts as present", a
   assert.equal(board.has("b"), false);
   assert.deepEqual(await board.take(), []);
 });
+
+test("a withdrawn notice is never handed out again, and a late confirmation for it does nothing", async () => {
+  const board = new NoticeBoard();
+  let delivered = 0;
+  board.post("Sage reminder: waiting", { key: "r1", onDelivered: () => void delivered++ });
+  board.post("Sage reminder: handed out", { key: "r2", onDelivered: () => void delivered++ });
+  board.post("other");
+  // r2 is handed out but not confirmed; then both reminders are deleted.
+  const taken = await board.take();
+  assert.equal(board.withdraw("r1"), true);
+  assert.equal(board.withdraw("r2"), true);
+  assert.equal(board.withdraw("r2"), false, "nothing left to withdraw");
+  assert.equal(board.has("r1"), false);
+  assert.deepEqual(texts(await board.take()), ["other"]);
+  await board.ack(idsOf(taken));
+  assert.equal(delivered, 0, "the window's late confirmation doesn't record a deleted reminder");
+
+  // A reminder refused by a full board and then deleted isn't counted as waiting.
+  for (let i = 0; i < MAX_NOTICES; i++) board.post(`fill ${i}`);
+  assert.equal(board.post("late", { key: "late" }), false);
+  board.withdraw("late");
+  assert.equal(
+    texts(await board.take()).some((text) => text.includes("more reminder")),
+    false,
+  );
+});
+
+test("a notice that is no longer wanted is dropped when the window collects it", async () => {
+  const board = new NoticeBoard();
+  let wanted = true;
+  board.post("Sage reminder: maybe", { key: "r1", stillWanted: () => wanted });
+  board.post("Sage reminder: check fails", {
+    key: "r2",
+    stillWanted: () => {
+      throw new Error("disk gone");
+    },
+  });
+  board.post("Sage reminder: async", { key: "r3", stillWanted: async () => true });
+  assert.deepEqual(texts(await board.take()), [
+    "Sage reminder: maybe",
+    "Sage reminder: check fails",
+    "Sage reminder: async",
+  ]);
+  wanted = false;
+  assert.deepEqual(
+    texts(await board.take()),
+    ["Sage reminder: check fails", "Sage reminder: async"],
+    "dropped even after it was handed out once; a failed check keeps it",
+  );
+  assert.equal(board.has("r1"), false);
+});
+
+test("a notice confirmed while the collection checks run isn't handed out again", async () => {
+  const board = new NoticeBoard();
+  let delivered = 0;
+  let answer!: (wanted: boolean) => void;
+  board.post("a", { key: "a", onDelivered: () => void delivered++ });
+  const [first] = await board.take();
+  board.post("b", {
+    key: "b",
+    stillWanted: () =>
+      new Promise<boolean>((resolve) => {
+        answer = resolve;
+      }),
+  });
+  const taking = board.take();
+  await board.ack([first!.id]);
+  answer(true);
+  assert.deepEqual(texts(await taking), ["b"]);
+  assert.equal(delivered, 1);
+});

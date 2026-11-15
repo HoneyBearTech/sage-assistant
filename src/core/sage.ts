@@ -94,6 +94,7 @@ export function createSage(deps: SageDeps): Sage {
     launch: deps.launch,
     now,
     ...(deps.platform ? { platform: deps.platform } : {}),
+    reminderDeleted: (id) => scheduler.withdraw(id),
   })) {
     registry.register(skill);
   }

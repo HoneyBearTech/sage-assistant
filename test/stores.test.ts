@@ -319,6 +319,42 @@ test("a confirmation that arrives while a check runs doesn't show the reminder t
   assert.notEqual((await reminders.list()).find((r) => r.text === "A")!.firedAt, null);
 });
 
+test("a reminder removed while its notice waits for the window is never shown or recorded", async (t) => {
+  const dir = await tempDir(t);
+  const { logger } = captureLogs();
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const reminders = new RemindersStore(dir, logger, () => clock.now());
+  const board = new NoticeBoard();
+  const scheduler = new ReminderScheduler(reminders, () => false, clock, logger, board);
+  const gone = await reminders.add("Gone", new Date("2026-11-15T08:00:00Z"));
+  const kept = await reminders.add("Kept", new Date("2026-11-15T08:01:00Z"));
+  const handedOut = await reminders.add("Handed out", new Date("2026-11-15T08:02:00Z"));
+  await scheduler.tick();
+  const taken = await board.take();
+  assert.equal(taken.length, 3);
+
+  // Removed from the file without going through the scheduler (no withdraw): skipped at collection.
+  assert.equal(await reminders.remove(gone.id), true);
+  // Removed after the window collected it: its late confirmation records nothing.
+  assert.equal(await reminders.remove(handedOut.id), true);
+  const next = await board.take();
+  assert.deepEqual(
+    next.map((n) => n.text),
+    ["Sage reminder: Kept"],
+  );
+  await board.ack(taken.map((n) => n.id));
+  assert.deepEqual(await reminders.list(), [{ ...kept, firedAt: "2026-11-15T09:00:00.000Z" }]);
+
+  // A reminder withdrawn through the scheduler is gone from the board at once.
+  const later = await reminders.add("Later", new Date("2026-11-15T08:03:00Z"));
+  await scheduler.tick();
+  assert.equal(board.has(`reminder:${later.id}`), true);
+  scheduler.withdraw(later.id);
+  assert.equal(board.has(`reminder:${later.id}`), false);
+  await reminders.remove(later.id);
+  assert.deepEqual(await board.take(), []);
+});
+
 test("more due reminders than the window holds: none is lost, and the window is told how many wait", async (t) => {
   const dir = await tempDir(t);
   const { logger } = captureLogs();

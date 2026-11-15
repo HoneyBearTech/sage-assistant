@@ -7,7 +7,7 @@ import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings } from "../src/main/ipc.js";
 import { MAX_NOTICES } from "../src/core/notices.js";
 import { CHANNELS, type Notice } from "../src/shared/api.js";
-import { FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir } from "./helpers.js";
+import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
 
 async function setup(t: Parameters<typeof tempDir>[0]) {
   const dir = await tempDir(t);
@@ -189,6 +189,41 @@ test("notices are handed to the window until it confirms them, and confirmed onc
   assert.deepEqual(await take(), [taken[1]]);
   await handlers[CHANNELS.ackNotices]({ ids: taken.map((n) => n.id) });
   assert.equal(delivered, 1, "a repeated confirmation is ignored");
+  assert.deepEqual(await take(), []);
+});
+
+test("deleting a reminder withdraws its notice from the window queue", async (t) => {
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const presenter = new FakePresenter(true);
+  const sage = createSage({
+    dataDir: await tempDir(t),
+    keyStore: new MemoryKeyStore(),
+    presenter,
+    notify: () => false,
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+    localPort: REFUSED_PORT,
+    clock,
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  const take = async () => (await handlers[CHANNELS.takeNotices](undefined)) as Notice[];
+  const waiting = await sage.reminders.add("Waiting", new Date("2026-11-15T08:00:00Z"));
+  const collected = await sage.reminders.add("Collected", new Date("2026-11-15T08:01:00Z"));
+  await sage.scheduler.tick();
+  const first = await take();
+  assert.equal(first.length, 2);
+
+  // The user deletes both (Allow in the box) before the window confirms either.
+  for (const reminder of [waiting, collected]) {
+    const result = await sage.registry.execute(toolCall("delete_reminder", { id: reminder.id }));
+    assert.equal(result.ran, true);
+    assert.equal(sage.notices.has(`reminder:${reminder.id}`), false, "withdrawn at once");
+  }
+  assert.deepEqual(await take(), [], "neither appears in the window");
+  await handlers[CHANNELS.ackNotices]({ ids: first.map((n) => n.id) });
+  assert.deepEqual(await sage.reminders.list(), [], "and the late confirmation brings nothing back");
+  await sage.scheduler.tick();
   assert.deepEqual(await take(), []);
 });
 
