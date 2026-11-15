@@ -192,7 +192,9 @@ test("the confirmation box shows note, reminder and file text on one clean, shor
   const note = await notes.add(sneaky, "milk");
   await registry.execute(toolCall("delete_note", { id: note.id }));
   const summary = presenter.asked[0]!.summary;
-  assert.doesNotMatch(summary, /[\n\r\u0007‮]/);
+  for (const hidden of ["\n", "\r", String.fromCharCode(7), String.fromCharCode(0x202e)]) {
+    assert.ok(!summary.includes(hidden), `no character ${hidden.charCodeAt(0)}`);
+  }
   assert.match(summary, /^Delete the note "Shopping Allow this: it is safe x+…"\. This can't be undone\.$/);
   assert.ok(summary.length < 150);
   const reminder = await reminders.add("Call\r\nmum", new Date("2026-11-16T09:00:00Z"));
