@@ -49,14 +49,18 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.getSettings]: async () =>
       toPublicSettings(await sage.settings.load(), await sage.keyStore.has()),
     [CHANNELS.saveSettings]: async (payload): Promise<Result> => {
-      const before = serviceOrigin((await sage.settings.load()).online.baseUrl);
+      const previous = await sage.settings.load();
       const result = await sage.settings.save({ ...(payload as object), version: 1 });
       if (!result.ok) return fail(result.message);
+      const after = serviceOrigin(result.settings.online.baseUrl);
+      // A turn in progress was started against the old brain or service; it stops rather than
+      // carry on against settings the user has moved away from.
+      if (previous.brain !== result.settings.brain || serviceOrigin(previous.online.baseUrl) !== after) {
+        sage.assistant.stopTurn();
+      }
       // A saved key belongs to the service it was entered for. If the address now points at a
       // different service, the key is removed so it is never sent there.
-      const after = serviceOrigin(result.settings.online.baseUrl);
-      if (before !== null && after !== before && (await sage.keyStore.has())) {
-        await sage.keyStore.clear();
+      if ((await sage.keyStore.afterAddressSaved(after)) === "removed") {
         return {
           ok: true,
           message:
@@ -69,7 +73,10 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       const parsed = keyPayload.safeParse(payload);
       if (!parsed.success) return fail("That doesn't look like a key.");
       try {
-        await sage.keyStore.set(parsed.data.key);
+        // The key belongs to the service whose address is saved now (or, if none is saved yet, to
+        // the first address saved after it).
+        const origin = serviceOrigin((await sage.settings.load()).online.baseUrl);
+        await sage.keyStore.set(parsed.data.key, origin);
         return { ok: true };
       } catch (error) {
         return fail(describeError(error));

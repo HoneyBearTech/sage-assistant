@@ -2,9 +2,15 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { EncryptedFileKeyStore, osEncryptionUsable, validateKey } from "../src/core/keystore.js";
+import {
+  decodeSavedKey,
+  EncryptedFileKeyStore,
+  osEncryptionUsable,
+  ServiceKeys,
+  validateKey,
+} from "../src/core/keystore.js";
 import { DEFAULT_LOCAL_MODEL, defaultSettings, SettingsStore } from "../src/core/settings.js";
-import { captureLogs, fakeEncryptor, tempDir } from "./helpers.js";
+import { captureLogs, fakeEncryptor, MemoryKeyStore, tempDir } from "./helpers.js";
 
 test("first run gives the local brain and empty lists", async (t) => {
   const dir = await tempDir(t);
@@ -52,14 +58,16 @@ test("a broken settings file falls back to defaults and is kept aside", async (t
   assert.ok(lines.some((line) => line.includes("settings.json couldn't be read")));
 });
 
-test("the key file holds only the encrypted key", async (t) => {
+test("the key file holds only the encrypted key and the service it belongs to", async (t) => {
   const dir = await tempDir(t);
   const path = join(dir, "online-key.bin");
   const store = new EncryptedFileKeyStore(path, fakeEncryptor());
   assert.equal(await store.has(), false);
-  await store.set("  my-secret-key-123  ");
-  assert.equal(await store.get(), "my-secret-key-123");
+  await store.set("  my-secret-key-123  ", "https://service.example");
+  assert.deepEqual(await store.get(), { key: "my-secret-key-123", origin: "https://service.example" });
   assert.equal(await store.has(), true);
+  await store.set("my-secret-key-123", null);
+  assert.deepEqual(await store.get(), { key: "my-secret-key-123", origin: null });
   const raw = await readFile(path);
   assert.ok(!raw.toString("utf8").includes("my-secret-key-123"));
   assert.ok(!raw.toString("latin1").includes(Buffer.from("my-secret-key-123").toString("base64")));
@@ -72,7 +80,7 @@ test("without system encryption the key is refused, never stored in the clear", 
   const dir = await tempDir(t);
   const path = join(dir, "online-key.bin");
   const store = new EncryptedFileKeyStore(path, fakeEncryptor(false));
-  await assert.rejects(store.set("my-secret-key-123"), /won't store the key/);
+  await assert.rejects(store.set("my-secret-key-123", null), /won't store the key/);
   await assert.rejects(readFile(path), { code: "ENOENT" });
   await writeFile(path, "FAKE-OS-ENC:whatever");
   assert.equal(await store.get(), null, "can't decrypt without the system");
@@ -83,6 +91,38 @@ test("without system encryption the key is refused, never stored in the clear", 
     },
   });
   assert.equal(await other.get(), null);
+  // A file that decrypts but isn't a key with its service (an older format) counts as no key.
+  const plain = new EncryptedFileKeyStore(path, { ...fakeEncryptor(), decrypt: () => "just-a-bare-key-123" });
+  assert.equal(await plain.get(), null);
+  assert.equal(decodeSavedKey('{"version":1,"key":"","origin":null}'), null);
+  assert.equal(decodeSavedKey('{"version":2,"key":"k","origin":null}'), null);
+});
+
+test("a key is handed out only for the service it belongs to", async () => {
+  const seen: string[] = [];
+  const keys = new ServiceKeys(new MemoryKeyStore(), (key) => seen.push(key));
+  assert.equal(await keys.afterAddressSaved("https://a.example"), "none");
+  await keys.set("key-for-service-a", "https://a.example");
+  assert.equal(await keys.keyFor("https://a.example"), "key-for-service-a");
+  assert.equal(await keys.keyFor("https://b.example"), null);
+  assert.equal(await keys.keyFor("https://a.example:8443"), null);
+  assert.equal(await keys.afterAddressSaved("https://a.example"), "kept");
+  assert.equal(await keys.afterAddressSaved("https://b.example"), "removed");
+  assert.equal(await keys.has(), false);
+  // A key saved before any address belongs to the first address saved, and to nothing before that.
+  await keys.set("key-saved-first", null);
+  assert.equal(await keys.keyFor("https://a.example"), null);
+  assert.equal(await keys.afterAddressSaved(null), "kept");
+  assert.equal(await keys.afterAddressSaved("https://b.example"), "bound");
+  assert.equal(await keys.keyFor("https://b.example"), "key-saved-first");
+  assert.ok(
+    seen.includes("key-for-service-a") && seen.includes("key-saved-first"),
+    "the redactor knows both",
+  );
+  await assert.rejects(keys.set("short", null), /8 to 500/);
+  assert.ok(!seen.includes("short"), "a refused key isn't registered");
+  await keys.clear();
+  assert.equal(await keys.keyFor("https://b.example"), null);
 });
 
 test("keys are checked, and Linux's plain-text fallback doesn't count as protection", () => {

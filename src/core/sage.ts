@@ -2,9 +2,9 @@ import { join } from "node:path";
 import { Assistant } from "./assistant.js";
 import type { Brain, FetchLike } from "./brain/brain.js";
 import { LocalBrain } from "./brain/local.js";
-import { OnlineBrain } from "./brain/online.js";
+import { OnlineBrain, serviceOrigin } from "./brain/online.js";
 import type { Launcher } from "./apps.js";
-import { type KeyStore, validateKey } from "./keystore.js";
+import { type KeyStore, ServiceKeys } from "./keystore.js";
 import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
 import { NoticeBoard } from "./notices.js";
 import { NotesStore } from "./notes.js";
@@ -39,7 +39,7 @@ export interface SageDeps {
 export interface Sage {
   assistant: Assistant;
   settings: SettingsStore;
-  keyStore: KeyStore;
+  keyStore: ServiceKeys;
   notes: NotesStore;
   reminders: RemindersStore;
   scheduler: ReminderScheduler;
@@ -59,19 +59,7 @@ export function createSage(deps: SageDeps): Sage {
 
   // Every key that passes through Sage is registered with the redactor, so even an unexpected
   // log line or action-log entry can't contain it.
-  const keyStore: KeyStore = {
-    has: () => deps.keyStore.has(),
-    get: async () => {
-      const key = await deps.keyStore.get();
-      if (key) redactor.add(key);
-      return key;
-    },
-    set: async (key) => {
-      redactor.add(key.trim());
-      await deps.keyStore.set(validateKey(key));
-    },
-    clear: () => deps.keyStore.clear(),
-  };
+  const keyStore = new ServiceKeys(deps.keyStore, (key) => redactor.add(key));
 
   const notices = new NoticeBoard();
   // An unreadable data file is moved aside, never deleted; the user is told once, in the window.
@@ -129,17 +117,23 @@ export function createSage(deps: SageDeps): Sage {
   };
 }
 
+/**
+ * The brain for one turn. An online brain is tied to the service it was made for: every request
+ * in the turn asks for the key of that service only, so a key saved for another service (after
+ * the settings changed mid-turn) is never sent to this one.
+ */
 export function brainFor(
   settings: Settings,
-  keyStore: KeyStore,
+  keyStore: Pick<ServiceKeys, "keyFor">,
   deps: Pick<SageDeps, "fetch" | "localPort">,
   redact?: (text: string) => string,
 ): Brain {
   if (settings.brain === "online") {
+    const origin = serviceOrigin(settings.online.baseUrl);
     return new OnlineBrain({
       baseUrl: settings.online.baseUrl,
       model: settings.online.model,
-      getKey: () => keyStore.get(),
+      getKey: async () => (origin ? keyStore.keyFor(origin) : null),
       ...(redact ? { redact } : {}),
       ...(deps.fetch ? { fetch: deps.fetch } : {}),
     });

@@ -15,6 +15,9 @@ export const PER_TURN_SKILL_LIMITS: Readonly<Record<string, number>> = { add_not
 export const HISTORY_LIMIT = 20;
 /** What send() returns for a message whose chat was cleared before the reply arrived. */
 export const CLEARED_REPLY = "(This chat was cleared, so the reply was dropped.)";
+/** What send() returns for a message whose turn was stopped because the brain settings changed. */
+export const SETTINGS_CHANGED_REPLY =
+  "(The brain settings changed while Sage was answering, so that answer was stopped. Ask again.)";
 
 export interface AssistantDeps {
   getBrain: () => Promise<Brain>;
@@ -34,6 +37,8 @@ export class Assistant {
   private busy = false;
   /** Goes up on every reset; a turn started under an older value is abandoned. */
   private generation = 0;
+  /** The reply for each stopped turn, by the generation it started under. */
+  private readonly stopped = new Map<number, string>();
   private readonly now: () => Date;
 
   constructor(private readonly deps: AssistantDeps) {
@@ -50,6 +55,16 @@ export class Assistant {
    */
   reset(): void {
     this.history.length = 0;
+    this.stopTurn(CLEARED_REPLY);
+  }
+
+  /**
+   * Stops a turn in progress without clearing the chat: it runs no further tool calls, sends
+   * nothing more to the brain, and its reply is `reply` instead. Used when the brain settings
+   * change, so a turn never carries on against a service the user has moved away from.
+   */
+  stopTurn(reply = SETTINGS_CHANGED_REPLY): void {
+    if (this.busy) this.stopped.set(this.generation, reply);
     this.generation++;
     this.busy = false;
   }
@@ -59,9 +74,14 @@ export class Assistant {
     this.busy = true;
     const generation = this.generation;
     const current = () => this.generation === generation;
+    const stoppedReply = () => {
+      const reply = this.stopped.get(generation) ?? CLEARED_REPLY;
+      this.stopped.delete(generation);
+      return reply;
+    };
     try {
       const reply = await this.turn(text, current);
-      if (!current()) return CLEARED_REPLY;
+      if (!current()) return stoppedReply();
       this.history.push({ role: "user", content: text }, { role: "assistant", content: reply });
       if (this.history.length > HISTORY_LIMIT) this.history.splice(0, this.history.length - HISTORY_LIMIT);
       return reply;

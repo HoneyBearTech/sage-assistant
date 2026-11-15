@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Brain, BrainReply, ChatMessage, ToolCall, ToolSpec } from "../src/core/brain/brain.js";
-import type { Encryptor, KeyStore } from "../src/core/keystore.js";
+import type { Encryptor, KeyStore, SavedKey } from "../src/core/keystore.js";
 import { createLogger, type Logger, SecretRedactor } from "../src/core/log.js";
 import type { Clock } from "../src/core/scheduler.js";
 import type { ConfirmPresenter, ConfirmRequest } from "../src/core/skills/gate.js";
@@ -84,18 +84,18 @@ export class FakePresenter implements ConfirmPresenter {
 }
 
 export class MemoryKeyStore implements KeyStore {
-  constructor(private key: string | null = null) {}
+  constructor(private saved: SavedKey | null = null) {}
   async has() {
-    return this.key !== null;
+    return this.saved !== null;
   }
   async get() {
-    return this.key;
+    return this.saved ? { ...this.saved } : null;
   }
-  async set(key: string) {
-    this.key = key.trim();
+  async set(key: string, origin: string | null) {
+    this.saved = { key: key.trim(), origin };
   }
   async clear() {
-    this.key = null;
+    this.saved = null;
   }
 }
 

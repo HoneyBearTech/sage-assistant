@@ -57,7 +57,7 @@ test("settings go out without the key, and come back validated", async (t) => {
   assert.equal(before.brain, "local");
 
   assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests" }), { ok: true });
-  assert.equal(await keyStore.get(), "fake-value-for-tests");
+  assert.deepEqual(await keyStore.get(), { key: "fake-value-for-tests", origin: null });
   const after = (await handlers[CHANNELS.getSettings](undefined)) as any;
   assert.equal(after.online.hasKey, true);
   assert.ok(!JSON.stringify(after).includes("fake-value-for-tests"));

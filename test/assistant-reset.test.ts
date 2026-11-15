@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { Assistant, CLEARED_REPLY, PER_TURN_SKILL_LIMITS } from "../src/core/assistant.js";
+import {
+  Assistant,
+  CLEARED_REPLY,
+  PER_TURN_SKILL_LIMITS,
+  SETTINGS_CHANGED_REPLY,
+} from "../src/core/assistant.js";
 import type { Brain, BrainReply } from "../src/core/brain/brain.js";
 import { ActionLog } from "../src/core/skills/action-log.js";
 import { ApprovalGate, type ConfirmPresenter } from "../src/core/skills/gate.js";
@@ -124,4 +129,37 @@ test("add_note and add_reminder run at most 3 times per message", async (t) => {
   const second = await setup(t, again, { ask: async () => false });
   await second.assistant.send("one more");
   assert.deepEqual(second.ran, ["add_note"]);
+});
+
+test("stopping a turn after a settings change keeps the chat and runs nothing more", async (t) => {
+  const pending = deferred<BrainReply>();
+  const reached = deferred<void>();
+  let calls = 0;
+  const brain: Brain = {
+    kind: "online",
+    chat: async () => {
+      calls++;
+      if (calls === 2) {
+        reached.resolve();
+        return pending.promise;
+      }
+      return textReply(`answer ${calls}`);
+    },
+  };
+  const { assistant, ran } = await setup(t, brain, { ask: async () => true });
+  assert.equal(await assistant.send("first"), "answer 1");
+  const stopped = assistant.send("second");
+  await reached.promise;
+  assistant.stopTurn();
+  pending.resolve(toolReply(toolCall("add_note", {})));
+  assert.equal(await stopped, SETTINGS_CHANGED_REPLY);
+  assert.deepEqual(ran, []);
+  assert.deepEqual(
+    assistant.transcript.map((entry) => entry.content),
+    ["first", "answer 1"],
+    "the earlier chat is kept",
+  );
+  // With no turn running, stopping changes nothing, and the next message works.
+  assistant.stopTurn();
+  assert.equal(await assistant.send("third"), "answer 3");
 });
