@@ -168,8 +168,9 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
     } catch {
       result = { ok: false, message: WELCOME_TEXT.diagnosticsFailed };
     }
-    // Left, moved on, or checked again meanwhile: this text is no longer about what is shown.
-    if (mine !== diagnosticsAsk) return;
+    // Left, moved on, or checked again meanwhile, or a newer build started in the main process:
+    // this text is no longer about what is shown.
+    if (mine !== diagnosticsAsk || (!result.ok && result.stale)) return;
     if (!result.ok) {
       el.diagnosticsStatus.textContent = result.message;
       return;

@@ -194,7 +194,8 @@ function plain(value: string): string {
 
 export class Diagnostics {
   private last: { id: string; text: string } | undefined;
-  private count = 0;
+  /** Builds are numbered when they start; only the newest one started is kept. */
+  private started = 0;
   private readonly system: SystemFacts;
 
   constructor(private readonly deps: DiagnosticsDeps) {
@@ -234,15 +235,19 @@ export class Diagnostics {
     };
   }
 
-  /** Builds the text and remembers it under a new id; only that text can then be copied. */
+  /**
+   * Builds the text and remembers it under a new id; only that text can then be copied. A build
+   * that finishes after a newer one started is not kept, and comes back marked stale.
+   */
   async build(request: DiagnosticsRequest): Promise<DiagnosticsResult> {
+    const number = ++this.started;
     const facts = await this.facts(request);
     const lines = diagnosticsLines(facts).map(
       ([label, value]) => `${label}: ${scrubValue(value, this.system, this.deps.redact)}`,
     );
     const text = [...DIAGNOSTICS_HEADER, "", ...lines].join("\n");
-    this.count += 1;
-    this.last = { id: `diag-${this.count}`, text };
+    if (number !== this.started) return { ok: false, stale: true, message: DIAGNOSTICS_MESSAGES.stale };
+    this.last = { id: `diag-${number}`, text };
     return { ok: true, id: this.last.id, text };
   }
 

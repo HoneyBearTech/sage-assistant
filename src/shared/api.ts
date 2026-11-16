@@ -287,7 +287,10 @@ export interface DiagnosticsRequest {
  * The diagnostics text, built in the main process from a fixed list of fields, to show in full
  * before copying. `id` names this text for `copyDiagnostics`, which copies exactly it.
  */
-export type DiagnosticsResult = { ok: true; id: string; text: string } | { ok: false; message: string };
+export type DiagnosticsResult =
+  | { ok: true; id: string; text: string }
+  /** `stale`: a newer build started before this one finished; the window drops it. */
+  | { ok: false; message: string; stale?: true };
 
 export interface SageApi {
   send(text: string): Promise<string>;

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Diagnostics } from "../src/core/diagnostics.js";
+import { defaultSettings } from "../src/core/settings.js";
 import { TYPE_FRAME_MS } from "../src/renderer/typing-time.js";
 import { PULL_POLL_MS, WELCOME_TEXT } from "../src/renderer/welcome-text.js";
 import type {
@@ -963,4 +965,48 @@ test("Copy diagnostics on the model step names that step and its code; Skip setu
   assert.equal(el("model-diagnostics").hidden, true);
   assert.deepEqual(lines(el, "model-checks"), []);
   assert.equal(el("welcome-checks-status").textContent, "");
+});
+
+test("two quick Copy diagnostics, answered out of order: the shown text is the one Copy copies", async (t) => {
+  // The real main-process builder behind the fake window.sage, with settings answers held back.
+  const held: ReturnType<typeof deferred<void>>[] = [];
+  const clipboard: string[] = [];
+  let builds = 0;
+  const builder = new Diagnostics({
+    appVersion: "0.2.0",
+    loadSettings: async () => {
+      builds++;
+      const gate = deferred<void>();
+      held.push(gate);
+      await gate.promise;
+      return { ...defaultSettings(), theme: builds === 1 ? "light" : "dark" };
+    },
+    runnerStatus: async () => runner("unreachable"),
+    voiceStatus: async () => ({ model: "missing", received: 0, total: 1 }),
+    triedModel: () => null,
+    redact: (text) => text,
+    writeClipboard: (text) => clipboard.push(text),
+    system: { os: "Windows", osVersion: "10.0", arch: "x64", home: "C:\\Users\\example", user: "example" },
+  });
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => runner("unreachable"),
+    diagnostics: (request) => builder.build(request),
+    copyDiagnostics: async (id) => builder.copy(id),
+  });
+  await click("place-local");
+  await click("runner-diagnostics");
+  await click("runner-diagnostics");
+  assert.equal(held.length, 2);
+  // The newer build answers first and is shown; the older one answers after it.
+  held[1]!.resolve();
+  await settled();
+  await settled();
+  assert.match(el("diagnostics-text").textContent, /^Theme: dark$/m);
+  held[0]!.resolve();
+  await settled();
+  await settled();
+  assert.match(el("diagnostics-text").textContent, /^Theme: dark$/m, "the older answer is dropped");
+  await click("diagnostics-copy");
+  assert.equal(el("diagnostics-status").textContent, WELCOME_TEXT.copied);
+  assert.deepEqual(clipboard, [el("diagnostics-text").textContent], "exactly the text on screen");
 });

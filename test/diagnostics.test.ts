@@ -5,7 +5,16 @@ import { createSage, type DiagnosticsParts, type SageDeps } from "../src/core/sa
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS, type DiagnosticsResult, type Result } from "../src/shared/api.js";
-import { fakeServer, FakePresenter, json, memoryKeyStores, REFUSED_PORT, tempDir } from "./helpers.js";
+import {
+  deferred,
+  fakeServer,
+  FakePresenter,
+  json,
+  memoryKeyStores,
+  REFUSED_PORT,
+  settled,
+  tempDir,
+} from "./helpers.js";
 
 // Copy diagnostics (src/core/diagnostics.ts and its two requests in src/main/ipc.ts): the text is
 // built in the main process from a fixed list of fields, shown in full, and copied only on request,
@@ -433,4 +442,27 @@ test("a model that downloaded but couldn't be saved is reported as such; a succe
   })) as DiagnosticsResult & { ok: true };
   assert.match(after.text, /^Model tried: none$/m);
   assert.match(after.text, /^Saved model: qwen3:1\.7b \(downloaded: yes\)$/m);
+});
+
+test("a build that finishes after a newer one started isn't kept, and comes back marked stale", async (t) => {
+  const { sage, copied } = await sageWith(t);
+  const held: ReturnType<typeof deferred<void>>[] = [];
+  // The voice status is asked only by the builder: its answers are held back.
+  sage.voice.status = async () => {
+    const gate = deferred<void>();
+    held.push(gate);
+    await gate.promise;
+    return { model: "missing", received: 0, total: 1 };
+  };
+  const request = { step: "runner", code: "SAGE-RUN-01", reducedMotion: false } as const;
+  const older = sage.diagnostics.build(request);
+  const newer = sage.diagnostics.build(request);
+  for (let i = 0; i < 100 && held.length < 2; i++) await settled();
+  held[1]!.resolve();
+  const shown = (await newer) as DiagnosticsResult & { ok: true };
+  held[0]!.resolve();
+  assert.deepEqual(await older, { ok: false, stale: true, message: DIAGNOSTICS_MESSAGES.stale });
+  assert.equal(shown.id, "diag-2");
+  assert.deepEqual(sage.diagnostics.copy(shown.id), { ok: true });
+  assert.deepEqual(copied, [shown.text]);
 });
