@@ -376,6 +376,7 @@ export function startChatWindow(): void {
   const settingsStatus = byId<HTMLSpanElement>("settings-status");
   const brainStatus = byId<HTMLSpanElement>("brain-status");
   const speakReplies = byId<HTMLSelectElement>("speak-replies");
+  const morningBrief = byId<HTMLInputElement>("morning-brief");
   const themeChoice = byId<HTMLSelectElement>("theme");
   const brainNotice = byId<HTMLParagraphElement>("brain-notice");
   const panels = {
@@ -507,6 +508,7 @@ export function startChatWindow(): void {
     brainNotice.textContent = "";
     showBrainPanels();
     speakReplies.value = settings.speakReplies;
+    morningBrief.checked = settings.morningBrief;
     showSound(settings.sound);
     themeChoice.value = settings.theme;
     applyTheme(settings.theme);
@@ -584,6 +586,7 @@ export function startChatWindow(): void {
         folders: settings.folders,
         speakReplies: readSpeakReplies(),
         theme: toTheme(themeChoice.value),
+        morningBrief: morningBrief.checked,
       })
       .then(async (result) => {
         if (!result.ok) {

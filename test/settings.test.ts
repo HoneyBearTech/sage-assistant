@@ -67,6 +67,8 @@ test("a settings file saved before voice loads unchanged, with Read replies alou
     setupDone: false,
     theme: "dark",
     sound: false,
+    morningBrief: false,
+    lastBrief: null,
   });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
@@ -96,6 +98,8 @@ test("a settings file saved before first-run setup loads unchanged, and shows th
     setupDone: false,
     theme: "dark",
     sound: false,
+    morningBrief: false,
+    lastBrief: null,
   });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
@@ -127,11 +131,59 @@ test("a settings file saved by Sage 0.1.1 loads unchanged, with the dark look an
     services: defaultSettings().services,
     theme: "dark",
     sound: false,
+    morningBrief: false,
+    lastBrief: null,
   });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
   assert.equal(defaultSettings().theme, "dark");
   assert.equal(defaultSettings().sound, false);
+});
+
+test("a settings file saved after the online brains change loads unchanged, with the morning brief off", async (t) => {
+  const dir = await tempDir(t);
+  // Exactly what Sage wrote after the online brains change, before Home existed.
+  const before = {
+    version: 1,
+    brain: "claude",
+    local: { model: "qwen3:4b" },
+    online: { baseUrl: "https://api.example.com/v1", model: "m" },
+    services: {
+      claude: { model: "claude-model" },
+      openai: { model: "openai-model" },
+      gemini: { model: "gemini-model" },
+    },
+    apps: [{ name: "Editor", path: "/usr/bin/editor", args: [] }],
+    folders: ["/docs"],
+    speakReplies: "always",
+    setupDone: true,
+    theme: "light",
+    sound: true,
+  };
+  const text = `${JSON.stringify(before, null, 2)}\n`;
+  await writeFile(join(dir, "settings.json"), text);
+  const { logger, lines } = captureLogs();
+  const store = new SettingsStore(dir, logger);
+  assert.deepEqual(await store.load(), { ...before, morningBrief: false, lastBrief: null });
+  assert.deepEqual(lines, [], "not treated as unreadable");
+  assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
+  assert.equal(defaultSettings().morningBrief, false);
+  assert.equal(defaultSettings().lastBrief, null);
+});
+
+test("the morning brief is a true or false; its day is a date, and anything else counts as never", async (t) => {
+  const store = new SettingsStore(await tempDir(t), captureLogs().logger);
+  assert.ok((await store.save({ ...defaultSettings(), morningBrief: true })).ok);
+  assert.equal((await store.load()).morningBrief, true);
+  for (const bad of ["yes", 1, null]) {
+    assert.equal((await store.save({ ...defaultSettings(), morningBrief: bad })).ok, false, String(bad));
+  }
+  assert.ok((await store.save({ ...defaultSettings(), lastBrief: "2026-11-16" })).ok);
+  assert.equal((await store.load()).lastBrief, "2026-11-16");
+  for (const odd of ["16/11/2026", "", 20261116, "2026-11-16T00:00:00Z"]) {
+    assert.ok((await store.save({ ...defaultSettings(), lastBrief: odd })).ok, String(odd));
+    assert.equal((await store.load()).lastBrief, null, String(odd));
+  }
 });
 
 test("the theme is saved, and only its three choices are accepted; sound is a true or false", async (t) => {

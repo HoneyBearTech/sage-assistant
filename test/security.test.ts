@@ -13,7 +13,7 @@ import {
   isPermissionCheckAllowed,
   windowOptions,
 } from "../src/main/security.js";
-import { CHANNELS } from "../src/shared/api.js";
+import { CHANNELS, EVENTS } from "../src/shared/api.js";
 
 const root = join(import.meta.dirname, "..");
 const rendererDir = join(root, "dist", "renderer");
@@ -93,6 +93,61 @@ test("the preload exposes only the named methods, never ipcRenderer itself", asy
     /ipcRenderer\.on\(EVENTS\.asking, \(_event, payload: unknown\) => \{\s*const event = readAskingEvent\(payload\);\s*if \(event\) listener\(event\);\s*\}\);/,
   );
   assert.equal(source.match(/_event/g)?.length, 1, "the IPC event is never passed on or used");
+});
+
+test("the window can make exactly these requests, and is told only one thing by itself", () => {
+  // Each one is checked for its sender in main.ts and validated in ipc.ts. Home's two are the
+  // read-only summary and the morning brief's once-a-day mark.
+  assert.deepEqual(Object.values(CHANNELS).sort(), [
+    "sage:chat-reset",
+    "sage:chat-send",
+    "sage:choose-app",
+    "sage:choose-folder",
+    "sage:home",
+    "sage:home-brief-claim",
+    "sage:key-clear",
+    "sage:key-set",
+    "sage:notices-ack",
+    "sage:notices-take",
+    "sage:service-key-page",
+    "sage:service-models",
+    "sage:service-test-key",
+    "sage:settings-get",
+    "sage:settings-save",
+    "sage:setup-finish",
+    "sage:setup-open-guide",
+    "sage:setup-pull",
+    "sage:setup-pull-cancel",
+    "sage:setup-pull-status",
+    "sage:setup-runner-status",
+    "sage:sound-set",
+    "sage:voice-download",
+    "sage:voice-download-cancel",
+    "sage:voice-status",
+    "sage:voice-transcribe",
+  ]);
+  // No new message from the main process: Home asks; it is never sent anything by itself.
+  assert.deepEqual(Object.values(EVENTS), ["sage:asking"]);
+});
+
+test("every request goes through the one sender check in main.ts", async () => {
+  const main = await readFile(join(root, "src", "main", "main.ts"), "utf8");
+  assert.equal(main.match(/ipcMain\.handle\(/g)?.length, 1, "one place registers the handlers");
+  assert.match(main, /for \(const channel of Object\.values\(CHANNELS\)\) \{\s*ipcMain\.handle\(channel,/);
+  const check = main.slice(
+    main.indexOf("ipcMain.handle(channel"),
+    main.indexOf("return handlers[channel](payload)"),
+  );
+  assert.match(check, /event\.sender !== mainWindow\.webContents/);
+  assert.match(check, /!isAppPage\(event\.senderFrame\?\.url, appUrl\)/);
+  assert.match(check, /throw new Error/);
+  // Home's requests carry an empty object and nothing else.
+  const preload = await readFile(join(root, "src", "preload", "preload.ts"), "utf8");
+  assert.match(preload, /homeSummary: \(\) => ipcRenderer\.invoke\(CHANNELS\.homeSummary, \{\}\),/);
+  assert.match(
+    preload,
+    /claimMorningBrief: \(\) => ipcRenderer\.invoke\(CHANNELS\.claimMorningBrief, \{\}\),/,
+  );
 });
 
 test("only the app's own page counts as the sender", () => {

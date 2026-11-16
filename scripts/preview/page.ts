@@ -1,4 +1,4 @@
-import type { AskingEvent, PublicSettings, SageApi } from "../../src/shared/api.js";
+import type { AskingEvent, HomeSummary, PublicSettings, SageApi } from "../../src/shared/api.js";
 
 // The preview page's own script (review only, never part of Sage). It runs before the real window
 // script and stands in for the main process: a fake window.sage with sample settings, a short
@@ -23,6 +23,14 @@ const settings: PublicSettings = {
   setupDone: true,
   theme: "dark",
   sound: false,
+  morningBrief: false,
+};
+
+const EMPTY_HOME: HomeSummary = {
+  reminders: [],
+  next: null,
+  notes: [],
+  status: { brain: "local", voiceReady: false, sound: false },
 };
 
 const askingListeners: ((event: AskingEvent) => void)[] = [];
@@ -110,6 +118,8 @@ const sage: SageApi = {
     settings.sound = on;
     return { ok: true };
   },
+  homeSummary: async () => structuredClone(EMPTY_HOME),
+  claimMorningBrief: async () => false,
   onAsking: (listener) => {
     askingListeners.push(listener);
   },

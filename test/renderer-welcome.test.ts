@@ -410,6 +410,7 @@ test("after a download, Settings shows the new local model without losing other 
       setupDone: model !== "small-model",
       theme: "dark",
       sound: false,
+      morningBrief: false,
     }),
     pullModel: async () => {
       model = "qwen3:1.7b";
@@ -537,6 +538,7 @@ test("a late answer after setup doesn't overwrite edits made since", async (t) =
         setupDone: model !== "small-model",
         theme: "dark" as const,
         sound: false,
+        morningBrief: false,
       };
       await hold?.promise;
       return answer;
@@ -612,6 +614,7 @@ test("a late setup refresh never overwrites a Settings save that finished first"
     setupDone: false,
     theme: "dark" as const,
     sound: false,
+    morningBrief: false,
   };
   let holdNext: ReturnType<typeof deferred<void>> | undefined;
   const { el, click, calls } = await welcomeWindow(t, {

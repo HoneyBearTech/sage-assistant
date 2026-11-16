@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
-import type { AskingEvent, PublicSettings, SageApi } from "../src/shared/api.js";
+import type { AskingEvent, HomeSummary, PublicSettings, SageApi } from "../src/shared/api.js";
 import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 import { type FakeMedia, installFakeMedia, removeFakeMedia } from "./fake-media.js";
 import { settled } from "./helpers.js";
@@ -22,7 +22,17 @@ export const SAMPLE_SERVICES: PublicSettings["services"] = {
 };
 export const NO_KEYS: PublicSettings["keys"] = { claude: false, openai: false, gemini: false, other: false };
 
+/** Home's summary with nothing in it. */
+export const EMPTY_HOME: HomeSummary = {
+  reminders: [],
+  next: null,
+  notes: [],
+  status: { brain: "local", voiceReady: false, sound: false },
+};
+
 export interface WindowOptions {
+  /** Home's summary, for the default `homeSummary` request. */
+  summary?: HomeSummary;
   /** Settings the window loads at start-up, over the defaults. */
   settings?: Partial<PublicSettings>;
   /** Runs before the window script loads, to set up the microphone or the voices. */
@@ -53,6 +63,8 @@ export async function startWindow(
     listModels: [] as string[],
     testKey: [] as string[],
     keyPages: [] as string[],
+    homeSummary: 0,
+    claims: 0,
   };
   const settings: PublicSettings = {
     brain: "local",
@@ -67,6 +79,7 @@ export async function startWindow(
     setupDone: true,
     theme: "dark",
     sound: false,
+    morningBrief: false,
     ...options.settings,
   };
   const askingListeners: ((event: AskingEvent) => void)[] = [];
@@ -146,6 +159,14 @@ export async function startWindow(
       calls.sound.push(on);
       settings.sound = on;
       return { ok: true };
+    },
+    homeSummary: async () => {
+      calls.homeSummary++;
+      return structuredClone(options.summary ?? EMPTY_HOME);
+    },
+    claimMorningBrief: async () => {
+      calls.claims++;
+      return false;
     },
     ...overrides,
   };

@@ -366,6 +366,7 @@ test("toPublicSettings copies only the public fields", () => {
     "folders",
     "keys",
     "local",
+    "morningBrief",
     "online",
     "services",
     "setupDone",
@@ -377,6 +378,9 @@ test("toPublicSettings copies only the public fields", () => {
   assert.equal(out.theme, "dark");
   assert.equal(out.sound, false);
   assert.equal(out.setupDone, false);
+  assert.equal(out.morningBrief, false);
+  // The day of the last morning brief stays in the main process.
+  assert.equal("lastBrief" in out, false);
   out.apps[0]!.args.push("y");
   assert.deepEqual(settings.apps[0]!.args, ["x"], "a copy, not the stored object");
 });
