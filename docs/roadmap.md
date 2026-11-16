@@ -81,9 +81,11 @@ later, and what Sage will not do.
       speech recognition, and spoken replies.
 - [ ] **Voice accuracy:** if the tiny model mishears too often, move to Moonshine base (about 3 times
       the size): new pinned addresses, sizes and fingerprints in `src/core/voice/model.ts`.
-- [ ] **Test coverage counting:** each window test loads the window script again, and each load counts
+- [x] **Test coverage counting:** each window test loads the window script again, and each load counts
       as a separate, partly covered file, so the total drifts toward the 80% floor as window tests are
       added (82.5% after the voice job). Count the window script once.
+      Done: the window script is now `startChatWindow()`, loaded once by the tests; `renderer.ts` went
+      from 79.9% to 96.4% of lines, and the all-files total from 86.4% to 99.1%.
 - [x] **First-run setup** (first-run-setup): a Welcome screen the first time Sage opens. It asks where
       Sage should think, checks the local model runner, opens Sage's install guide after asking,
       downloads Standard (`qwen3:4b`) or Smaller (`qwen3:1.7b`) through the runner after asking, and sends

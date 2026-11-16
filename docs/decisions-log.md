@@ -2,6 +2,34 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - window-coverage
+
+**Context:** the owner asked for the next roadmap item: count the window script once in test coverage.
+
+**Decisions:**
+- **Make the window script a function rather than change the coverage tool.** `renderer.ts` did all its
+  work on load, so each window test imported a fresh copy (`renderer.ts?window=N`), and the built-in
+  coverage report counted every copy separately in the total and couldn't merge them for the file
+  itself. Its start-up now sits in `startChatWindow()`, in the same order. A new `src/renderer/main.ts`
+  calls it and is the build entry (output still `dist/renderer/renderer.js`, `index.html` unchanged).
+  The tests load the file once and call the function per test on a fresh fake DOM. This matches the
+  other window files (`createWelcome`, `createVoiceControls`). Rejected: a separate coverage tool (a new
+  dependency for one file).
+- **Coverage before and after** (lines / branches / functions): `renderer.ts` 79.93 / 63.83 / 40.00 ->
+  96.43 / 89.13 / 83.33; all files 86.36 / 81.94 / 59.75 -> 99.13 / 94.62 / 94.88. Same 333 tests.
+  `main.ts` isn't in the report because no test loads it; it is four lines.
+- The two source-text checks in `test/renderer.test.ts` now allow the deeper indentation; they check the
+  same things. The no-HTML security test now also scans `main.ts`.
+
+**Review:** QA passed: the built `renderer.js` is the same window code apart from the wrapper (after
+allowing for renamed identifiers), and no test was removed or weakened. The Security Officer found nothing:
+`startChatWindow` is not reachable from the page (the bundle is one closed iife), and the CSP and
+`index.html` are unchanged. The Auditor approved: the statement order, hoisting and closures keep their
+meaning, and each test's timers and listeners stay with its own fake window. Small follow-ups, done in one
+round: the guidelines and `docs/architecture.md` now name `main.ts` as the entry, and the first two commits
+were combined so each commit passes the tests. CI can't open the real window, so the owner checks it after
+the next install.
+
 ## 2026-11-16 - minimatch-advisory
 
 **Context:** the owner asked for the next roadmap item: track the minimatch advisory
