@@ -2,6 +2,22 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - docs-sync
+
+**Context:** the owner asked to "start the docs sync job" after merging Renovate's "Pin dependencies"
+update (#10), which changed three lines of the release workflow (two version notes and the exact Node
+version, `24.22.3`) but not the guide's copy of it.
+
+**Decisions:**
+- **The copy is made identical to the real file again**, and the guide says the real file wins if they
+  differ. A release runs the version of `.github/workflows/release.yml` in the tagged commit.
+- **No test that forces the two to match.** Renovate can't update the docs in its own pull requests, so
+  such a test would block every workflow update. The copy is brought up to date by hand now and then.
+
+**Review:** the Security Officer found nothing to fix. The Auditor found that the first wording ("the
+file on `main` is the one that runs") was wrong for a tag on an older commit, and that `#16` isn't a link
+in a Markdown file; both were fixed and re-checked. The approved plan keeps its original wording.
+
 ## 2026-11-16 - release-0-1-0
 
 **Context:** the owner asked to "start the release workflow job".
