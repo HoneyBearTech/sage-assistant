@@ -2,6 +2,62 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - home-brief
+
+**Context:** the owner asked for the Home screen with a daily brief, part 2 of the new look, together
+with the OpenSSF badge (#26) and the Welcome start-up sequence (#28, built after this job).
+
+**Decisions:**
+- **Sage opens on Home** after setup; the Welcome screen still comes first when setup isn't done, and its
+  exits still open Chat.
+- **The brief is built by Sage itself** from a read-only summary, with fixed wording, and is never sent
+  to the brain or added to the conversation: free, offline, and nothing leaves the PC. Read aloud unless
+  "Read replies aloud" is Never; the optional morning brief (off by default) speaks only with Always.
+- **Two window requests, no new message from the app to the window.** `sage:home` returns only what Home
+  shows (bounded reminder text, note titles but never note text, three status values) and changes
+  nothing. `sage:home-brief-claim` writes only the last brief day, once per local day, under the
+  settings lock; that day never reaches the window, a Settings save keeps it, and it never moves
+  backwards (a saved day more than two days ahead counts as a broken clock). Home polls when shown,
+  every minute while on screen, and when a notice arrives.
+- **Limits:** at most 5 missed reminders (newest, plus "and N more") kept apart from today's (at most
+  10, those still to come first), so old missed ones can't hide what is due.
+- **Each brief request has a number;** an older or unwanted one (Home left, window hidden) is dropped,
+  and a morning check that comes to nothing never cancels a Brief me. Home has its own Stop button;
+  sending a message stops the brief. The clock stops while the window is hidden and follows a change of
+  time zone.
+- **The chat cards from part 1** became their own roadmap item: they are a chat change, not Home.
+
+**Review:** QA passed every plan step and asked for proof of two behaviours (the brief silent while the
+microphone is open, a Settings save keeping the brief day) and safer checklist wording; all added. The
+Security Officer cleared it. The Auditor found, over two rounds: the reminder cap hiding today's
+reminders (and a false "Nothing is due today"), out-of-date briefs replacing newer ones or speaking after
+Home was left, a sent message not stopping the brief, no Stop button on Home, the brief day moving
+backwards, the clock running while hidden, a time formatter stuck on the first time zone, and a declined
+morning check cancelling a Brief me. All fixed with tests. 534 tests. No second security review (quota
+out). The window was not seen on screen (no display on the team's machine); the owner got a private
+preview page.
+
+**Rejected findings:** a keyboard test for the new buttons: the test window can't turn Enter or Space
+into a click, so a static check that they are plain buttons was added instead, and the Windows checklist
+walks through the keyboard.
+
+## 2026-11-16 - openssf-badge
+
+**Context:** the owner asked for the OpenSSF badge in the README (project 16810 on bestpractices.dev).
+
+**Decisions:**
+- **The Best Practices badge only**, under the title, linked to the project page. Other badges (such as
+  the Scorecard's) were left out to keep the change to what was asked.
+- **No changelog entry:** it changes nothing in Sage itself.
+- **The questionnaire stays with the owner,** because it needs his sign-in. The badge reads "in progress"
+  until it is complete.
+
+**Review:** the Security Officer cleared it (only bestpractices.dev links over https; nothing private).
+The Auditor approved (README layout unchanged; the badge page and image checked live). A two-file text
+change, so no Researcher, QA or plain-English check.
+
+**Rejected findings:** none.
+
 ## 2026-11-16 - brains-api
 
 **Context:** the owner asked for Sage to use the big online model services as well as local models,

@@ -25,6 +25,8 @@ export const CHANNELS = {
   listModels: "sage:service-models",
   testKey: "sage:service-test-key",
   openKeyPage: "sage:service-key-page",
+  homeSummary: "sage:home",
+  claimMorningBrief: "sage:home-brief-claim",
 } as const;
 
 /** The online services with a ready-made choice, each reached with the user's own key. */
@@ -108,6 +110,48 @@ export interface Notice {
 
 export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
 
+/** The most of today's reminders (still to come first, then ones already shown) Home is given. */
+export const MAX_HOME_REMINDERS = 10;
+/** The most missed reminders Home is given, the newest; `missedMore` counts the rest. */
+export const MAX_HOME_MISSED = 5;
+/** The longest reminder text Home is given; longer ones are shortened, ending in "…". */
+export const MAX_HOME_REMINDER_TEXT = 200;
+/** The most note titles Home is given: the most recently changed ones. */
+export const MAX_HOME_NOTES = 5;
+/** The longest note title Home is given. Home never gets a note's text. */
+export const MAX_HOME_NOTE_TITLE = 80;
+
+/** One reminder as Home shows it. `due` is an ISO time; the window shows it in the PC's own format. */
+export interface HomeReminder {
+  id: string;
+  text: string;
+  due: string;
+  /** Its time has passed and it hasn't been shown yet. */
+  missed: boolean;
+}
+
+/**
+ * What Home shows, and all the window can read for it: reminders due today on the PC's own day (at
+ * most MAX_HOME_REMINDERS, the ones still to come kept first) and missed ones not yet shown (at most
+ * MAX_HOME_MISSED, the newest), together soonest first; how many more missed ones were left out; the
+ * next reminder after today when nothing more is to come today; the titles of the most recently
+ * changed notes; and the status values. Read-only: asking for it changes nothing.
+ */
+export interface HomeSummary {
+  reminders: HomeReminder[];
+  /** Missed reminders left out of `reminders` (beyond MAX_HOME_MISSED). */
+  missedMore: number;
+  next: HomeReminder | null;
+  notes: string[];
+  status: {
+    brain: BrainChoice;
+    /** The speech file is there, so hold-to-talk works. */
+    voiceReady: boolean;
+    /** The top bar's sound switch. */
+    sound: boolean;
+  };
+}
+
 export interface PublicAppEntry {
   name: string;
   path: string;
@@ -137,6 +181,8 @@ export interface PublicSettings {
   theme: "dark" | "light" | "system";
   /** Sound effects in the window. Changed only by `setSound` (the top bar's switch). */
   sound: boolean;
+  /** Show the daily brief on Home the first time the window opens each day. Off by default. */
+  morningBrief: boolean;
 }
 
 export type SettingsInput = Omit<PublicSettings, "keys" | "setupDone" | "sound">;
@@ -266,6 +312,13 @@ export interface SageApi {
   finishSetup(): Promise<Result>;
   /** The top bar's sound switch: saves only whether sound effects are on. */
   setSound(on: boolean): Promise<Result>;
+  /** Home's summary: today's reminders, the latest note titles and the status. Changes nothing. */
+  homeSummary(): Promise<HomeSummary>;
+  /**
+   * True only the first time it is asked on a new day (the PC's own day) while "Brief me when Sage
+   * first opens each day" is on; that day is then remembered, so the brief shows once a day.
+   */
+  claimMorningBrief(): Promise<boolean>;
   /**
    * Called when Sage's own asking box opens and when it closes, so the chat can show what is being
    * asked. Only news: the box is answered in the box, and nothing here can answer it.

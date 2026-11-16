@@ -27,6 +27,8 @@ const api: SageApi = {
   openInstallGuide: () => ipcRenderer.invoke(CHANNELS.openInstallGuide),
   finishSetup: () => ipcRenderer.invoke(CHANNELS.finishSetup),
   setSound: (on) => ipcRenderer.invoke(CHANNELS.setSound, { on }),
+  homeSummary: () => ipcRenderer.invoke(CHANNELS.homeSummary, {}),
+  claimMorningBrief: () => ipcRenderer.invoke(CHANNELS.claimMorningBrief, {}),
   // One way only: news that Sage's own box is asking something, and later its answer. The page gets
   // the checked fields, never the IPC event (which could send a reply), and nothing it does can
   // answer the box.

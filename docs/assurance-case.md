@@ -40,8 +40,9 @@ risk that remains. The tests named here run with `npm run verify`.
    against a strict schema, and every "confirm" skill passes through the gate.
 2. **Outside text → model.** Web results, notes and reminders go back to the model inside a labelled
    untrusted block, and are never read as commands by Sage itself.
-3. **Window → main process.** The window is treated as untrusted input: it gets twenty-one typed
-   calls, and each handler checks the sender and validates the payload. The other way, the main
+3. **Window → main process.** The window is treated as untrusted input: it gets twenty-six typed
+   calls, and each handler checks the sender and validates the payload. One of them, Home's summary, is
+   read-only and returns a bounded summary of reminders and note titles (see T8). The other way, the main
    process sends the window one thing by itself, news of its asking box, which the window can only
    listen to.
 4. **Sage → network.** The main process talks to `127.0.0.1:11434` (local brain, and the runner's model
@@ -416,6 +417,46 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
 - **Notices and the talk key.** While the Welcome screen is open, notices wait (they are confirmed only
   while Chat is visible) and Ctrl+Space does nothing. *Evidence:* `test/renderer-welcome.test.ts`.
 
+### T8. Home and the daily brief
+
+Home shows reminders and note titles that the window could see before only inside chat replies; a
+summary request could become a way to read notes' text, change data, or send them somewhere, and the
+morning brief could speak when nobody expects it.
+
+- **One read-only request, bounded.** `homeSummary` (`sage:home`) takes an empty object and nothing
+  else (a strict schema; anything else is refused before anything is read), and its sender is checked
+  like every other request. It returns only: reminders (id, text cut to 200 characters, due time,
+  missed or not), at most 10 due on the PC's own day and at most 5 missed and not yet shown, with a
+  count of the missed ones left out (capped apart, so missed ones can't hide today's); the next reminder after
+  today when nothing more is to come today; at most 5 note titles, cut to 80 characters, never a note's
+  text; and three status values (the brain's kind, whether the speech file is there, the sound switch).
+  It only reads the stores and the settings: no file is written or touched. *Evidence:*
+  `test/home.test.ts` (the limits, no note text, only those fields, the payload refused, every file in
+  Sage's folder unchanged after a request), `test/security.test.ts` (the list of requests the window can
+  make, the one sender check, the preload sending an empty object).
+- **No new message from the main process.** Home asks; it is refreshed when shown, every minute and
+  when the existing notice collection brings a new notice. `sage:asking` stays the only thing the main
+  process sends the window by itself. *Evidence:* `test/security.test.ts`, `test/renderer-home.test.ts`.
+- **The brief stays on the PC.** The window builds the brief itself, in fixed words, from the summary
+  (`briefText`); it is never sent to the brain, local or online, and never added to the conversation.
+  It is read aloud only with the PC's own voices, like replies, and never while the microphone is open.
+  Text goes on screen with `textContent` only. *Evidence:* `test/home-text.test.ts`,
+  `test/renderer-home.test.ts` (nothing sent to the brain), `test/security.test.ts` (no HTML insertion
+  in any window file).
+- **The once-a-day mark changes one field.** `claimMorningBrief` (`sage:home-brief-claim`) also takes
+  only an empty object. It writes nothing while the morning brief is off or already shown today;
+  otherwise it saves only `lastBrief`, the day, under the settings lock, so two claims at once give one
+  brief. The saved day never moves backwards (a clock moved back doesn't bring a second brief; a day
+  more than two days ahead is taken as a broken clock). A Settings save keeps the stored day whatever
+  the window sends, and a value that can't be read counts as never instead of making the settings file
+  unreadable. *Evidence:* `test/home.test.ts`, `test/settings.test.ts`, `test/ipc.test.ts`.
+- **It speaks only when asked, or when set to.** **Brief me** reads the brief aloud unless Read replies
+  aloud is *Never*. The morning brief is off by default, and is read aloud only when Read replies aloud
+  is *Always*. A brief is dropped if it is no longer the newest asked for, Home was left or the window
+  hidden by the time its answer arrives; leaving Home, hiding the window, sending a message or holding
+  Talk stops it being read, and the Brief panel has its own **Stop speaking** button while it is.
+  *Evidence:* `test/home-text.test.ts`, `test/renderer-home.test.ts`.
+
 ### The window itself
 
 A bug in the window, or a hostile string displayed in it, must not become code execution.
@@ -505,6 +546,10 @@ cap spending; Settings, the Welcome screen and the README point to each company'
   the 5-second wait, the reminder may also appear in the window. *Evidence:* `test/notify.test.ts`,
   `test/stores.test.ts` (the window collects a reminder and crashes before confirming it; it comes
   back after a restart), `test/ipc.test.ts` and `test/renderer.test.ts`.
+- **Home shows reminders and note titles to anyone who can see the screen.** They were visible before
+  only when a reply listed them. Home shows at most ten reminders and five note titles, never a note's
+  text; someone at an unlocked PC can see them, as they could open the chat. Lock the PC when you leave
+  it.
 - **The model may be wrong.** Answers and search summaries can be mistaken; nothing Sage says is
   checked for truth.
 - **An online service receives your conversation**, including note text and search results that Sage

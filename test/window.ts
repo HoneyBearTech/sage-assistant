@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
-import type { AskingEvent, PublicSettings, SageApi } from "../src/shared/api.js";
+import type { AskingEvent, HomeSummary, PublicSettings, SageApi } from "../src/shared/api.js";
 import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 import { type FakeMedia, installFakeMedia, removeFakeMedia } from "./fake-media.js";
 import { settled } from "./helpers.js";
@@ -22,7 +22,25 @@ export const SAMPLE_SERVICES: PublicSettings["services"] = {
 };
 export const NO_KEYS: PublicSettings["keys"] = { claude: false, openai: false, gemini: false, other: false };
 
+/** Home's summary with nothing in it. */
+export const EMPTY_HOME: HomeSummary = {
+  reminders: [],
+  missedMore: 0,
+  next: null,
+  notes: [],
+  status: { brain: "local", voiceReady: false, sound: false },
+};
+
 export interface WindowOptions {
+  /** Home's summary, for the default `homeSummary` request. */
+  summary?: HomeSummary;
+  /** The clock's time when the window starts (the window's Date is mocked). */
+  now?: number;
+  /**
+   * The view to be on once the window has started. Sage opens on Home; most tests are about Chat,
+   * so they start there, as if the Chat tab was clicked.
+   */
+  startOn?: "home" | "chat";
   /** Settings the window loads at start-up, over the defaults. */
   settings?: Partial<PublicSettings>;
   /** Runs before the window script loads, to set up the microphone or the voices. */
@@ -37,7 +55,7 @@ export async function startWindow(
 ) {
   // The window's timers (the notice poll, the voice timers) and the clock are mocked, so nothing
   // fires by itself and nothing is left running.
-  t.mock.timers.enable({ apis: ["setInterval", "setTimeout", "Date"] });
+  t.mock.timers.enable({ apis: ["setInterval", "setTimeout", "Date"], now: options.now ?? 0 });
   const calls = {
     send: [] as string[],
     getSettings: 0,
@@ -53,6 +71,8 @@ export async function startWindow(
     listModels: [] as string[],
     testKey: [] as string[],
     keyPages: [] as string[],
+    homeSummary: 0,
+    claims: 0,
   };
   const settings: PublicSettings = {
     brain: "local",
@@ -67,6 +87,7 @@ export async function startWindow(
     setupDone: true,
     theme: "dark",
     sound: false,
+    morningBrief: false,
     ...options.settings,
   };
   const askingListeners: ((event: AskingEvent) => void)[] = [];
@@ -147,6 +168,14 @@ export async function startWindow(
       settings.sound = on;
       return { ok: true };
     },
+    homeSummary: async () => {
+      calls.homeSummary++;
+      return structuredClone(options.summary ?? EMPTY_HOME);
+    },
+    claimMorningBrief: async () => {
+      calls.claims++;
+      return false;
+    },
     ...overrides,
   };
   const elements = installFakeDom(ids, api);
@@ -160,6 +189,10 @@ export async function startWindow(
   startChatWindow();
   await settled();
   const el = (id: string) => elements.get(id)!;
+  if ((options.startOn ?? "chat") === "chat" && !el("view-home").hidden) {
+    el("tab-chat").click();
+    await settled();
+  }
   const texts = () => el("messages").children.map((item) => item.textContent);
   /** The main process's news about its asking box, as the preload hands it to the window. */
   const emitAsking = (event: AskingEvent) => {

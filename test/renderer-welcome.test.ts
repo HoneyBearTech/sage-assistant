@@ -23,7 +23,10 @@ async function welcomeWindow(
   overrides: Partial<SageApi> = {},
   setupDone = false,
 ) {
-  const win = await startWindow(t, async () => "The reply.", overrides, { settings: { setupDone } });
+  const win = await startWindow(t, async () => "The reply.", overrides, {
+    settings: { setupDone },
+    startOn: "home",
+  });
   const visibleStep = () => STEPS.filter((id) => !win.el(id).hidden);
   const click = async (id: string) => {
     win.el(id).click();
@@ -36,6 +39,7 @@ async function welcomeWindow(
 test("a first start opens the Welcome screen, with Chat hidden and no tabs", async (t) => {
   const { el, visibleStep } = await welcomeWindow(t);
   assert.equal(el("view-welcome").hidden, false);
+  assert.equal(el("view-home").hidden, true);
   assert.equal(el("view-chat").hidden, true);
   assert.equal(el("view-settings").hidden, true);
   assert.equal(el("tabs").hidden, true);
@@ -44,20 +48,24 @@ test("a first start opens the Welcome screen, with Chat hidden and no tabs", asy
   assert.equal(el("welcome-skip").hidden, false);
 });
 
-test("once set up, Sage opens on Chat; if the settings can't be read, it opens on Chat too", async (t) => {
+test("once set up, Sage opens on Home, with the Home tab pressed", async (t) => {
   const done = await welcomeWindow(t, {}, true);
-  assert.equal(done.el("view-chat").hidden, false);
+  assert.equal(done.el("view-home").hidden, false);
+  assert.equal(done.el("view-chat").hidden, true);
   assert.equal(done.el("view-welcome").hidden, true);
   assert.equal(done.el("tabs").hidden, false);
+  assert.equal(done.el("tab-home").getAttribute("aria-pressed"), "true");
+  assert.equal(done.el("tab-chat").getAttribute("aria-pressed"), "false");
 });
 
-test("if the settings can't be read, Sage opens on Chat", async (t) => {
+test("if the settings can't be read, Sage opens on Home", async (t) => {
   const broken = await welcomeWindow(t, {
     getSettings: async () => {
       throw new Error("no answer");
     },
   });
-  assert.equal(broken.el("view-chat").hidden, false);
+  assert.equal(broken.el("view-home").hidden, false);
+  assert.equal(broken.el("view-chat").hidden, true);
   assert.equal(broken.el("view-welcome").hidden, true);
 });
 
@@ -410,6 +418,7 @@ test("after a download, Settings shows the new local model without losing other 
       setupDone: model !== "small-model",
       theme: "dark",
       sound: false,
+      morningBrief: false,
     }),
     pullModel: async () => {
       model = "qwen3:1.7b";
@@ -537,6 +546,7 @@ test("a late answer after setup doesn't overwrite edits made since", async (t) =
         setupDone: model !== "small-model",
         theme: "dark" as const,
         sound: false,
+        morningBrief: false,
       };
       await hold?.promise;
       return answer;
@@ -612,6 +622,7 @@ test("a late setup refresh never overwrites a Settings save that finished first"
     setupDone: false,
     theme: "dark" as const,
     sound: false,
+    morningBrief: false,
   };
   let holdNext: ReturnType<typeof deferred<void>> | undefined;
   const { el, click, calls } = await welcomeWindow(t, {

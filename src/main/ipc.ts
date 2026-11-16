@@ -9,6 +9,7 @@ import {
   COMPANIES,
   type Channel,
   type GuideResult,
+  type HomeSummary,
   type ModelListResult,
   ONLINE_BRAINS,
   privacyLine,
@@ -65,6 +66,9 @@ const transcribePayload = z.strictObject({
 // The top bar's sound switch: on or off, nothing else.
 const soundPayload = z.strictObject({ on: z.boolean() });
 
+// Home's two requests carry nothing: an empty object, and nothing else is accepted.
+const emptyPayload = z.strictObject({});
+
 // The window picks one of Sage's two models; it never sends a model name.
 const pullPayload = z.strictObject({ choice: z.enum(MODEL_CHOICES) });
 
@@ -91,6 +95,7 @@ export function toPublicSettings(settings: Settings, keys: PublicSettings["keys"
     setupDone: settings.setupDone,
     theme: settings.theme,
     sound: settings.sound,
+    morningBrief: settings.morningBrief,
   };
 }
 
@@ -134,13 +139,15 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.getSettings]: async () =>
       toPublicSettings(await sage.settings.load(), await sage.keyStore.hasKeys()),
     [CHANNELS.saveSettings]: async (payload): Promise<Result> => {
-      // The Settings screen saves everything it shows; "set up" and the sound switch aren't among
-      // them, so their saved values are kept (read and written under the settings lock).
+      // The Settings screen saves everything it shows; "set up", the sound switch and the day of
+      // the last morning brief aren't among them, so their saved values are kept (read and written
+      // under the settings lock).
       const result = await sage.settings.update((current) => ({
         ...(payload as object),
         version: 1,
         setupDone: current.setupDone,
         sound: current.sound,
+        lastBrief: current.lastBrief,
       }));
       if (!result.ok) return fail(result.message);
       const previous = result.previous;
@@ -267,6 +274,16 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       if (!parsed.success) return fail(NOT_READ);
       const result = await sage.settings.update((current) => ({ ...current, sound: parsed.data.on }));
       return result.ok ? { ok: true } : fail(result.message);
+    },
+    // Home's summary: read-only and bounded (src/core/home.ts). The request carries nothing.
+    [CHANNELS.homeSummary]: async (payload): Promise<HomeSummary> => {
+      if (!emptyPayload.safeParse(payload).success) throw new Error(NOT_READ);
+      return sage.home.summary();
+    },
+    // Whether to show the morning brief now; true once a day, when the setting is on.
+    [CHANNELS.claimMorningBrief]: async (payload): Promise<boolean> => {
+      if (!emptyPayload.safeParse(payload).success) return false;
+      return sage.home.claimMorningBrief();
     },
   };
 }

@@ -105,11 +105,17 @@ later, and what Sage will not do.
       [the interface study](reports/2026-11-16-jarvis-look.md).
 - [ ] **Owner:** run the "New look" section of [the Windows checklist](windows-checklist.md) after the
       next install.
-- [ ] **A new look, part 2: a Home screen.** A large orb, a clock, a greeting for the time of day, and
-      panels for today's reminders, recent notes and Sage's status; then a daily brief that reads them
-      out. Also from part 1: small cards in the chat for actions Sage took without asking (they need a
-      new one-way message to the window), and showing a question that is still open after the window
-      reloads.
+- [x] **A new look, part 2: a Home screen** (home-brief). Sage opens on Home: a large orb, a clock, a
+      greeting for the time of day, and Today, Notes and Status panels; Talk to Sage; **Brief me**, a
+      daily brief Sage builds itself from reminders and note titles (never sent to the brain), typed out
+      and read aloud, with its own Stop button; an optional morning brief, off by default.
+- [ ] **Owner:** run the "Home screen" section of [the Windows checklist](windows-checklist.md) after the
+      next install (layout, the clock against the taskbar clock, the brief's voice).
+- [ ] **Chat cards** (from part 1): small cards in the chat for actions Sage took without asking (they
+      need a new one-way message to the window), and showing a question that is still open after the
+      window reloads.
+- [ ] **Minor:** a morning brief whose claim comes back after the window was hidden or Brief me was
+      pressed still uses up the day (undoing it would need another write request).
 - [ ] **A new look, part 3: the Welcome screen as a start-up sequence.** The same steps as numbered
       sections with typed check lines, plus a support code and Copy diagnostics when something fails.
 - [x] **More online brains** (brains-api): Claude, OpenAI and Gemini with the user's own API key, next
@@ -128,6 +134,10 @@ later, and what Sage will not do.
 - [ ] **Minor:** in Settings, a Test or Load models still running when that company's key is saved or
       removed can show its old answer ("The key works" next to "No key saved"). Sage itself never reuses
       the old answer; only the window's display is stale. Clear pending results when the key changes.
+- [x] **OpenSSF Best Practices badge** (openssf-badge): the badge for project 16810 under the README's
+      title, explained in [the GitHub checks notes](github-checks.md).
+- [ ] **Owner:** fill in the questionnaire at https://www.bestpractices.dev/projects/16810 (the badge
+      shows "in progress" until then). A later job can draft suggested answers from the repo.
 - [ ] **GitHub Copilot sign-in** with the user's subscription, after a trial that checks it can answer
       without using its own tools. Its own plan.
 

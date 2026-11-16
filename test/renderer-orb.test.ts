@@ -29,6 +29,16 @@ test("the orb is drawn in the page itself, and Hold to talk stays a real button"
   assert.match(html, /<button\s+type="button"\s+id="talk"[\s\S]*?>\s*Hold to talk\s*<\/button>/);
 });
 
+test("Home draws the same orb, larger, hidden from screen readers, with its own gradient id", () => {
+  const home = html.slice(html.indexOf('<div id="home-orb"'), html.indexOf('<p id="home-orb-state"'));
+  assert.match(home, /class="orb orb-large"/);
+  assert.match(home, /aria-hidden="true"/);
+  assert.match(home, /<svg class="orb-art"/);
+  assert.match(home, /fill="url\(#home-orb-core-fill\)"/);
+  const ids = [...html.matchAll(/\sid="([\w-]+)"/g)].map((match) => match[1]);
+  assert.equal(new Set(ids).size, ids.length, "every id in the page is used once");
+});
+
 test("the orb rests, thinks while a reply is on its way, and rests again", async (t) => {
   const reply = deferred<string>();
   const { el } = await startWindow(t, () => reply.promise);

@@ -16,7 +16,8 @@
       <h1 class="brand">Sage</h1>
       <span id="brain-status" class="status"></span>
       <nav id="tabs" class="tabs">
-        <button type="button" id="tab-chat" class="tab active" aria-pressed="true">Chat</button>
+        <button type="button" id="tab-home" class="tab active" aria-pressed="true">Home</button>
+        <button type="button" id="tab-chat" class="tab" aria-pressed="false">Chat</button>
         <button type="button" id="tab-settings" class="tab" aria-pressed="false">Settings</button>
       </nav>
       <button
@@ -105,6 +106,75 @@
         <p id="done-voice" class="hint"></p>
         <button type="button" id="start-chatting" class="primary">Start chatting</button>
       </section>
+    </main>
+
+    <main id="view-home" class="view home" hidden>
+      <div class="home-top">
+        <div class="orb-dock home-orb-dock">
+          <!-- The same orb as in Chat, drawn larger; orb.ts sets both from one state. -->
+          <div id="home-orb" class="orb orb-large" data-state="idle" aria-hidden="true">
+          <svg class="orb-art" viewBox="0 0 200 200" focusable="false" aria-hidden="true">
+            <defs>
+              <radialGradient id="home-orb-core-fill" cx="0.5" cy="0.42" r="0.6">
+                <stop offset="0" class="orb-stop-hot" />
+                <stop offset="0.55" class="orb-stop-mid" />
+                <stop offset="1" class="orb-stop-edge" />
+              </radialGradient>
+            </defs>
+            <circle class="orb-ripple" cx="100" cy="100" r="48" />
+            <circle class="orb-ripple orb-ripple-late" cx="100" cy="100" r="48" />
+            <circle class="orb-frame" cx="100" cy="100" r="97" />
+            <circle class="orb-ticks" cx="100" cy="100" r="90" />
+            <circle class="orb-ticks-major" cx="100" cy="100" r="90" />
+            <circle class="orb-arcs" cx="100" cy="100" r="76" />
+            <circle class="orb-inner" cx="100" cy="100" r="62" />
+            <g class="orb-core">
+              <circle class="orb-disc" cx="100" cy="100" r="46" fill="url(#home-orb-core-fill)" />
+              <g transform="rotate(38 100 100)">
+                <path class="orb-leaf" d="M100 74 C117 85 119 109 100 126 C81 109 83 85 100 74 Z" />
+                <path class="orb-vein" d="M100 81 L100 120" />
+              </g>
+            </g>
+          </svg>
+          </div>
+          <p id="home-orb-state" class="orb-caption">Ready</p>
+        </div>
+        <div class="home-hello">
+          <p id="home-clock" class="home-clock"></p>
+          <h2 id="home-greeting" class="home-greeting">Hello</h2>
+          <div class="row">
+            <button type="button" id="home-talk" class="primary">Talk to Sage</button>
+            <button type="button" id="home-brief">Brief me</button>
+          </div>
+          <p id="home-status" class="hint" role="status"></p>
+        </div>
+      </div>
+
+      <section id="home-brief-panel" class="panel home-brief" aria-labelledby="home-brief-heading" hidden>
+        <h2 id="home-brief-heading" class="panel-label">Brief</h2>
+        <p id="home-brief-text" class="brief-text" aria-live="polite"></p>
+        <button type="button" id="home-stop-speaking" class="brief-stop" hidden>Stop speaking</button>
+      </section>
+
+      <div class="home-panels">
+        <section class="panel" aria-labelledby="home-today-heading">
+          <h2 id="home-today-heading" class="panel-label">Today</h2>
+          <ul id="home-today" class="home-list"></ul>
+        </section>
+        <section class="panel" aria-labelledby="home-notes-heading">
+          <h2 id="home-notes-heading" class="panel-label">Notes</h2>
+          <ul id="home-notes" class="home-list"></ul>
+        </section>
+        <section class="panel" aria-labelledby="home-status-heading">
+          <h2 id="home-status-heading" class="panel-label">Status</h2>
+          <dl class="home-facts">
+            <div><dt>Brain</dt><dd id="home-brain"></dd></div>
+            <div><dt>Voice</dt><dd id="home-voice"></dd></div>
+            <div><dt>Sound</dt><dd id="home-sound"></dd></div>
+            <div><dt>Next reminder</dt><dd id="home-next"></dd></div>
+          </dl>
+        </section>
+      </div>
     </main>
 
     <main id="view-chat" class="view" hidden>
@@ -297,6 +367,19 @@
             <option value="never">Never</option>
           </select>
           <p id="voice-note" class="hint"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Home</legend>
+          <label class="choice">
+            <input type="checkbox" id="morning-brief" aria-describedby="morning-brief-note" />
+            Brief me when Sage first opens each day
+          </label>
+          <p id="morning-brief-note" class="choice-note">
+            The first time Sage opens on a new day, Home shows the daily brief: today's reminders and your latest
+            notes. It is read aloud only when Read replies aloud is set to Always. The brief is made on this PC and
+            never sent to the brain.
+          </p>
         </fieldset>
 
         <fieldset>
