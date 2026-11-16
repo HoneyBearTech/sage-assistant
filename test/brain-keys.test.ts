@@ -113,6 +113,11 @@ test("each brain sends only its own key, only to its own service", async () => {
     if (call.url.startsWith("https://generativelanguage.googleapis.com/")) {
       return jsonResponse(200, { candidates: [{ content: { parts: [{ text: "gemini" }] } }] });
     }
+    if (call.url.startsWith("https://api.openai.com/")) {
+      return jsonResponse(200, {
+        output: [{ type: "message", content: [{ type: "output_text", text: "openai" }] }],
+      });
+    }
     return jsonResponse(200, { choices: [{ message: { content: "chat" } }] });
   });
   const keys = new ServiceKeys(memoryKeyStores());
@@ -136,7 +141,7 @@ test("each brain sends only its own key, only to its own service", async () => {
   assert.equal(claude!.url, "https://api.anthropic.com/v1/messages");
   assert.equal(claude!.headers["x-api-key"], CLAUDE_KEY);
   assert.equal(JSON.parse(claude!.body).model, "claude-sonnet-5-5");
-  assert.equal(openai!.url, "https://api.openai.com/v1/chat/completions");
+  assert.equal(openai!.url, "https://api.openai.com/v1/responses");
   assert.equal(openai!.headers.authorization, `Bearer ${OPENAI_KEY}`);
   assert.equal(JSON.parse(openai!.body).model, defaultSettings().services.openai.model);
   assert.equal(

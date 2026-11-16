@@ -45,9 +45,6 @@ export const SERVICES: Readonly<Record<Company, CompanyService>> = {
   },
 };
 
-/** OpenAI's chat-completions address, for the chat-completions brain. */
-export const OPENAI_CHAT_URL = `${OPENAI_ORIGIN}/v1/chat/completions`;
-
 /**
  * The origin (scheme, host and port) a request to `url` goes to, or null if Sage would never send
  * a key there: only https, or plain http to this computer (for a self-hosted "other" service), and

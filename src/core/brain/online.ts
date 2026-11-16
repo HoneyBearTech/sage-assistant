@@ -15,8 +15,7 @@ import { requestService } from "./request.js";
 
 /**
  * An online model service that speaks the widely used chat-completions format: POST
- * <base>/v1/chat/completions with a bearer key (another online service), or a ready-made service's
- * fixed chat-completions address (OpenAI).
+ * <base>/v1/chat/completions with a bearer key (another online service).
  */
 
 const completionReply = z.object({
@@ -44,10 +43,8 @@ const completionReply = z.object({
 });
 
 export interface OnlineBrainOptions {
-  /** Another online service: the address the user typed. Ignored when `endpoint` is given. */
+  /** The address the user typed. */
   baseUrl?: string;
-  /** A ready-made service: its fixed chat-completions address. */
-  endpoint?: string;
   /** How messages name the service; "The online service" by default. */
   service?: ServiceName;
   model: string;
@@ -101,7 +98,7 @@ export class OnlineBrain implements Brain {
   async chat(messages: ChatMessage[], allTools: ToolSpec[], allowTools = true): Promise<BrainReply> {
     // Past the skill limit no tools are offered at all.
     const tools = allowTools ? allTools : [];
-    const url = this.options.endpoint ?? completionsUrl(this.options.baseUrl ?? "");
+    const url = completionsUrl(this.options.baseUrl ?? "");
     if (!url) {
       return {
         ok: false,

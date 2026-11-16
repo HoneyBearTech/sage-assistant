@@ -3,10 +3,9 @@ import { Assistant } from "./assistant.js";
 import type { Brain, FetchLike } from "./brain/brain.js";
 import { LocalBrain } from "./brain/local.js";
 import { MessagesBrain } from "./brain/anthropic.js";
-import { serviceName } from "./brain/errors.js";
 import { GeminiBrain } from "./brain/gemini.js";
 import { OnlineBrain } from "./brain/online.js";
-import { OPENAI_CHAT_URL } from "./brain/services.js";
+import { ResponsesBrain } from "./brain/responses.js";
 import { RunnerClient } from "./brain/runner.js";
 import type { Launcher } from "./apps.js";
 import { type KeyStores, ServiceKeys } from "./keystore.js";
@@ -234,9 +233,7 @@ export function brainFor(
         ...common,
       });
     case "openai":
-      return new OnlineBrain({
-        endpoint: OPENAI_CHAT_URL,
-        service: serviceName("OpenAI"),
+      return new ResponsesBrain({
         model: settings.services.openai.model,
         getKey: (url) => keyStore.keyForRequest("openai", url),
         ...common,
