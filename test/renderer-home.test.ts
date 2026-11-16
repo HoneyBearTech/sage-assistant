@@ -494,3 +494,148 @@ test("the sound switch updates Home's Status panel", async (t) => {
   await settled();
   assert.equal(el("home-sound").textContent, "On");
 });
+
+// --- A brief on its way: only the newest one, and only while Home is on screen ---
+
+/** Home with each summary answer held until the test gives it, after the first (start-up) load. */
+async function heldBriefs(t: Parameters<typeof startWindow>[0], options: WindowOptions = {}, overrides = {}) {
+  const answers: ReturnType<typeof deferred<HomeSummary>>[] = [];
+  const started = await homeWindow(
+    t,
+    { summary: SAMPLE, ...options },
+    {
+      homeSummary: () => {
+        if (answers.length === 0) {
+          answers.push(deferred<HomeSummary>());
+          answers[0]!.resolve(EMPTY_HOME);
+          return answers[0]!.promise;
+        }
+        const answer = deferred<HomeSummary>();
+        answers.push(answer);
+        return answer.promise;
+      },
+      ...overrides,
+    },
+  );
+  return { ...started, answers };
+}
+
+const WITH_NOTES: HomeSummary = { ...EMPTY_HOME, notes: ["Newer"] };
+
+test("two quick Brief me presses: the older answer, arriving last, neither replaces nor interrupts the newer", async (t) => {
+  const { el, media, answers } = await heldBriefs(t);
+  el("home-brief").click();
+  el("home-brief").click();
+  answers[2]!.resolve(WITH_NOTES);
+  await settled();
+  assert.match(el("home-brief-text").textContent, /Your latest notes: Newer\./);
+  assert.equal(media.speech.spoken.length, 1);
+  const cancels = media.speech.cancels;
+  answers[1]!.resolve(SAMPLE);
+  await settled();
+  assert.match(el("home-brief-text").textContent, /Your latest notes: Newer\./, "the newer brief stays");
+  assert.equal(media.speech.spoken.length, 1, "the older one isn't read aloud");
+  assert.equal(media.speech.cancels, cancels, "and doesn't cut the newer one off");
+  assert.equal(media.speech.speaking, true);
+});
+
+test("a brief whose answer arrives after leaving Home is never typed or read aloud", async (t) => {
+  const { el, media, answers } = await heldBriefs(t);
+  el("home-brief").click();
+  el("tab-chat").click();
+  el("tab-home").click();
+  // Home's own reload when shown again.
+  answers[2]!.resolve(EMPTY_HOME);
+  answers[1]!.resolve(SAMPLE);
+  await settled();
+  assert.equal(el("home-brief-panel").hidden, true);
+  assert.equal(el("home-brief-text").textContent, "");
+  assert.equal(media.speech.spoken.length, 0);
+});
+
+test("a brief whose answer arrives while the window is hidden is never typed or read aloud", async (t) => {
+  const { el, media, answers } = await heldBriefs(t);
+  el("home-brief").click();
+  setWindowVisibility("hidden");
+  answers[1]!.resolve(SAMPLE);
+  await settled();
+  setWindowVisibility("visible");
+  answers[2]!.resolve(EMPTY_HOME);
+  await settled();
+  assert.equal(el("home-brief-panel").hidden, true);
+  assert.equal(media.speech.spoken.length, 0);
+});
+
+test("a morning claim answered after leaving Home, or after Brief me, shows no morning brief", async (t) => {
+  await t.test("left Home", async (t) => {
+    const claim = deferred<boolean>();
+    const { el, media } = await homeWindow(
+      t,
+      { summary: SAMPLE, settings: { morningBrief: true, speakReplies: "always" } },
+      { claimMorningBrief: () => claim.promise },
+    );
+    el("tab-chat").click();
+    claim.resolve(true);
+    await settled();
+    assert.equal(el("home-brief-panel").hidden, true);
+    assert.equal(media.speech.spoken.length, 0);
+  });
+  await t.test("window hidden", async (t) => {
+    const claim = deferred<boolean>();
+    const { el, media } = await homeWindow(
+      t,
+      { summary: SAMPLE, settings: { morningBrief: true, speakReplies: "always" } },
+      { claimMorningBrief: () => claim.promise },
+    );
+    setWindowVisibility("hidden");
+    claim.resolve(true);
+    await settled();
+    assert.equal(el("home-brief-panel").hidden, true);
+    assert.equal(media.speech.spoken.length, 0);
+  });
+  await t.test("Brief me pressed meanwhile", async (t) => {
+    const claim = deferred<boolean>();
+    const { el, media } = await homeWindow(
+      t,
+      { summary: SAMPLE, settings: { morningBrief: true, speakReplies: "always" } },
+      { claimMorningBrief: () => claim.promise },
+    );
+    el("home-brief").click();
+    await settled();
+    assert.equal(media.speech.spoken.length, 1);
+    claim.resolve(true);
+    await settled();
+    assert.equal(media.speech.spoken.length, 1, "the morning brief doesn't start again over it");
+    assert.equal(media.speech.speaking, true);
+  });
+});
+
+test("leaving Home or hiding the window stops the brief being read and shows its text in full", async (t) => {
+  for (const leave of ["tab", "hide"] as const) {
+    await t.test(leave, async (t) => {
+      const { el, media } = await homeWindow(t, { summary: SAMPLE });
+      setReducedMotion(false);
+      el("home-brief").click();
+      await settled();
+      assert.equal(media.speech.speaking, true);
+      assert.equal(el("home-brief-text").classList.contains("typing"), true);
+      if (leave === "tab") el("tab-settings").click();
+      else setWindowVisibility("hidden");
+      assert.equal(media.speech.speaking, false, "the brief stopped");
+      assert.equal(el("home-brief-text").classList.contains("typing"), false);
+      assert.equal(el("orb").getAttribute("data-state"), "idle");
+    });
+  }
+});
+
+test("leaving Home doesn't stop a reply being read aloud", async (t) => {
+  const { el, media } = await homeWindow(t, { settings: { speakReplies: "always" } });
+  el("tab-chat").click();
+  el("input").value = "Hello";
+  el("composer").dispatch("submit");
+  await settled();
+  assert.equal(media.speech.speaking, true);
+  el("tab-home").click();
+  el("tab-chat").click();
+  assert.equal(media.speech.speaking, true, "a reply goes on");
+});

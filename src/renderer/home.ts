@@ -43,8 +43,10 @@ export interface HomeHooks {
   talk(): void;
   /** The saved settings, once loaded. */
   settings(): Pick<PublicSettings, "speakReplies" | "morningBrief"> | null;
-  /** Reads text aloud with the PC's own voice; never while the microphone is open. */
+  /** Reads the brief aloud with the PC's own voice; never while the microphone is open. */
   speak(text: string): void;
+  /** Stops the brief being read aloud, if it is; a reply being read goes on. */
+  stopSpeaking(): void;
   /** The chat's typist: one text types out at a time, with its skip and reduced-motion rules. */
   typist: Typist;
   /** The PC's own time format; the tests give a fixed one. */
@@ -54,7 +56,7 @@ export interface HomeHooks {
 export interface Home {
   /** Home was just shown: the clock starts, the panels load, and the morning brief may show. */
   shown(): void;
-  /** Home was hidden: the clock stops. */
+  /** Home was hidden: the clock stops, and a brief on its way or being read is dropped. */
   hidden(): void;
   /** A reminder notice arrived: the panels load again if Home is on screen. */
   reminderArrived(): void;
@@ -73,6 +75,11 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** Goes up with each load; an older answer that arrives late is dropped. */
   let loads = 0;
+  /**
+   * Goes up with each brief asked for (Brief me, or the morning brief) and when Home is left or the
+   * window hidden: a brief whose answer arrives after that is dropped, never typed or read aloud.
+   */
+  let briefs = 0;
   let claiming = false;
 
   function onScreen(): boolean {
@@ -157,8 +164,21 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
     return summary;
   }
 
-  async function brief(trigger: BriefTrigger): Promise<void> {
+  /** True while brief `mine` is still the newest one asked for, and Home is on screen. */
+  function stillWanted(mine: number): boolean {
+    return mine === briefs && onScreen();
+  }
+
+  /** Drops a brief on its way, stops it being read aloud and shows the text typed so far in full. */
+  function cancelBrief(): void {
+    briefs++;
+    hooks.stopSpeaking();
+    if (el.briefText.classList.contains("typing")) hooks.typist.finish();
+  }
+
+  async function brief(mine: number, trigger: BriefTrigger): Promise<void> {
     const summary = await load();
+    if (!stillWanted(mine)) return;
     el.briefPanel.hidden = false;
     if (!summary) {
       hooks.typist.finish();
@@ -175,8 +195,10 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
   async function morningBrief(): Promise<void> {
     if (claiming || !hooks.settings()?.morningBrief || !onScreen()) return;
     claiming = true;
+    const mine = ++briefs;
     try {
-      if (await sage.claimMorningBrief()) await brief("morning");
+      // Claimed but no longer wanted (Brief me was pressed, Home was left): the day counts anyway.
+      if ((await sage.claimMorningBrief()) && stillWanted(mine)) await brief(mine, "morning");
     } catch {
       // Asked again the next time Home is shown.
     } finally {
@@ -187,11 +209,15 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
   // The Brief panel appears with the first brief.
   el.briefPanel.hidden = true;
   el.talk.addEventListener("click", () => hooks.talk());
-  el.briefMe.addEventListener("click", () => void brief("button"));
+  el.briefMe.addEventListener("click", () => void brief(++briefs, "button"));
 
-  // The window coming back into view counts as showing Home again.
+  // The window coming back into view counts as showing Home again; hiding it drops the brief.
   document.addEventListener("visibilitychange", () => {
-    if (!onScreen()) return;
+    if (el.view.hidden) return;
+    if (document.visibilityState === "hidden") {
+      cancelBrief();
+      return;
+    }
     showClock();
     void load();
     void morningBrief();
@@ -207,6 +233,7 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
     hidden() {
       clearTimeout(timer);
       timer = undefined;
+      cancelBrief();
     },
     reminderArrived() {
       if (onScreen()) void load();

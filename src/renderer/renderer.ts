@@ -234,7 +234,8 @@ export function startChatWindow(): void {
         input.focus();
       },
       settings: () => settings,
-      speak: (text) => voice.speak(text),
+      speak: (text) => voice.speakBrief(text),
+      stopSpeaking: () => voice.stopBrief(),
       typist,
     },
   );

@@ -38,8 +38,10 @@ export interface VoiceControls {
   holdingTalkKey(): boolean;
   /** Reads Sage's final reply aloud if the setting says so; never while Sage is listening. */
   replied(reply: string, fromVoice: boolean, setting: PublicSettings["speakReplies"]): void;
-  /** Reads Sage's own text (the daily brief) aloud; never while Sage is listening. */
-  speak(text: string): void;
+  /** Reads the daily brief aloud; never while Sage is listening. */
+  speakBrief(text: string): void;
+  /** Stops the speech if it is the daily brief being read (a reply being read goes on). */
+  stopBrief(): void;
 }
 
 type TalkSource = "key" | "button" | "button-key";
@@ -75,8 +77,11 @@ export function createVoiceControls(
   let fromVoice = false;
   /** The key (or "ctrl-space") pressed to start a recording, until it is let go. */
   let heldKey: string | null = null;
+  /** True while what is being read aloud is the daily brief, not a reply. */
+  let speakingBrief = false;
 
   const speaker = new Speaker(synth, (current) => {
+    if (!current.speaking) speakingBrief = false;
     el.stopSpeaking.hidden = !current.speaking;
     onActivity({ speaking: current.speaking });
     el.voiceNote.textContent = current.availability === "none" ? VOICE_TEXT.noVoice : "";
@@ -355,10 +360,17 @@ export function createVoiceControls(
       return taken;
     },
     replied(reply, spoken, setting) {
-      if (!talk && shouldSpeak(setting, spoken)) speaker.speak(reply);
+      if (talk || !shouldSpeak(setting, spoken)) return;
+      speakingBrief = false;
+      speaker.speak(reply);
     },
-    speak(text) {
-      if (!talk) speaker.speak(text);
+    speakBrief(text) {
+      if (talk) return;
+      // Set once speaking has started: starting cancels what was being read, which clears it.
+      speakingBrief = speaker.speak(text);
+    },
+    stopBrief() {
+      if (speakingBrief) speaker.stop();
     },
   };
 }
