@@ -4,10 +4,11 @@
 useDefault = true
 
 [allowlist]
-description = "Installed packages and build output"
+description = "Installed packages, build output and packaged apps"
 paths = [
   '''(^|/)node_modules/''',
   '''(^|/)dist/''',
+  '''(^|/)out/''',
   '''(^|/)coverage/''',
   '''(^|/)\.git/''',
 ]
