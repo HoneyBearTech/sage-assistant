@@ -87,9 +87,10 @@ It must pass. If you changed the window, also start the app (`npm start`) and tr
 ### Install scripts and `allowScripts`
 
 A package's install script runs code on your computer during `npm install`, so Sage keeps a reviewed
-list of them in the `allowScripts` field of `package.json`. Today it has one entry, pinned to a
-version: `esbuild@0.28.2`, whose script picks the right prebuilt binary for your system. Electron has no
-install script; it downloads its runtime on the first `npm start`.
+list of them in the `allowScripts` field of `package.json`. Today it has two entries, each pinned to a
+version: `esbuild@0.28.2` is allowed (its script picks the right prebuilt binary for your system), and
+`electron-winstaller@5.4.0` is turned off (`false`): electron-builder brings it for an installer type
+Sage doesn't use. Electron has no install script; it downloads its runtime on the first `npm start`.
 
 The field is read by npm 11.19 and later (the version that comes with Node 24):
 
@@ -133,6 +134,10 @@ like any other change, because an update can carry a compromised release:
   script and update the `allowScripts` entry in `package.json` (the list of packages allowed to run
   install scripts). Entries are keyed by exact version, such as `esbuild@0.28.2`, so each esbuild update
   needs a new key.
+- After an electron-builder update, check whether the version of `electron-winstaller` it brings changed
+  (`npm install-scripts ls`, or its entry in the `package-lock.json` diff). If it did, read its new
+  install script and replace the `electron-winstaller@…` key in `allowScripts` with the new version,
+  still set to `false`: its script stays off, because Sage's installer type doesn't use it.
 - Look for new or changed install scripts in every update pull request, including the monthly lockfile
   refresh: in the `package-lock.json` diff, look for `"hasInstallScript": true` on new or changed
   entries; or run `npm install-scripts ls` locally, which lists packages whose install scripts aren't

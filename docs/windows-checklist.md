@@ -2,7 +2,8 @@
 
 Short manual checks for a Windows 10 or 11 PC, for the parts the automated tests can't reach (the real
 window, the native confirmation box, notifications and the key encryption). Run them after a change to
-the window, the skills or the key store, and before any release. It takes about 15 minutes.
+the window, the skills or the key store, and before any release. It takes about 15 minutes, and the
+[Installed app](#installed-app) section about 10 more.
 
 Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (see
 [installing.md](installing.md)), and Sage's source is up to date (`git pull`, `npm install`).
@@ -88,3 +89,36 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 - [ ] Press Ctrl+R and F5: the page doesn't change, and the chat still works.
 - [ ] In Task Manager, Sage runs as Electron processes and nothing else of Sage's keeps running after you
       close the window.
+
+## Installed app
+
+Run this section after a change to the installer settings (`electron-builder.json`), the fuses, or the
+release workflow, and before any release. It takes about 10 minutes. Electron's security switches
+(fuses) are set by the installer build, so this section also checks the app still starts with them.
+
+Before you start: close Sage if it's open. Make sure the source copy has at least one saved note (the
+earlier sections delete the Shopping note and replace `notes.json`, so if needed, start the source copy,
+add a quick note, then close Sage).
+
+`npm ci` installs the exact versions of everything needed to build (run it in the source folder if you
+haven't since the last update). The first `npm run dist` downloads a few hundred MB, so it takes longer.
+
+- [ ] In PowerShell, in the source folder, `npm run dist` ends without errors and writes
+      `out\Sage-Setup-<version>.exe` (the version in `package.json`), and no `.blockmap` file next to it.
+- [ ] Run the installer: SmartScreen may warn (**More info**, then **Run anyway**). It installs without
+      asking for admin rights and starts Sage.
+- [ ] The Start menu has **Sage**, and so does the desktop. Close Sage and start it from each shortcut:
+      it opens.
+- [ ] The window is titled "Sage" and looks the same as from source (styled, not plain black text on
+      white). Ask "What can you do?": a reply comes back. **Settings** opens, and the chat comes back.
+- [ ] "What notes do I have?" lists the note made in the source copy (both use
+      `%APPDATA%\sage-assistant`).
+- [ ] "Remind me to stretch in two minutes": a Windows notification titled "Sage reminder" says
+      "stretch". In Settings → System → Notifications, the sender is listed as **Sage**.
+- [ ] Starting Sage again from the Start menu while it is open brings the window forward.
+- [ ] Close Sage. Open `package.json` in Notepad, change `"version": "0.1.0"` to `"version": "0.1.1"`
+      and save (don't commit it). Run `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
+      and the note is still there. Then put `package.json` back with `git checkout package.json`.
+- [ ] Close Sage. Uninstall it in Settings → Apps → Installed apps (Windows 10: Apps & features): the shortcuts are gone, and
+      `%APPDATA%\sage-assistant` still holds `notes.json` and `settings.json`. `npm start` from the source
+      folder still opens Sage with the note.

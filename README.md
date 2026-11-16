@@ -13,9 +13,19 @@ Its "brain" (the model that understands you and writes the replies) is your choi
   your own key. The key is encrypted with your operating system's protection.
 
 > [!NOTE]
-> This is the foundation: a text chat that runs from source on Windows and Linux. A one-click Windows
-> installer, voice (hold a key to talk) and a first-run setup come next; see the
+> This is the foundation: a text chat with a one-click Windows installer, which also runs from source on
+> Windows and Linux. Voice (hold a key to talk) and a first-run setup come next; see the
 > [roadmap](docs/roadmap.md).
+
+## Install it on Windows
+
+Download `Sage-Setup-<version>.exe` and `SHA256SUMS.txt` from the
+[Releases page](https://github.com/HoneyBearTech/sage-assistant/releases), check the checksum, and run
+the installer. It installs for your account only, without admin rights, and adds Sage to the Start menu
+and the desktop. It isn't code-signed yet, so SmartScreen may warn: choose **More info**, then **Run
+anyway**, only for a file from the Releases page whose checksum matched. For the local brain you also
+need the local model runner and a model (see below). Step by step, with updating and uninstalling:
+[docs/installing.md](docs/installing.md#installing-on-windows).
 
 ## What Sage can do
 
@@ -100,10 +110,14 @@ the DCO check, a secret scan, CodeQL and dependency review, and the OpenSSF Scor
 (see [docs/github-checks.md](docs/github-checks.md)). Renovate opens the dependency update pull
 requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
 
+`npm run dist` builds the Windows installer into `out/` (on Windows only), and `npm run dist:dir` the
+unpacked app (also on Linux). Releases are built on GitHub from a version tag, with a checksum and build
+provenance; see [docs/releasing.md](docs/releasing.md).
+
 ## Documentation
 
 The [docs index](docs/README.md) lists everything: how Sage works, the security case, installing, the
-Windows checklist and the roadmap.
+Windows checklist, releasing and the roadmap.
 
 ## Security and support
 

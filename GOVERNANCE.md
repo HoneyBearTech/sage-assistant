@@ -14,8 +14,9 @@ Decisions happen in the open wherever possible:
   [GitHub Issues](https://github.com/HoneyBearTech/sage-assistant/issues). Anyone can open one or comment.
 - **Changes** land only through pull requests to `main`. The pull request description records what changed
   and why.
-- **Releases**, once there are any, will be SemVer version tags, with what each one changed in
-  [CHANGELOG.md](CHANGELOG.md).
+- **Releases** are SemVer version tags, built and published by the release workflow, with what each one
+  changed in [CHANGELOG.md](CHANGELOG.md). How a release is made is in
+  [docs/releasing.md](docs/releasing.md).
 - **Larger design choices** are explained in the issues and pull requests that make them, and in the
   [roadmap](docs/roadmap.md).
 - **Security reports** are handled privately, as described in [SECURITY.md](SECURITY.md), until a fix is
@@ -36,8 +37,11 @@ Decisions happen in the open wherever possible:
 | Repository administration (settings, rules, merging) | the maintainer |
 | Security advisories and private vulnerability reports | the maintainer |
 
-There are no other collaborators, no CI secrets and no signing keys yet. The Windows installer job will
-add a build and, later, signing; this table is updated in the same pull request.
+There are no other collaborators, no CI secrets and no signing keys yet. The Windows installer is built
+by a release workflow ([docs/releasing.md](docs/releasing.md)) that uses only the short-lived token
+GitHub gives each run, and its build provenance is signed with a short-lived certificate for that run,
+so it adds no secrets or keys either. Code signing comes later; this table is updated in the same pull
+request.
 
 ## Granting elevated access
 

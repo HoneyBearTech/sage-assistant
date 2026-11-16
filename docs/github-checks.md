@@ -26,6 +26,13 @@ Workflows:
 - [Scorecard](../.github/workflows/scorecard.yml): the OpenSSF Scorecard, on every push to `main` and
   weekly (it doesn't run on pull requests).
 
+Not in place yet:
+
+- **Release**: builds the Windows installer on a version tag such as `v0.2.0`, with a checksum file and
+  build provenance, and publishes them on the Releases page. The team doesn't add workflows, so the
+  owner adds it as `.github/workflows/release.yml` from the ready-to-paste text in
+  [releasing.md](releasing.md), which also explains how to make a release.
+
 Set up:
 
 - [CODEOWNERS](../.github/CODEOWNERS): `* @HoneyBearTech`.
@@ -64,6 +71,9 @@ confirmed here):
   - after an esbuild (or any install-script package) update, inspect the new script and update the
     `allowScripts` entry in `package.json` (the list of packages allowed to run install scripts). Entries
     are keyed by exact version, such as `esbuild@0.28.2`, so each esbuild update needs a new key;
+  - after an electron-builder update, check whether the version of `electron-winstaller` it brings
+    changed; if it did, inspect its install script and update its `allowScripts` entry, which stays
+    `false` (the script stays off);
   - in every update pull request, including the monthly lockfile refresh, look for new or changed install
     scripts: in the `package-lock.json` diff, look for `"hasInstallScript": true` on new or changed
     entries, or run `npm install-scripts ls` locally (npm 11.19.1, which comes with Node 24.22, has it;

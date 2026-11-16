@@ -8,6 +8,18 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **A one-click Windows installer**, `Sage-Setup-<version>.exe`: it installs for your account only,
+  without admin rights, adds Start-menu and desktop shortcuts, and starts Sage. The installed app uses the
+  same data folder as a copy run from source, and uninstalling keeps your data. `npm run dist` builds it
+  on Windows; `npm run dist:dir` builds the unpacked app, also on Linux. It isn't code-signed yet.
+- **Two more hardening fuses** in the packaged app: pages loaded from files get no extra privileges, and
+  cookies are encrypted. electron-builder sets all the fuses while packaging, and a test keeps its
+  settings and `src/main/fuses-config.ts` the same.
+- **A release workflow, ready for the owner to add** ([docs/releasing.md](docs/releasing.md)): on a
+  version tag it builds the installer on GitHub and publishes it with a `SHA256SUMS.txt` checksum and a
+  signed build provenance. The install guide explains how to check both, and releases now follow
+  Semantic Versioning with only the latest supported.
+
 - **Biome 2.6.8** for linting and formatting; its Markdown formatter is turned off so the hand-written docs stay as written.
 - **Renovate** keeps the npm dependencies and the pinned GitHub Actions current, in weekly pull requests
   that go through every check; the docs now describe the checks that run on GitHub.
@@ -41,8 +53,7 @@ All notable changes to Sage are documented here. The format follows
   works only for the address that is saved: with a new address typed but not saved, it asks you to save the
   settings first.
 - **A locked-down window**: sandboxed, context-isolated, no Node access, a strict Content-Security-Policy,
-  only local files, no navigation or pop-ups, and the microphone as the only permission it can be given. A
-  script to set Electron's hardening fuses on the packaged app.
+  only local files, no navigation or pop-ups, and the microphone as the only permission it can be given.
 - **No telemetry** or analytics of any kind.
 - **Project files and checks**: licence, security policy, contribution guide, governance, code of conduct,
   support policy, issue and pull request templates, and `npm run verify` (lint and format, typecheck, tests
