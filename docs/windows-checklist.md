@@ -105,11 +105,16 @@ Needs a real key for at least one of the three (set a low spending limit on the 
       can't be found in it or in `settings.json` with Ctrl+F.
 - [ ] Choose **Test**: "The key works: … answered."
 - [ ] Choose **Load models**: a list appears; picking one fills the model box, which can still be typed
-      in. Choose **Save settings**: the line about what is sent to which company shows once.
+      in. Choose **Save settings**: the line about what is sent to which company shows.
 - [ ] Ask a question in Chat: the answer comes from that service.
 - [ ] Ask "open <an app from your list>": Sage's box asks first, exactly as with the local brain, and
       **Don't allow** stops it.
 - [ ] Ask Sage to add a note, then to list notes: both work, and the answer uses the list.
+- [ ] With each of the three, ask "What notes and reminders do I have?" (two skills in one message):
+      the answer uses both lists, with no error (the service's thinking went back unchanged).
+- [ ] Paste a key, then pick another brain before **Save key**: the key box is empty.
+- [ ] Ask something, and while Sage is answering save a different model name: the answer stops with
+      "The brain settings changed…".
 - [ ] Save a second company's key: both files exist. **Remove key** for one: only its file is gone and
       the other brain still answers.
 - [ ] Save a wrong key (change one character) and choose **Test**, then ask something: both say the key

@@ -31,21 +31,28 @@ All notable changes to Sage are documented here. The format follows
   the default), *Claude* (an Anthropic key), *OpenAI* (an OpenAI key), *Gemini* (a Google AI Studio key)
   and *Another online service* (an address and a key, as before). Each choice has a one-line note on
   what it costs, that its key is kept in your system's protected storage, and that what you type and
-  the results of Sage's skills go to that company. The first time you pick or save an online brain,
-  Sage says the same in one line. Sage's skills and its ask-first rule are unchanged: the services only
+  the results of Sage's skills go to that company. When you pick an online brain (and when you save
+  it), Sage says the same in one line. Sage's skills and its ask-first rule are unchanged: the services only
   answer, or ask to use one of Sage's skills.
-- **Claude through Anthropic's Messages API**, with Sage's skills as tools; **Gemini through Google's own
-  API**, which sends back the signatures current Gemini models need for skill requests; **OpenAI**
-  through the existing chat-completions brain at OpenAI's address. No new packages.
+- **Claude through Anthropic's Messages API**, **OpenAI through its Responses API** (its current models
+  take tools only there; nothing is stored at OpenAI) and **Gemini through Google's own API**, each with
+  Sage's skills as tools. Within one message, each reply goes back to its service exactly as it came
+  (thinking blocks, signatures and encrypted reasoning included), the tools list never changes (tool
+  use is switched off past the skill limit), and a refused thinking signature is retried once without
+  thinking. Replies may use up to 16,000 tokens and three minutes, since thinking counts toward both;
+  a reply cut off at the limit keeps its text and says so. No new packages.
 - **One key per company,** each encrypted on its own and sent only to its company's fixed address,
   checked at the moment of each request. Switching brains never mixes keys; removing one keeps the
   others. On Linux, keys are still refused without a real keyring.
 - **Load models** asks the company for its current models to pick from (the model box stays editable),
   **Test** checks a saved key with one free request, and **Get a key** opens the company's key page in
   your web browser, after Sage's own asking box, at a fixed address.
-- **Clear errors** for a wrong or revoked key, credit or quota used up, a model that doesn't exist or was
-  retired, a busy service, a time-out and no network. The service's own error text is never shown or
-  saved.
+- **Clear errors** for a wrong or revoked key, credit or quota used up (including prepaid credit and a
+  daily free-tier quota), a model that doesn't exist or was retired, a busy service, a time-out and no
+  network. The service's own error text is never shown or saved.
+- **Load models and Test** run one at a time per company, and reuse an answer for a few seconds.
+- Changing the chosen brain's model or key stops an answer in progress, as switching brains does. A key
+  may hold only printable ASCII characters.
 - **Theme setting:** Settings → Look → Theme: *Dark* (the default), *Light* or *Match system*. Older
   settings files load with *Dark*.
 - **The orb:** a glowing ring above the message box that shows what Sage is doing: ready, listening

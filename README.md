@@ -142,8 +142,8 @@ Open **Settings** in Sage's window:
 
 - **Brain** picks where Sage thinks: *On this computer (Ollama)*, *Claude*, *OpenAI*, *Gemini* or
   *Another online service*, each with a one-line note on what it costs and what is sent where. The
-  switch takes effect with your next message. The first time you pick (or save) an online brain, Sage
-  says in one line what it will send to which company.
+  switch takes effect with your next message. When you pick an online brain (and again when you save
+  it), Sage says in one line what it will send to which company.
 - **Local model** is the Ollama model name (default `qwen3:4b`). Sage only ever talks to Ollama at
   `127.0.0.1:11434`, on the same computer; that address can't be changed. If Ollama isn't running,
   Sage says so in plain words ("Sage can't reach the local model runner. Start it, or open Settings →
@@ -153,7 +153,8 @@ Open **Settings** in Sage's window:
   company's key page in your web browser, after Sage asks; paste the key and choose **Save key**, then
   **Test** checks it with one small request that costs nothing (listing the models). Sage talks to
   each company at its own fixed address: Claude through Anthropic's Messages API
-  (`https://api.anthropic.com/v1/messages`), OpenAI through `https://api.openai.com/v1/chat/completions`,
+  (`https://api.anthropic.com/v1/messages`), OpenAI through its Responses API
+  (`https://api.openai.com/v1/responses`, with nothing stored at OpenAI),
   and Gemini through Google's own API (`https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`).
 - **Another online service** keeps the **Online service address**, **Online model name** and **Online
   service key** from before. Sage sends `POST <address>/v1/chat/completions` with the key as a bearer
@@ -164,8 +165,11 @@ Open **Settings** in Sage's window:
   (or, for another online service, to the address it was saved for). It is never written to the
   settings file, the logs, the action log or the chat, and it is never shown again after you save it.
 - **Errors** are plain sentences: a wrong or revoked key, credit or quota used up, a model that doesn't
-  exist or was retired, the service busy, a time-out, or no network. Sage never shows the service's own
-  error text.
+  exist or was retired, the service busy, a time-out, or no network. A reply cut off for being too long
+  keeps what it said and says so, and a request the service declines to answer is said plainly. Sage
+  never shows the service's own error text.
+- **Changing the chosen brain's model or key** (saving a new one, or removing it) stops an answer in
+  progress, as switching brains does; ask again.
 
 ## Where Sage keeps its data
 
