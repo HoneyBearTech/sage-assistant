@@ -134,21 +134,33 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
       list.append(item);
       queue.push({ item, text: check.text });
     }
-    announce(announcement(lines, code));
+    // Only a step that is showing reads its result out.
+    if (!el.steps[step].hidden) announce(step, announcement(lines, code));
     typeNext();
   }
 
   let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Goes up whenever a check restarts, a step changes or setup ends: a waiting result is stale. */
+  let announceTurn = 0;
   /**
    * Clears the status area, then sets it a moment later, so a screen reader reads a result out
-   * again even when it is the same as last time.
+   * again even when it is the same as last time. The write still checks that nothing restarted
+   * or moved on meanwhile and that the step is still showing.
    */
-  function announce(text: string): void {
-    clearTimeout(announceTimer);
-    el.announce.textContent = "";
+  function announce(step: Exclude<WelcomeStep, "place">, text: string): void {
+    clearAnnouncement();
+    const mine = announceTurn;
     announceTimer = setTimeout(() => {
+      if (mine !== announceTurn || leaving || el.steps[step].hidden) return;
       el.announce.textContent = text;
     }, ANNOUNCE_DELAY_MS);
+  }
+
+  /** Drops a result still waiting to be read out, and empties the status area. */
+  function clearAnnouncement(): void {
+    announceTurn++;
+    clearTimeout(announceTimer);
+    el.announce.textContent = "";
   }
 
   /** Shows (or clears) a step's support code and its Copy diagnostics button. */
@@ -219,6 +231,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
   }
 
   function showStep(step: WelcomeStep): void {
+    clearAnnouncement();
     stopTyping();
     hideDiagnostics();
     for (const name of WELCOME_STEPS) el.steps[name].hidden = name !== step;
@@ -275,6 +288,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
     el.runnerCheck.disabled = true;
     el.runnerNext.disabled = true;
     setFailed("runner", null);
+    clearAnnouncement();
     stopTyping();
     el.checks.runner.replaceChildren();
     const current = await status();
@@ -347,6 +361,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
     el.modelNext.hidden = true;
     el.modelSkills.textContent = "";
     setFailed("model", null);
+    clearAnnouncement();
     stopTyping();
     el.checks.model.replaceChildren();
     el.modelStatus.textContent = WELCOME_TEXT.asking;
@@ -387,6 +402,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
   async function finish(to: "chat" | "settings"): Promise<void> {
     if (leaving) return;
     leaving = true;
+    clearAnnouncement();
     el.status.textContent = "";
     // Leaving stops a download in progress: nothing keeps running behind the user's back.
     if (downloading) await sage.cancelPull().catch(() => undefined);
@@ -403,6 +419,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
       return;
     }
     visit++;
+    clearAnnouncement();
     stopTyping();
     hideDiagnostics();
     hooks.leave(to);
@@ -488,8 +505,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
       setFailed("model", null);
       stopTyping();
       for (const list of Object.values(el.checks)) list.replaceChildren();
-      clearTimeout(announceTimer);
-      el.announce.textContent = "";
+      clearAnnouncement();
       renderModelButtons();
       el.modelNext.hidden = true;
       if (!downloading) setBusy(false);

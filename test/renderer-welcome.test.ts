@@ -1059,3 +1059,73 @@ test("hiding the diagnostics box while the focus is in it moves the focus back t
   assert.equal(el("welcome-diagnostics").hidden, true);
   assert.equal(focusedElement(), el("runner-check"));
 });
+
+test("an announcement still waiting is dropped when the check starts again", async (t) => {
+  const answers: ReturnType<typeof deferred<RunnerStatus>>[] = [];
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: () => {
+      const answer = deferred<RunnerStatus>();
+      answers.push(answer);
+      return answer.promise;
+    },
+  });
+  const area = el("welcome-checks-status");
+  await click("place-local");
+  answers[0]!.resolve(runner("unreachable"));
+  await settled();
+  await settled();
+  // Check again within the 100 ms: the old "not found" must not be read out while it checks.
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS - 1);
+  await click("runner-check");
+  assert.equal(el("runner-status").textContent, WELCOME_TEXT.checking);
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS * 2);
+  assert.equal(area.textContent, "", "nothing read out while checking");
+  answers[1]!.resolve(runner("ready"));
+  await settled();
+  await settled();
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS);
+  assert.match(area.textContent, /^Looking for the local model runner\.\.\. found\./);
+});
+
+test("an announcement still waiting is dropped when the next step opens", async (t) => {
+  const { el, click } = await welcomeWindow(t, { runnerStatus: async () => runner("ready") });
+  const area = el("welcome-checks-status");
+  await click("place-local");
+  assert.equal(el("runner-next").disabled, false);
+  // On to the Model step within the 100 ms: the runner's result isn't read out over its heading.
+  await click("runner-next");
+  assert.equal(focusedElement(), el("step-model-heading"));
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS * 2);
+  assert.equal(area.textContent, "");
+});
+
+test("an announcement still waiting is dropped when setup finishes or is skipped", async (t) => {
+  const { el, click } = await welcomeWindow(t, { runnerStatus: async () => runner("unreachable") });
+  const area = el("welcome-checks-status");
+  await click("place-local");
+  // Skip setup within the 100 ms: the Welcome screen's result isn't read out over Chat.
+  await click("welcome-skip");
+  assert.equal(el("view-welcome").hidden, true);
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS * 2);
+  assert.equal(area.textContent, "");
+});
+
+test("an announcement still waiting is dropped when Start chatting finishes setup", async (t) => {
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => runner("ready"),
+    pullModel: async () => ({ status: "done", skills: "yes" }),
+  });
+  const area = el("welcome-checks-status");
+  await click("place-local");
+  await click("runner-next");
+  await click("model-download");
+  // On to Ready within the 100 ms: the model's lines aren't read out; the Ready lines wait.
+  await click("model-next");
+  assert.equal(el("step-done").hidden, false);
+  assert.equal(area.textContent, "");
+  // Start chatting within the 100 ms: the Ready lines aren't read out over Chat.
+  await click("start-chatting");
+  assert.equal(el("view-welcome").hidden, true);
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS * 2);
+  assert.equal(area.textContent, "");
+});
