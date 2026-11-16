@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Sage: a white leaf on a green tile</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a8571"/>
+      <stop offset="1" stop-color="#245a4c"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <path d="M128 40 C 188 80, 196 150, 128 214 C 60 150, 68 80, 128 40 Z" fill="#ffffff"/>
+  <path d="M128 70 L128 196" stroke="#2f6f5e" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <path d="M128 110 L100 88 M128 140 L156 116 M128 168 L102 148" stroke="#2f6f5e" stroke-width="7" stroke-linecap="round" fill="none"/>
+</svg>

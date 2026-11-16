@@ -20,7 +20,7 @@ const rendererDir = join(root, "dist", "renderer");
 const appUrl = pathToFileURL(join(rendererDir, "index.html")).href;
 
 test("the window is sandboxed, isolated and has no Node access", () => {
-  const options = windowOptions("/app/preload.cjs", false);
+  const options = windowOptions("/app/preload.cjs", false, "/app/icon.png");
   assert.deepEqual(options.webPreferences, {
     preload: "/app/preload.cjs",
     contextIsolation: true,
@@ -38,7 +38,8 @@ test("the window is sandboxed, isolated and has no Node access", () => {
     devTools: false,
   });
   assert.equal(options.show, false);
-  assert.equal(windowOptions("/p", true).webPreferences?.devTools, true);
+  assert.equal(options.icon, "/app/icon.png");
+  assert.equal(windowOptions("/p", true, "/i.png").webPreferences?.devTools, true);
 });
 
 test("the page's CSP is strict and matches the one in the code", async () => {
@@ -250,4 +251,16 @@ test("Sage opens one web address, its install guide, and only after asking", asy
   // The window's request carries nothing that could become an address.
   const preload = await readFile(join(root, "src", "preload", "preload.ts"), "utf8");
   assert.match(preload, /openInstallGuide: \(\) => ipcRenderer\.invoke\(CHANNELS\.openInstallGuide\),/);
+});
+
+test("the app icon is a 512 by 512 PNG and electron-builder names it", async () => {
+  const png = await readFile(join(root, "build", "icon.png"));
+  assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.equal(png.subarray(12, 16).toString("latin1"), "IHDR");
+  assert.equal(png.readUInt32BE(16), 512);
+  assert.equal(png.readUInt32BE(20), 512);
+  const config = JSON.parse(await readFile(join(root, "electron-builder.json"), "utf8"));
+  assert.equal(config.win.icon, "build/icon.png");
+  const svg = await readFile(join(root, "build", "icon.svg"), "utf8");
+  assert.doesNotMatch(svg, /<script|href=|url\(\s*["']?https?:|<image|<text|font/i);
 });

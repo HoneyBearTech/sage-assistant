@@ -2,6 +2,35 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - sage-icon
+
+**Context:** the owner asked to "start the Sage icon job", the roadmap item "A Sage icon for the
+installer, the shortcuts and the window".
+
+**Decisions:**
+- **An original design in Sage's own green.** Three designs were offered on the plan (a sage leaf, a
+  leaf in a speech bubble, an S made of two leaves). The owner approved the plan without choosing, so the
+  recommended leaf was built. It stays clear at taskbar size.
+- **One picture for everything.** The installer tool makes every Windows icon size, and the installer's
+  and uninstaller's icons, from one 512 by 512 PNG; no `.ico` files are kept in the repo.
+- **The drawing is the source.** `build/icon.svg` is the file to edit; `build/icon.png` is made from it
+  with a renderer installed outside the repo (pinned version, install scripts off), so Sage gains no
+  dependency. `build/README.md` gives the exact command, and it reproduces the committed picture byte
+  for byte.
+- **The window gets the picture from the build** (`dist/icon.png`, outside `dist/renderer`), so the
+  page can't load it and the window's request filter is unchanged.
+
+**Review:** the Security Officer found nothing to fix (no metadata in the pictures, a plain SVG, the
+window's settings unchanged); the Auditor approved, after checking a packaged build: the picture is in
+the app, `Sage.exe` holds seven icon sizes, and the re-render command works.
+
+**Rejected findings:**
+- *Pin the renderer by checksum in the re-render note* (Security Officer, low). Not done: it is a
+  one-off step that draws a picture, outside the repo, with an exact version and install scripts off,
+  and the result is checked by eye and by the test before it is committed.
+- *Keep the plan's options picture out of the repo* (Security Officer, a note). Kept: plans stay in
+  `docs/plans/`, and the picture shows what the owner chose from.
+
 ## 2026-11-16 - first-run-setup
 
 **Context:** the owner asked to "start the first-run setup job", the roadmap item "Checks that the local
