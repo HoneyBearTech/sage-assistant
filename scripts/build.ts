@@ -55,6 +55,8 @@ await Promise.all([
   }),
   copyFile("src/renderer/index.html", "dist/renderer/index.html"),
   copyFile("src/renderer/styles.css", "dist/renderer/styles.css"),
+  // The window icon (the installed app's icon is built into Sage.exe from the same file).
+  copyFile("build/icon.png", "dist/icon.png"),
 ]);
 
 console.log("Built dist/");

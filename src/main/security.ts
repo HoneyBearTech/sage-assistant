@@ -23,7 +23,11 @@ export const CONTENT_SECURITY_POLICY = [
   "form-action 'none'",
 ].join("; ");
 
-export function windowOptions(preloadPath: string, devTools: boolean): BrowserWindowConstructorOptions {
+export function windowOptions(
+  preloadPath: string,
+  devTools: boolean,
+  iconPath: string,
+): BrowserWindowConstructorOptions {
   return {
     width: 900,
     height: 700,
@@ -31,6 +35,7 @@ export function windowOptions(preloadPath: string, devTools: boolean): BrowserWi
     minHeight: 400,
     show: false,
     title: "Sage",
+    icon: iconPath,
     backgroundColor: "#14171c",
     autoHideMenuBar: true,
     webPreferences: {

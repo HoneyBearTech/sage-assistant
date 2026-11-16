@@ -234,7 +234,9 @@ async function start(): Promise<void> {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow(windowOptions(join(__dirname, "preload.cjs"), !app.isPackaged));
+  mainWindow = new BrowserWindow(
+    windowOptions(join(__dirname, "preload.cjs"), !app.isPackaged, join(__dirname, "icon.png")),
+  );
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   mainWindow.on("closed", () => {
     mainWindow = null;
