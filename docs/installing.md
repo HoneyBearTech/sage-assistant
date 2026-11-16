@@ -164,7 +164,7 @@ results, notes), is sent to that service.
 
 ## Voice and the microphone
 
-Hold **Ctrl+Space** while Sage's window is focused, or press and hold **Hold to talk**, speak, and let go.
+Hold **Ctrl+Space** while Sage's window is in front (the active window), or press and hold **Hold to talk**, speak, and let go.
 The words go into the message box; press Enter to send them.
 
 - **The first time**, Sage asks *"Voice needs a 44 MB speech file from Hugging Face. Download it now?"*.

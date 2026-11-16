@@ -49,7 +49,7 @@ Sage sends no telemetry, analytics or crash reports, and has no account.
 
 ## Voice
 
-Hold **Ctrl+Space** while Sage's window is focused, or press and hold the **Hold to talk** button, and
+Hold **Ctrl+Space** while Sage's window is in front (the active window), or press and hold the **Hold to talk** button, and
 speak. Let go when you're done (at most 30 seconds). Sage works out what you said **on your PC**, with
 the [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) speech engine and the Moonshine tiny English
 model, and puts the words **in the message box**. Nothing is sent until you check it and press Enter.

@@ -138,7 +138,7 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
 - [ ] Send a typed message: the reply is not read aloud.
 - [ ] Settings → **Read replies aloud** → **Always**, Save: a typed message's reply is read aloud.
       **Never**, Save: a spoken message's reply isn't. Back to **After voice messages**, Save: as before.
-      Settings shows no "no voice" note.
+      Settings does not show a message saying this PC has no voice.
 - [ ] With the network off, send a spoken message: the reply (if the brain is local) is read aloud
       offline. Turn the network back on.
 - [ ] In Task Manager, while Sage works out a recording, a separate Sage process ("Sage speech") runs;
@@ -181,8 +181,8 @@ haven't since the last update). The first `npm run dist` downloads a few hundred
       shared, so no download is asked for): the words appear in the message box, so the speech engine
       loads from the installed app. Its native files (`sherpa-onnx.node` and its `.dll` files) are in
       the install folder under `resources\app.asar.unpacked\node_modules\sherpa-onnx-win-x64` (to find
-      the install folder, right-click Sage in the Start menu and choose **Open file location**, then open
-      the shortcut's **Properties**).
+      the install folder, right-click Sage in the Start menu and choose **Open file location**,
+      right-click the Sage shortcut there, choose **Properties**, then **Open File Location**).
 - [ ] Close Sage. Open `package.json` in Notepad, change `"version": "0.1.0"` to `"version": "0.1.1"`
       and save (don't commit it). Run `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
       and the note is still there. Then put `package.json` back with `git checkout package.json`.
