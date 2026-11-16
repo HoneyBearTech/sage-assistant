@@ -23,11 +23,26 @@
 
     <main id="view-chat" class="view">
       <ol id="messages" class="messages" aria-live="polite"></ol>
+      <div class="voice-bar">
+        <span id="voice-status" class="hint" role="status"></span>
+        <button type="button" id="voice-download" hidden>Download</button>
+        <button type="button" id="voice-cancel" hidden>Cancel</button>
+        <button type="button" id="stop-speaking" hidden>Stop speaking</button>
+      </div>
       <form id="composer" class="composer">
         <label for="input" class="visually-hidden">Message</label>
         <textarea id="input" rows="2" maxlength="8000" placeholder="Ask Sage something…" required></textarea>
         <div class="composer-actions">
           <button type="submit" id="send" class="primary">Send</button>
+          <button
+            type="button"
+            id="talk"
+            class="talk"
+            aria-pressed="false"
+            title="Hold to talk (or hold Ctrl+Space). Let go when you're done."
+          >
+            Hold to talk
+          </button>
           <button type="button" id="new-chat">New chat</button>
         </div>
       </form>
@@ -80,6 +95,21 @@
             <button type="button" id="browse-folder">Browse…</button>
             <button type="button" id="add-folder">Add</button>
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Voice</legend>
+          <p class="hint">
+            Hold Ctrl+Space, or hold the Talk button, while you speak. Your words go into the message box and
+            are sent only when you press Enter. Speech is worked out on this PC.
+          </p>
+          <label for="speak-replies">Read replies aloud</label>
+          <select id="speak-replies">
+            <option value="voice">After voice messages</option>
+            <option value="always">Always</option>
+            <option value="never">Never</option>
+          </select>
+          <p id="voice-note" class="hint"></p>
         </fieldset>
 
         <div class="row">

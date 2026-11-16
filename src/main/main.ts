@@ -11,12 +11,15 @@ import {
   safeStorage,
   session,
   shell,
+  utilityProcess,
 } from "electron";
 import type { Launcher } from "../core/apps.js";
 import { EncryptedFileKeyStore, type Encryptor, osEncryptionUsable } from "../core/keystore.js";
 import { consoleSink } from "../core/log.js";
 import { createSage } from "../core/sage.js";
 import type { ConfirmPresenter } from "../core/skills/gate.js";
+import { DOWNLOAD_DETAIL, DOWNLOAD_QUESTION } from "../core/voice/model.js";
+import type { HelperProcess } from "../core/voice/transcriber.js";
 import { CHANNELS } from "../shared/api.js";
 import { createIpcHandlers } from "./ipc.js";
 import { createNotifier } from "./notify.js";
@@ -78,6 +81,40 @@ const launch: Launcher = (command, args) =>
     });
   });
 
+// Voice's one-time download is asked here, in the main process's own box; the window can only
+// ask for it.
+async function confirmVoiceDownload(): Promise<boolean> {
+  const options = {
+    type: "question" as const,
+    title: "Sage voice",
+    message: DOWNLOAD_QUESTION,
+    detail: DOWNLOAD_DETAIL,
+    buttons: ["Not now", "Download"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  };
+  const answer = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+  return answer.response === 1;
+}
+
+// The speech helper: a separate process, so a slow or crashing recognition can't freeze or close
+// the window. Its output is dropped; it never sees the network.
+function startVoiceHelper(): HelperProcess {
+  const child = utilityProcess.fork(join(__dirname, "voice-helper.cjs"), [], {
+    serviceName: "Sage speech",
+    stdio: "ignore",
+  });
+  return {
+    send: (message) => child.postMessage(message),
+    onMessage: (listener) => child.on("message", listener),
+    onExit: (listener) => child.once("exit", () => listener()),
+    kill: () => void child.kill(),
+  };
+}
+
 function lockDownSessionAndContents(): void {
   const ses = session.defaultSession;
   ses.setPermissionRequestHandler((_contents, permission, callback, details) => {
@@ -129,7 +166,10 @@ async function start(): Promise<void> {
     openPath: (path) => shell.openPath(path),
     launch,
     logSink: consoleSink,
+    voice: { confirmDownload: confirmVoiceDownload, startHelper: startVoiceHelper },
   });
+  await sage.voice.removeLeftovers();
+  app.on("will-quit", () => sage.voice.dispose());
 
   const handlers = createIpcHandlers(sage, {
     chooseFolder: async () => {

@@ -17,6 +17,9 @@ import { ActionLog } from "./skills/action-log.js";
 import { builtinSkills, type PathOpener } from "./skills/builtin.js";
 import { ApprovalGate, type ConfirmPresenter } from "./skills/gate.js";
 import { SkillRegistry } from "./skills/registry.js";
+import type { SpeechModel } from "./voice/model.js";
+import { HelperTranscriber, type StartHelper } from "./voice/transcriber.js";
+import { Voice } from "./voice/voice.js";
 
 /** Everything Sage needs from the outside world. The Electron main process supplies the real ones. */
 export interface SageDeps {
@@ -34,7 +37,25 @@ export interface SageDeps {
   platform?: NodeJS.Platform;
   /** For tests only: the port of a fake local model runner on 127.0.0.1. */
   localPort?: number;
+  /** Voice's parts from the main process; without them voice says it isn't available. */
+  voice?: VoiceParts;
 }
+
+export interface VoiceParts {
+  /** The main process's own box: "Voice needs a 44 MB speech file … Download it now?" */
+  confirmDownload: () => Promise<boolean>;
+  /** Starts the speech helper process. */
+  startHelper: StartHelper;
+  /** For tests only: the files to download (a fake server's addresses). */
+  model?: SpeechModel;
+}
+
+const NO_VOICE: VoiceParts = {
+  confirmDownload: async () => false,
+  startHelper: () => {
+    throw new Error("Voice isn't available here.");
+  },
+};
 
 export interface Sage {
   assistant: Assistant;
@@ -49,6 +70,8 @@ export interface Sage {
   gate: ApprovalGate;
   logger: Logger;
   redactor: SecretRedactor;
+  /** The speech file, its download, and turning recordings into text. */
+  voice: Voice;
 }
 
 export function createSage(deps: SageDeps): Sage {
@@ -103,6 +126,16 @@ export function createSage(deps: SageDeps): Sage {
     brainFor(await settings.load(), keyStore, deps, (text) => redactor.redact(text));
   const assistant = new Assistant({ getBrain, registry, logger, now });
 
+  const voiceParts = deps.voice ?? NO_VOICE;
+  const voice = new Voice({
+    dataDir: deps.dataDir,
+    confirmDownload: voiceParts.confirmDownload,
+    transcriber: new HelperTranscriber(voiceParts.startHelper),
+    logger,
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+    ...(voiceParts.model ? { model: voiceParts.model } : {}),
+  });
+
   return {
     assistant,
     settings,
@@ -115,6 +148,7 @@ export function createSage(deps: SageDeps): Sage {
     gate,
     logger,
     redactor,
+    voice,
   };
 }
 

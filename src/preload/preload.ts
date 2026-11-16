@@ -13,6 +13,10 @@ const api: SageApi = {
   chooseApp: () => ipcRenderer.invoke(CHANNELS.chooseApp),
   takeNotices: () => ipcRenderer.invoke(CHANNELS.takeNotices),
   ackNotices: (ids) => ipcRenderer.invoke(CHANNELS.ackNotices, { ids }),
+  voiceStatus: () => ipcRenderer.invoke(CHANNELS.voiceStatus),
+  downloadVoice: () => ipcRenderer.invoke(CHANNELS.downloadVoice),
+  cancelVoiceDownload: () => ipcRenderer.invoke(CHANNELS.cancelVoiceDownload),
+  transcribe: (pcm) => ipcRenderer.invoke(CHANNELS.transcribe, { pcm }),
 };
 
 contextBridge.exposeInMainWorld("sage", api);

@@ -11,7 +11,18 @@ export const CHANNELS = {
   chooseApp: "sage:choose-app",
   takeNotices: "sage:notices-take",
   ackNotices: "sage:notices-ack",
+  voiceStatus: "sage:voice-status",
+  downloadVoice: "sage:voice-download",
+  cancelVoiceDownload: "sage:voice-download-cancel",
+  transcribe: "sage:voice-transcribe",
 } as const;
+
+/** The longest message the window may send; the message box has the same limit. */
+export const MAX_MESSAGE_CHARS = 8_000;
+
+/** One recording: 16,000 samples a second, one channel, at most 30 seconds. */
+export const VOICE_SAMPLE_RATE = 16_000;
+export const MAX_VOICE_SAMPLES = VOICE_SAMPLE_RATE * 30;
 
 /** The most notice ids one `ackNotices` call may carry; the window sends more in batches. */
 export const MAX_ACK_IDS = 50;
@@ -37,6 +48,8 @@ export interface PublicSettings {
   online: { baseUrl: string; model: string; hasKey: boolean };
   apps: PublicAppEntry[];
   folders: string[];
+  /** Read replies aloud: after voice messages, always, or never. */
+  speakReplies: "voice" | "always" | "never";
 }
 
 export type SettingsInput = Omit<PublicSettings, "online"> & {
@@ -45,6 +58,25 @@ export type SettingsInput = Omit<PublicSettings, "online"> & {
 
 /** `message` on success is something the user should know, such as a key that was removed. */
 export type Result = { ok: true; message?: string } | { ok: false; message: string };
+
+/** Whether the speech file is there, and how far a download has got. */
+export interface VoiceStatus {
+  model: "missing" | "downloading" | "ready";
+  received: number;
+  total: number;
+}
+
+/** "declined": the user chose Not now in the main process's box. */
+export type DownloadResult =
+  | { status: "done" }
+  | { status: "declined" }
+  | { status: "cancelled" }
+  | { status: "failed"; message: string };
+
+/** `needsDownload`: the speech file isn't there, so the window offers the download. */
+export type TranscribeResult =
+  | { ok: true; text: string }
+  | { ok: false; message: string; needsDownload?: true };
 
 export interface SageApi {
   send(text: string): Promise<string>;
@@ -63,4 +95,10 @@ export interface SageApi {
   takeNotices(): Promise<Notice[]>;
   /** Confirms these notices are on screen; only then does a reminder count as shown. */
   ackNotices(ids: string[]): Promise<void>;
+  voiceStatus(): Promise<VoiceStatus>;
+  /** The main process asks the user first, in its own box, then downloads the speech file. */
+  downloadVoice(): Promise<DownloadResult>;
+  cancelVoiceDownload(): Promise<void>;
+  /** 16 kHz mono sound, at most MAX_VOICE_SAMPLES samples; the words go into the message box. */
+  transcribe(pcm: Int16Array): Promise<TranscribeResult>;
 }

@@ -5,7 +5,14 @@ type Listener = (event: FakeEvent) => void;
 
 export interface FakeEvent {
   key?: string;
+  code?: string;
   shiftKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  metaKey?: boolean;
+  repeat?: boolean;
+  button?: number;
+  pointerId?: number;
   preventDefault(): void;
 }
 
@@ -73,6 +80,11 @@ export class FakeElement {
   }
   scrollIntoView() {}
   focus() {}
+  /** Pointer ids captured by the Talk button. */
+  readonly captured: number[] = [];
+  setPointerCapture(id: number) {
+    this.captured.push(id);
+  }
   querySelectorAll() {
     return this.radios;
   }
@@ -95,7 +107,12 @@ export function installFakeDom(ids: readonly string[], sage: unknown): Map<strin
   }
   const globals = globalThis as Record<string, unknown>;
   globals.document = fakeDocument(elements);
-  globals.window = { sage };
+  const windowEvents = new FakeElement("window");
+  globals.window = {
+    sage,
+    addEventListener: (type: string, listener: Listener) => windowEvents.addEventListener(type, listener),
+    dispatch: (type: string, init?: Partial<FakeEvent>) => windowEvents.dispatch(type, init),
+  };
   return elements;
 }
 
@@ -106,8 +123,29 @@ function fakeDocument(elements: Map<string, FakeElement>) {
     getElementById: (id: string) => elements.get(id) ?? null,
     createElement: (tag: string) => new FakeElement(tag),
     addEventListener: (type: string, listener: Listener) => listeners.addEventListener(type, listener),
-    dispatch: (type: string) => listeners.dispatch(type),
+    dispatch: (type: string, init?: Partial<FakeEvent>) => listeners.dispatch(type, init),
   };
+}
+
+/** A key event on the whole page, as the window script sees it on `document`. */
+export function pressKey(type: "keydown" | "keyup", init: Partial<FakeEvent>): { prevented: boolean } {
+  const document = (globalThis as { document?: ReturnType<typeof fakeDocument> }).document;
+  if (!document) throw new Error("the fake DOM isn't installed");
+  const result = { prevented: false };
+  document.dispatch(type, {
+    ...init,
+    preventDefault: () => {
+      result.prevented = true;
+    },
+  });
+  return result;
+}
+
+/** The window loses focus (another app was clicked). */
+export function blurWindow(): void {
+  const window = (globalThis as { window?: { dispatch(type: string): void } }).window;
+  if (!window) throw new Error("the fake DOM isn't installed");
+  window.dispatch("blur");
 }
 
 /** Hides or shows the whole window (minimised, or behind another one), as the browser reports it. */

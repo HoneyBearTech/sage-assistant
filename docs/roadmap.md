@@ -59,7 +59,16 @@ later, and what Sage will not do.
       for `@`) in JSON files. This gap is older than the installer job.
 - [ ] **Track the minimatch advisory** (GHSA-g3hv-75wg-m249) in electron-builder's build tools, and
       take the electron-builder update that fixes it.
-- [ ] **Voice.** Hold a key to talk, offline speech recognition, and spoken replies.
+- [x] **Voice** (voice): hold Ctrl+Space or the Talk button to talk; offline speech recognition
+      (sherpa-onnx with the Moonshine tiny English model, downloaded once after asking and checked by
+      fingerprint); the words go into the message box to check before sending; spoken replies with the
+      PC's own voices and a "Read replies aloud" setting. The original item: Hold a key to talk, offline
+      speech recognition, and spoken replies.
+- [ ] **Voice accuracy:** if the tiny model mishears too often, move to Moonshine base (about 3 times
+      the size): new pinned addresses, sizes and fingerprints in `src/core/voice/model.ts`.
+- [ ] **Test coverage counting:** each window test loads the window script again, and each load counts
+      as a separate, partly covered file, so the total drifts toward the 80% floor as window tests are
+      added (82.5% after the voice job). Count the window script once.
 - [ ] **First-run setup.** Checks that the local model runner is installed, downloads a model, and lets the
       user add an online-service key.
 

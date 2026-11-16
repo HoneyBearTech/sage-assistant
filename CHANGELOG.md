@@ -8,6 +8,28 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **Voice: hold to talk.** Hold Ctrl+Space while Sage's window is focused, or press and hold the new
+  **Hold to talk** button, and speak (up to 30 seconds). Sage works out what you said on your PC, with the
+  sherpa-onnx speech engine and the Moonshine tiny English model, and puts the words in the message box
+  for you to check: they are never sent by themselves. The microphone is on only while you hold, and
+  turns off if the window loses focus or you start a New chat. The sound is never saved or logged.
+  Plain messages if the microphone is blocked (with where to allow it in Windows) or missing, or if
+  nothing was heard.
+- **A one-time speech file download**, only after you agree in Sage's own box ("Voice needs a 44 MB
+  speech file from Hugging Face. Download it now?"), with progress, Cancel and Try again. The three
+  files come from fixed addresses pinned to one version, over https only, and are used only if their
+  size and SHA-256 fingerprint match. It is the only thing Sage downloads by itself; none of your
+  speech or text is sent with it (it is an ordinary file download from Hugging Face). Sage checks the
+  files' fingerprints again before first use in each run, and stops a download that stalls for 30
+  seconds. Voice works offline after that.
+- **Spoken replies** with a voice installed on your PC, and a new setting, **Read replies aloud**:
+  after voice messages (the default), always, or never. **Stop speaking**, the talk key and New chat
+  stop it. Settings says so if the PC has no voice. Settings files from earlier versions load unchanged.
+- **Sage's first run-time dependency**, the speech engine `sherpa-onnx-node` 2.0.1 (Apache-2.0, no install
+  scripts), loaded only in a separate helper process, so a slow or crashing recognition can't freeze or
+  close the window. Its native files are kept unpacked next to the app archive; build the Windows
+  installer on Windows. Renovate updates the engine's packages together.
+
 - **A one-click Windows installer**, `Sage-Setup-<version>.exe`: it installs for your account only,
   without admin rights, adds Start-menu and desktop shortcuts, and starts Sage. The installed app uses the
   same data folder as a copy run from source, and uninstalling keeps your data. `npm run dist` builds it

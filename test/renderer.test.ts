@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { type TestContext, test } from "node:test";
+import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
-import { CHANNELS, MAX_ACK_IDS, type Notice, type PublicSettings, type SageApi } from "../src/shared/api.js";
-import { installFakeDom, removeFakeDom, setWindowVisibility } from "./fake-dom.js";
-import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
+import { CHANNELS, MAX_ACK_IDS, type Notice } from "../src/shared/api.js";
+import { setWindowVisibility } from "./fake-dom.js";
+import {
+  deferred,
+  FakeClock,
+  FakePresenter,
+  MemoryKeyStore,
+  REFUSED_PORT,
+  settled,
+  tempDir,
+  toolCall,
+} from "./helpers.js";
+import { startWindow } from "./window.js";
 
 // The first checks read the renderer's source for the behaviour that matters (unsaved settings
 // aren't thrown away); the later ones run the script itself against a fake DOM.
@@ -32,69 +42,6 @@ test("saving or removing the key refreshes only the key status", () => {
   assert.match(refresh, /settings\.online\.hasKey = latest\.online\.hasKey/);
   assert.doesNotMatch(refresh, /render\(\)/);
 });
-
-// The real window script, run against a small fake DOM (test/fake-dom.ts) and a fake window.sage.
-const ids = [...source.matchAll(/byId<\w+>\("([\w-]+)"\)/g)].map((match) => match[1]!);
-let loads = 0;
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-}
-
-const settled = () => new Promise((resolve) => setImmediate(resolve));
-
-async function startWindow(
-  t: TestContext,
-  send: (text: string) => Promise<string>,
-  overrides: Partial<SageApi> = {},
-) {
-  // The notice poll's timer is mocked, so it never fires by itself and nothing is left running.
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const calls = { send: [] as string[], getSettings: 0, reset: 0 };
-  const settings: PublicSettings = {
-    brain: "local",
-    local: { model: "small-model" },
-    online: { baseUrl: "", model: "", hasKey: false },
-    apps: [],
-    folders: [],
-  };
-  const api: SageApi = {
-    send: (text) => {
-      calls.send.push(text);
-      return send(text);
-    },
-    resetChat: async () => {
-      calls.reset++;
-    },
-    getSettings: async () => {
-      calls.getSettings++;
-      return structuredClone(settings);
-    },
-    saveSettings: async () => ({ ok: true }),
-    setKey: async () => {
-      settings.online.hasKey = true;
-      return { ok: true };
-    },
-    clearKey: async () => ({ ok: true }),
-    chooseFolder: async () => null,
-    chooseApp: async () => null,
-    takeNotices: async () => [],
-    ackNotices: async () => {},
-    ...overrides,
-  };
-  const elements = installFakeDom(ids, api);
-  t.after(removeFakeDom);
-  // A fresh copy of the script for each test.
-  await import(`../src/renderer/renderer.ts?window=${++loads}`);
-  await settled();
-  const el = (id: string) => elements.get(id)!;
-  const texts = () => el("messages").children.map((item) => item.textContent);
-  return { el, texts, calls };
-}
 
 test("New chat during a pending reply: Send works again, and the old reply never appears", async (t) => {
   const first = deferred<string>();

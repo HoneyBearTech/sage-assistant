@@ -1,4 +1,5 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
+import { createVoiceControls } from "./voice-controls.js";
 
 // The chat window. It runs sandboxed with no Node access; `window.sage` (from the preload) is its
 // only way to reach the rest of Sage. Text is always inserted with textContent, never as HTML.
@@ -44,13 +45,17 @@ async function submit(): Promise<void> {
   const text = input.value.trim();
   if (!text) return;
   const generation = chatGeneration;
+  // A voice message: some of its words came from talking, even if they were edited afterwards.
+  const fromVoice = voice.takeFromVoice();
   input.value = "";
   addMessage("user", text);
   const pending = addMessage("assistant", "Thinking…", true);
   sendButton.disabled = true;
   let reply: string;
+  let answered = false;
   try {
     reply = await sage.send(text);
+    answered = true;
   } catch {
     reply = "Something went wrong. Try again.";
   }
@@ -59,6 +64,8 @@ async function submit(): Promise<void> {
   pending.classList.remove("pending");
   sendButton.disabled = false;
   input.focus();
+  // Only Sage's final reply is read aloud; never notices.
+  if (answered) voice.replied(reply, fromVoice, settings?.speakReplies ?? "voice");
 }
 
 composer.addEventListener("submit", (event) => {
@@ -68,10 +75,15 @@ composer.addEventListener("submit", (event) => {
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
+    // Only a fresh press sends: not a held key repeating, and not while the key that started a
+    // recording is still down (holding Enter on Talk can end with the focus here).
+    if (event.repeat || voice.holdingTalkKey()) return;
     void submit();
   }
 });
 byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
+  // The microphone closes, speech stops, and a recording still being worked out is dropped.
+  voice.reset();
   // The old chat's pending reply is abandoned at once; Send comes back when Sage has reset.
   chatGeneration++;
   const generation = chatGeneration;
@@ -86,6 +98,23 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
       input.focus();
     });
 });
+
+// --- Voice ---
+
+// The logic is in voice-controls.ts; this only finds the elements.
+const voice = createVoiceControls(
+  sage,
+  {
+    input,
+    talkButton: byId<HTMLButtonElement>("talk"),
+    voiceStatus: byId<HTMLSpanElement>("voice-status"),
+    voiceDownload: byId<HTMLButtonElement>("voice-download"),
+    voiceCancel: byId<HTMLButtonElement>("voice-cancel"),
+    stopSpeaking: byId<HTMLButtonElement>("stop-speaking"),
+    voiceNote: byId<HTMLParagraphElement>("voice-note"),
+  },
+  typeof speechSynthesis === "undefined" ? undefined : speechSynthesis,
+);
 
 // --- Tabs ---
 
@@ -186,6 +215,7 @@ const appsList = byId<HTMLUListElement>("apps");
 const foldersList = byId<HTMLUListElement>("folders");
 const settingsStatus = byId<HTMLSpanElement>("settings-status");
 const brainStatus = byId<HTMLSpanElement>("brain-status");
+const speakReplies = byId<HTMLSelectElement>("speak-replies");
 
 function describeBrain(current: PublicSettings): string {
   return current.brain === "local"
@@ -232,6 +262,7 @@ function render(): void {
   localModel.value = settings.local.model;
   onlineUrl.value = settings.online.baseUrl;
   onlineModel.value = settings.online.model;
+  speakReplies.value = settings.speakReplies;
   renderKeyStatus();
   brainStatus.textContent = describeBrain(settings);
   renderLists();
@@ -257,6 +288,11 @@ async function refreshKeyStatus(): Promise<void> {
   renderKeyStatus();
 }
 
+function readSpeakReplies(): PublicSettings["speakReplies"] {
+  const value = speakReplies.value;
+  return value === "always" || value === "never" ? value : "voice";
+}
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!settings) return;
@@ -271,6 +307,7 @@ form.addEventListener("submit", (event) => {
       online: { baseUrl: onlineUrl.value.trim(), model: onlineModel.value.trim() },
       apps: settings.apps,
       folders: settings.folders,
+      speakReplies: readSpeakReplies(),
     })
     .then(async (result) => {
       if (!result.ok) {

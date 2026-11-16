@@ -5,6 +5,7 @@
     "output": "out"
   },
   "files": ["dist/**/*", "!dist/**/*.map", "package.json"],
+  "asarUnpack": ["node_modules/sherpa-onnx-*-*/*.{node,dll,so,dylib}"],
   "win": {
     "target": [{ "target": "nsis", "arch": ["x64"] }],
     "artifactName": "Sage-Setup-${version}.${ext}"

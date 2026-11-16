@@ -3,7 +3,16 @@ import { serviceOrigin } from "../core/brain/online.js";
 import { describeError } from "../core/log.js";
 import type { Sage } from "../core/sage.js";
 import type { Settings } from "../core/settings.js";
-import { CHANNELS, type Channel, MAX_ACK_IDS, type PublicSettings, type Result } from "../shared/api.js";
+import {
+  CHANNELS,
+  type Channel,
+  MAX_ACK_IDS,
+  MAX_MESSAGE_CHARS,
+  MAX_VOICE_SAMPLES,
+  type PublicSettings,
+  type Result,
+  type TranscribeResult,
+} from "../shared/api.js";
 
 /** Native pickers, supplied by the main process (Electron's dialog module). */
 export interface Pickers {
@@ -13,7 +22,7 @@ export interface Pickers {
 
 export type Handler = (payload: unknown) => Promise<unknown>;
 
-const sendPayload = z.strictObject({ text: z.string().trim().min(1).max(8_000) });
+const sendPayload = z.strictObject({ text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS) });
 const keyPayload = z.strictObject({
   key: z.string().min(1).max(1_000),
   // The address on screen when Save key was pressed; checked against the saved one.
@@ -26,6 +35,21 @@ const ackPayload = z.strictObject({
   ids: z.array(z.string().min(1).max(32)).max(MAX_ACK_IDS),
 });
 
+// One recording: 16-bit samples, 16 kHz mono, not empty and at most 30 seconds. The type and the
+// sizes are checked before a single sample is read or copied; a view onto a bigger buffer is
+// refused too, so nothing larger than one recording is ever held on to.
+const transcribePayload = z.strictObject({
+  pcm: z
+    .instanceof(Int16Array)
+    .refine(
+      (pcm) =>
+        pcm.length > 0 && pcm.length <= MAX_VOICE_SAMPLES && pcm.buffer.byteLength <= MAX_VOICE_SAMPLES * 2,
+      "bad recording",
+    ),
+});
+
+export const BAD_RECORDING = "Sage couldn't read that recording. Try again.";
+
 export const SAVE_SETTINGS_FIRST = "Save settings first, then save the key.";
 
 export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSettings {
@@ -35,6 +59,7 @@ export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSet
     online: { baseUrl: settings.online.baseUrl, model: settings.online.model, hasKey },
     apps: settings.apps.map((app) => ({ name: app.name, path: app.path, args: [...app.args] })),
     folders: [...settings.folders],
+    speakReplies: settings.speakReplies,
   };
 }
 
@@ -108,6 +133,23 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.ackNotices]: async (payload) => {
       const parsed = ackPayload.safeParse(payload);
       if (parsed.success) await sage.notices.ack(parsed.data.ids);
+    },
+    [CHANNELS.voiceStatus]: () => sage.voice.status(),
+    // The main process asks the user first, in its own box; the window can only ask for it.
+    [CHANNELS.downloadVoice]: () => sage.voice.downloadModel(),
+    [CHANNELS.cancelVoiceDownload]: async () => {
+      sage.voice.cancelDownload();
+    },
+    [CHANNELS.transcribe]: async (payload): Promise<TranscribeResult> => {
+      const parsed = transcribePayload.safeParse(payload);
+      if (!parsed.success) return { ok: false, message: BAD_RECORDING };
+      try {
+        return await sage.voice.transcribe(parsed.data.pcm);
+      } catch (error) {
+        // The error is about the helper or the engine; never the sound or the words.
+        sage.logger.error("A recording couldn't be turned into text", error);
+        return { ok: false, message: "Sage couldn't work out what you said. Try again." };
+      }
     },
   };
 }

@@ -38,6 +38,39 @@ test("saving validates, and drops anything that isn't a setting, such as a key",
   assert.equal((await store.load()).brain, "online");
 });
 
+test("a settings file saved before voice loads unchanged, with Read replies aloud at its default", async (t) => {
+  const dir = await tempDir(t);
+  // Exactly what Sage wrote before this setting existed.
+  const before = {
+    version: 1,
+    brain: "online",
+    local: { model: "small-model" },
+    online: { baseUrl: "https://api.example.com/v1", model: "m" },
+    apps: [{ name: "Editor", path: "/usr/bin/editor", args: ["--new-window"] }],
+    folders: ["/docs"],
+  };
+  const text = `${JSON.stringify(before, null, 2)}\n`;
+  await writeFile(join(dir, "settings.json"), text);
+  const { logger, lines } = captureLogs();
+  const loaded = await new SettingsStore(dir, logger).load();
+  assert.deepEqual(loaded, { ...before, speakReplies: "voice" });
+  assert.deepEqual(lines, [], "not treated as unreadable");
+  assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
+  assert.equal(defaultSettings().speakReplies, "voice");
+  assert.equal(defaultSettings().version, 1);
+});
+
+test("Read replies aloud is saved, and only its three choices are accepted", async (t) => {
+  const store = new SettingsStore(await tempDir(t), captureLogs().logger);
+  for (const choice of ["always", "never", "voice"] as const) {
+    assert.ok((await store.save({ ...defaultSettings(), speakReplies: choice })).ok);
+    assert.equal((await store.load()).speakReplies, choice);
+  }
+  for (const bad of ["sometimes", "", 1, null]) {
+    assert.equal((await store.save({ ...defaultSettings(), speakReplies: bad })).ok, false, String(bad));
+  }
+});
+
 test("bad settings are refused with a reason", async (t) => {
   const store = new SettingsStore(await tempDir(t), captureLogs().logger);
   assert.equal((await store.save({ brain: "telepathy" })).ok, false);

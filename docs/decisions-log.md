@@ -2,6 +2,63 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - voice
+
+**Context:** the owner asked to "start the voice job", the roadmap item "Hold a key to talk, offline
+speech recognition, and spoken replies", after the Windows installer shipped.
+
+**Decisions:**
+- **sherpa-onnx (`sherpa-onnx-node` 2.0.1, Apache-2.0) for speech recognition**, Sage's first run-time
+  dependency and first native code. It has ready-built files for Windows and Linux and no install
+  scripts. Its native files are kept unpacked next to the app's archive, because Windows can't load them
+  from inside it.
+  - *Rejected:* Chromium's built-in speech recognition (it sends audio to an online service, and doesn't
+    work in Electron); Whisper in the window (it needs the content rule loosened for WebAssembly and
+    fetches models from the window); whisper.cpp add-ons (a release candidate with a setup script, or
+    built on the user's PC); Vosk (unmaintained).
+- **The Moonshine tiny English model (MIT), downloaded once after asking.** About 44 MB in three files
+  from Hugging Face, pinned to one commit, each checked by exact size and SHA-256 before use, and checked
+  again once per run before its first use. Redirects are followed by hand, at most five, each over HTTPS.
+  A download that stalls for 30 seconds stops. The owner kept this choice at plan approval.
+  - *Rejected:* bundling the model in the installer (44 MB bigger, and the copy run from source would
+    still need its own download); a file the user copies in by hand.
+- **Recognition runs in its own helper process** (Electron's utility process), so a crash or a hang
+  can't freeze or close Sage's window; a 60-second limit, and a fresh helper after a crash.
+- **Hold to talk only while Sage's window is focused** (Ctrl+Space, or the Talk button). A key held
+  anywhere on the PC needs a system-wide keyboard hook, the kind of code a keylogger uses.
+- **The words go into the message box, never sent on their own**, so a misheard word is never sent
+  unseen. A held or repeating Enter can't send them either: sending needs a fresh press.
+- **The window records with the browser's standard recorder** and converts the sound itself, with no
+  worklets, workers or `blob:` addresses, so the window's security settings and content rule are
+  unchanged. The audio is checked by size and type before the main part reads it, and is never saved or
+  logged.
+- **Spoken replies with the PC's own voices** (only voices that run on the PC), with a "Read replies
+  aloud" setting: after voice messages (the default), always or never. A message counts as a voice
+  message while any dictated words stay in it. Only the final reply is read. The setting was added
+  without changing the settings file's version, so older settings files load unchanged.
+  - *Rejected for now:* sherpa-onnx's own voices (a second download and more code); that is the later
+    "Better voices" job.
+
+**Review:** a plan check before Gate A, then QA (pass), the Security Officer, a second security review
+(clear) and the Auditor, with two fix rounds and a re-check after each. The engine and the real model
+were run on the review machine outside Electron (a real download and a correct transcription). The
+microphone, the helper process inside the installed app and the PC's voices can only be checked on
+Windows, so the owner runs the checklist's Voice section before final approval.
+
+**Fixed after review:** releasing a keyboard-held Talk button after focus moved didn't stop the
+recording; a held Enter could send dictated words without a fresh press; a transcript could push the
+message past 8,000 characters; a status line could stay after New chat; a stalled download waited
+forever; the model was re-checked only by size; the download box said "Nothing is sent" (now: none of
+your speech or text is sent).
+
+**Rejected or deferred findings:**
+- *Clear the voice mark on New chat* (a fix-round request). Reversed: New chat keeps the words in the
+  box, and the plan says a message with dictated words counts as a voice message.
+- *A model file changed while Sage is running isn't caught* (Security Officer, informational). Accepted:
+  it needs write access to Sage's data folder, which already allows worse; the assurance case says so.
+- *Line coverage drifts toward the floor* (Engineer). Real, caused by how window tests are counted;
+  added to the roadmap.
+
 ## 2026-11-16 - windows-installer
 
 **Context:** the owner asked to "start the installer job", the next roadmap item, after running the

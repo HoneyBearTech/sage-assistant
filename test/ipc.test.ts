@@ -4,8 +4,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
-import { createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings } from "../src/main/ipc.js";
-import { CHANNELS, MAX_ACK_IDS, type Notice } from "../src/shared/api.js";
+import { VOICE_MESSAGES } from "../src/core/voice/voice.js";
+import { BAD_RECORDING, createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings } from "../src/main/ipc.js";
+import {
+  CHANNELS,
+  MAX_ACK_IDS,
+  MAX_VOICE_SAMPLES,
+  type Notice,
+  type TranscribeResult,
+} from "../src/shared/api.js";
 import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
 
 async function setup(t: Parameters<typeof tempDir>[0]) {
@@ -293,6 +300,90 @@ test("toPublicSettings copies only the public fields", () => {
   const settings = { ...defaultSettings(), apps: [{ name: "A", path: "/a", args: ["x"] }] };
   const out = toPublicSettings(settings, true);
   assert.deepEqual(Object.keys(out.online).sort(), ["baseUrl", "hasKey", "model"]);
+  assert.deepEqual(Object.keys(out).sort(), ["apps", "brain", "folders", "local", "online", "speakReplies"]);
+  assert.equal(out.speakReplies, "voice");
   out.apps[0]!.args.push("y");
   assert.deepEqual(settings.apps[0]!.args, ["x"], "a copy, not the stored object");
+});
+
+test("voice status and the download go through the main process, which asks first", async (t) => {
+  const asked: number[] = [];
+  const sage = createSage({
+    dataDir: await tempDir(t),
+    keyStore: new MemoryKeyStore(),
+    presenter: new FakePresenter(false),
+    notify: () => true,
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+    voice: {
+      confirmDownload: async () => {
+        asked.push(1);
+        return false;
+      },
+      startHelper: () => {
+        throw new Error("not in this test");
+      },
+    },
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  assert.deepEqual(await handlers[CHANNELS.voiceStatus](undefined), {
+    model: "missing",
+    received: 0,
+    total: 44_243_206,
+  });
+  // Whatever the window sends with it, the download is only asked for; the user answers in the box.
+  assert.deepEqual(await handlers[CHANNELS.downloadVoice]({ url: "https://elsewhere.example/x" }), {
+    status: "declined",
+  });
+  assert.equal(asked.length, 1);
+  assert.equal(await handlers[CHANNELS.cancelVoiceDownload](undefined), undefined);
+});
+
+test("a recording is checked for type and size before voice reads it", async (t) => {
+  const { handlers, sage } = await setup(t);
+  const heard: Int16Array[] = [];
+  sage.voice.transcribe = async (pcm): Promise<TranscribeResult> => {
+    heard.push(pcm);
+    return { ok: true, text: "hello" };
+  };
+  const big = new Int16Array(MAX_VOICE_SAMPLES * 2);
+  for (const payload of [
+    undefined,
+    null,
+    "audio",
+    new Int16Array(10),
+    { pcm: [1, 2, 3] },
+    { pcm: new Float32Array(10) },
+    { pcm: new Uint8Array(20) },
+    { pcm: new Int16Array(10).buffer },
+    { pcm: new Int16Array(0) },
+    { pcm: new Int16Array(MAX_VOICE_SAMPLES + 1) },
+    { pcm: big.subarray(0, 10) },
+    { pcm: new Int16Array(10), extra: true },
+  ]) {
+    assert.deepEqual(await handlers[CHANNELS.transcribe](payload), { ok: false, message: BAD_RECORDING });
+  }
+  assert.equal(heard.length, 0, "nothing malformed reaches voice");
+  assert.deepEqual(await handlers[CHANNELS.transcribe]({ pcm: new Int16Array(MAX_VOICE_SAMPLES) }), {
+    ok: true,
+    text: "hello",
+  });
+
+  sage.voice.transcribe = async () => {
+    throw new Error("helper broke");
+  };
+  assert.deepEqual(await handlers[CHANNELS.transcribe]({ pcm: new Int16Array(16_000) }), {
+    ok: false,
+    message: "Sage couldn't work out what you said. Try again.",
+  });
+});
+
+test("a recording with no speech file tells the window to offer the download", async (t) => {
+  const { handlers } = await setup(t);
+  assert.deepEqual(await handlers[CHANNELS.transcribe]({ pcm: new Int16Array(16_000) }), {
+    ok: false,
+    message: VOICE_MESSAGES.needsDownload,
+    needsDownload: true,
+  });
 });

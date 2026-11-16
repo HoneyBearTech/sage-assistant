@@ -176,6 +176,18 @@ export class ScriptedBrain implements Brain {
   }
 }
 
+/** A promise the test settles by hand: what a test waits on instead of a timer. */
+export function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+/** Lets every pending promise callback and I/O event run. */
+export const settled = () => new Promise((resolve) => setImmediate(resolve));
+
 let counter = 0;
 export function toolCall(name: string, args: unknown, id = `call-${++counter}`): ToolCall {
   return { id, name, args };

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -164,21 +164,61 @@ test("the installer settings set exactly the fuses in fuses-config.ts, and the a
 });
 
 test("nothing in the app sends telemetry or analytics", async () => {
-  const { readdir } = await import("node:fs/promises");
   const sources: string[] = [];
   for (const entry of await readdir(join(root, "src"), { recursive: true, withFileTypes: true })) {
     if (entry.isFile()) sources.push(await readFile(join(entry.parentPath, entry.name), "utf8"));
   }
   const all = sources.join("\n");
   assert.doesNotMatch(all, /telemetry|analytics|sentry|crashReporter|mixpanel|posthog|segment\.io/i);
-  // The only network addresses in the app: the local runner, the search page, and the user's own service.
+  // The only network addresses in the app: the local runner, the search page, the user's own
+  // service, and the three files of the speech model, pinned to one commit on Hugging Face.
+  const speechModel =
+    "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/d1e6c30921780b8508d04b492dfb3ce8a51605d4/";
+  const allowed = new Set(
+    ["encoder_model.ort", "decoder_model_merged.ort", "tokens.txt"].map((name) => `${speechModel}${name}`),
+  );
   const urls = [...all.matchAll(/https?:\/\/[^\s"'`)]+/g)].map((m) => m[0]);
   for (const url of urls) {
     assert.ok(
-      /^https:\/\/html\.duckduckgo\.com\/html\/$|^http:\/\/\$\{LOCAL_HOST\}|^https:\/\/api\.example\.com|^https:\/\/duckduckgo\.com$/.test(
-        url,
-      ),
+      allowed.has(url) ||
+        /^https:\/\/html\.duckduckgo\.com\/html\/$|^http:\/\/\$\{LOCAL_HOST\}|^https:\/\/api\.example\.com|^https:\/\/duckduckgo\.com$/.test(
+          url,
+        ),
       `unexpected address in src/: ${url}`,
     );
+  }
+  for (const url of allowed) assert.ok(urls.includes(url), `${url} is the one in the code`);
+});
+
+test("the speech engine is the one run-time dependency, kept out of the bundles, its native files unpacked", async () => {
+  const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  assert.deepEqual(pkg.dependencies, { "sherpa-onnx-node": "2.0.1" }, "one dependency, exact version");
+  const build = await readFile(join(root, "scripts", "build.ts"), "utf8");
+  assert.match(
+    build,
+    /entryPoints: \["src\/helper\/voice-helper\.ts"\],\s+outfile: "dist\/voice-helper\.cjs"/,
+  );
+  assert.equal(build.match(/external: \["electron", "sherpa-onnx-node"\]/g)?.length, 2, "main and helper");
+  const builder = JSON.parse(await readFile(join(root, "electron-builder.json"), "utf8"));
+  assert.deepEqual(builder.asarUnpack, ["node_modules/sherpa-onnx-*-*/*.{node,dll,so,dylib}"]);
+  assert.deepEqual(builder.files, ["dist/**/*", "!dist/**/*.map", "package.json"]);
+  // Only the speech helper loads the engine; the main process and the window never do.
+  const users: string[] = [];
+  for (const entry of await readdir(join(root, "src"), { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".ts") || entry.name.endsWith(".d.ts")) continue;
+    const text = await readFile(join(entry.parentPath, entry.name), "utf8");
+    if (/from "sherpa-onnx-node"|require\("sherpa-onnx-node"\)/.test(text)) users.push(entry.name);
+  }
+  assert.deepEqual(users, ["voice-helper.ts"]);
+});
+
+test("the speech helper never logs, writes files or opens a connection", async () => {
+  for (const file of [
+    join("src", "helper", "voice-helper.ts"),
+    join("src", "core", "voice", "helper-protocol.ts"),
+    join("src", "core", "voice", "transcriber.ts"),
+  ]) {
+    const text = await readFile(join(root, file), "utf8");
+    assert.doesNotMatch(text, /console\.|node:fs|fetch\(|node:net|node:http|writeFile/, file);
   }
 });

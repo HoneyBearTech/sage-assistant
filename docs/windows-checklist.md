@@ -1,8 +1,9 @@
 # Windows checklist
 
 Short manual checks for a Windows 10 or 11 PC, for the parts the automated tests can't reach (the real
-window, the native confirmation box, notifications and the key encryption). Run them after a change to
-the window, the skills or the key store, and before any release. It takes about 15 minutes, and the
+window, the native confirmation box, notifications, the key encryption, the microphone and the voices).
+Run them after a change to the window, the skills, the key store or voice, and before any release. It
+takes about 15 minutes, the [Voice](#voice) section about 10 more, and the
 [Installed app](#installed-app) section about 10 more.
 
 Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (see
@@ -83,6 +84,66 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 - [ ] Choose **Remove key**: `online-key.bin` is gone.
 - [ ] Switch back to "On this computer" and save.
 
+## Voice
+
+Run this section after a change to voice (the window's talk code, the speech helper, the download or the
+speech engine, including a Renovate update of sherpa-onnx), and before any release. You need a
+microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assistant\models` if it exists.
+
+- [ ] Hold **Ctrl+Space**: the line under the chat says voice needs a one-time 44 MB speech file, with a
+      **Download** button. No microphone prompt has appeared yet.
+- [ ] Choose **Download**: Sage's own box asks *"Voice needs a 44 MB speech file from Hugging Face.
+      Download it now?"*, with a line saying none of your speech or text is sent. Choose **Not now**:
+      nothing is downloaded and **Download** is offered again.
+- [ ] Choose **Download**, then **Download** in the box: a progress line with **Cancel** appears. Choose
+      **Cancel**: it says the download was cancelled, offers **Try again**, and
+      `%APPDATA%\sage-assistant\models` holds no files.
+- [ ] Turn the network off (aeroplane mode), choose **Try again** and **Download**: a plain message says
+      Sage couldn't reach Hugging Face, with **Try again**. Turn the network back on, choose **Try again**:
+      it finishes with "Voice is ready", and `models\moonshine-tiny-en-quantized-2026-02-27` holds three
+      files (about 13, 30 and 0.5 MB).
+- [ ] Hold **Ctrl+Space** and say "remind me to call the dentist tomorrow": Windows may ask for the
+      microphone the first time (allow it). The line shows "Listening…" with a counting timer, and the
+      microphone icon appears in the taskbar while you hold. Let go: it shows "Working out what you
+      said…", then the words appear in the message box and are **not** sent. The taskbar microphone
+      icon disappears as soon as you let go.
+- [ ] Type "Note:" in the box first, then talk again: the words go after "Note:" with a space.
+- [ ] Press and hold the **Hold to talk** button with the mouse while you speak, then release: the words
+      appear. Tab to the button, hold **Space** while you speak, and let go: the same.
+- [ ] On the button, hold **Space**, press **Tab** while still holding, then let go: the microphone icon
+      disappears as soon as you press Tab (not after 30 seconds), and the words appear.
+- [ ] Send a question, and while Sage is answering, Tab to the button and hold **Enter** while you speak.
+      Keep holding Enter after the reply appears: the words appear in the message box and are **not**
+      sent. Let go of Enter, then press it again: now they are sent.
+- [ ] Hold Ctrl+Space, let go, and press Ctrl+Space again at once while it says "Working out what you
+      said…": it says it is still working, and only the first words appear. Talk again, let go and
+      click **New chat** at once: the status line clears and no words appear.
+- [ ] Type or paste almost 8,000 characters in the box, then talk: the words aren't added, the text is
+      kept as it was, and Sage says they don't fit.
+- [ ] Tap Ctrl+Space quickly: it says to hold the key while you speak, and nothing appears in the box.
+- [ ] Hold Ctrl+Space and keep talking for over 30 seconds: it stops by itself at 0:30 and the words
+      appear.
+- [ ] Hold Ctrl+Space and click another window while still holding: the microphone icon disappears and
+      Sage says it stopped listening. Hold it again and click **New chat** with the mouse: the same, and
+      nothing appears in the box.
+- [ ] Turn the network off. Hold Ctrl+Space and talk: the words still appear (voice works offline after
+      the download). Turn the network back on.
+- [ ] In Windows Settings → Privacy & security → Microphone, turn off **Let desktop apps access your
+      microphone**. Hold Ctrl+Space: Sage says the microphone is blocked and where to allow it. Turn it
+      back on.
+- [ ] Send a message you spoke (you may edit it first): the reply is shown and read aloud with a Windows
+      voice, and a **Stop speaking** button appears. Choose it: the speech stops and the button goes.
+- [ ] Send a long voice message, and while the reply is read aloud press Ctrl+Space: the speech stops at
+      once. Do it again and choose **New chat**: the speech stops.
+- [ ] Send a typed message: the reply is not read aloud.
+- [ ] Settings → **Read replies aloud** → **Always**, Save: a typed message's reply is read aloud.
+      **Never**, Save: a spoken message's reply isn't. Back to **After voice messages**, Save: as before.
+      Settings does not show a message saying this PC has no voice.
+- [ ] With the network off, send a spoken message: the reply (if the brain is local) is read aloud
+      offline. Turn the network back on.
+- [ ] In Task Manager, while Sage works out a recording, a separate Sage process ("Sage speech") runs;
+      Sage's window stays responsive.
+
 ## The window
 
 - [ ] Drag a file from Explorer onto the chat: the window does not navigate to the file.
@@ -116,6 +177,12 @@ haven't since the last update). The first `npm run dist` downloads a few hundred
 - [ ] "Remind me to stretch in two minutes": a Windows notification titled "Sage reminder" says
       "stretch". In Settings → System → Notifications, the sender is listed as **Sage**.
 - [ ] Starting Sage again from the Start menu while it is open brings the window forward.
+- [ ] Voice in the installed app: hold Ctrl+Space and speak (the speech file downloaded from source is
+      shared, so no download is asked for): the words appear in the message box, so the speech engine
+      loads from the installed app. Its native files (`sherpa-onnx.node` and its `.dll` files) are in
+      the install folder under `resources\app.asar.unpacked\node_modules\sherpa-onnx-win-x64` (to find
+      the install folder, right-click Sage in the Start menu and choose **Open file location**,
+      right-click the Sage shortcut there, choose **Properties**, then **Open File Location**).
 - [ ] Close Sage. Open `package.json` in Notepad, change `"version": "0.1.0"` to `"version": "0.1.1"`
       and save (don't commit it). Run `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
       and the note is still there. Then put `package.json` back with `git checkout package.json`.

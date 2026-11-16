@@ -3,8 +3,9 @@
 **Claim.** Sage does only what its user asks: it never opens an app or a file, or deletes anything,
 unless the user chose **Allow** for that exact action in a confirmation box that said what would happen;
 text from the web or from files can't make it act; the online key stays encrypted and never appears in
-plain text in any file, log or the window; and the window can't be turned into a way to run code or reach
-the network.
+plain text in any file, log or the window; the window can't be turned into a way to run code or reach
+the network; and the microphone is used only while the user holds the talk key or button, with the
+sound kept in memory and turned into text on the PC.
 
 This document gives the threats, the trust boundaries, the evidence for each part of the claim, and the
 risk that remains. The tests named here run with `npm run verify`.
@@ -17,6 +18,7 @@ risk that remains. The tests named here run with `npm run verify`.
 | Notes and reminders | Sage can delete them. |
 | The online key | It may cost money and can be used to read past usage. |
 | The conversation | It may be private; with an online brain it goes to that service. |
+| The microphone and what it hears | Sound from the room is private; an open microphone would be a bug that listens. |
 
 | Actor | Trust |
 | --- | --- |
@@ -25,6 +27,8 @@ risk that remains. The tests named here run with `npm run verify`.
 | Web pages and search results | **Not trusted.** Anyone can write them. |
 | Note and file contents | **Not trusted** as instructions; they may contain pasted text from anywhere. |
 | The online service | Trusted with the conversation (the user chose it), not with anything else. |
+| Hugging Face and its download servers | **Not trusted** with what they send: each file is used only if its exact size and SHA-256 fingerprint match the ones in Sage's code. They get only ordinary download requests (so they see the PC's address), never the user's speech or text. |
+| The speech engine (`sherpa-onnx-node`) | Trusted code at a pinned version, like Electron itself; run in its own process and fed only checked sound. |
 | Other programs running as the same user | Out of scope: they can already do anything the user can (see section 5). |
 
 ## 2. Trust boundaries
@@ -33,15 +37,20 @@ risk that remains. The tests named here run with `npm run verify`.
    against a strict schema, and every "confirm" skill passes through the gate.
 2. **Outside text → model.** Web results, notes and reminders go back to the model inside a labelled
    untrusted block, and are never read as commands by Sage itself.
-3. **Window → main process.** The window is treated as untrusted input: it gets eight typed methods, and
-   each handler checks the sender and validates the payload.
+3. **Window → main process.** The window is treated as untrusted input: it gets fourteen typed methods,
+   and each handler checks the sender and validates the payload.
 4. **Sage → network.** The main process talks to `127.0.0.1:11434` (local brain), the online service the
-   user configured, and DuckDuckGo's HTML page. The window can reach nothing at all.
+   user configured, DuckDuckGo's HTML page, and, once and only after the user agrees, Hugging Face for
+   the speech file. The window can reach nothing at all, and the speech helper opens no connection.
 5. **Sage → disk.** Sage writes only in its own `userData` folder. It opens files only from approved
    folders and starts only programs on the list.
 6. **Source → installed app.** Code reaches users from this repository, either as source or as the
    Windows installer that a release workflow builds from a version tag. There are no automatic updates
    yet (see threat T5).
+7. **Main process → speech helper.** The helper is a separate process (Electron's utility process) and
+   the only place the speech engine's native code is loaded. Both sides validate every message: the
+   helper gets only 16 kHz sound of at most 30 seconds and a folder name; the main process accepts back
+   only a short text for the recording it is waiting for.
 
 ## 3. Threats and what stops them
 
@@ -190,9 +199,14 @@ compromised build tool, is the risk here.
   (`electron-winstaller`, which electron-builder brings for an installer type Sage doesn't use). Electron
   downloads its runtime on first start, from its own release with the checksums shipped in the package.
 - **The build tools stay out of the app.** electron-builder and everything it brings are dev
-  dependencies, used only to build. Sage has no run-time dependencies (zod is bundled into
-  `dist/main.cjs`), so the app archive holds only `dist/` and `package.json`, without source maps or
-  `node_modules`.
+  dependencies, used only to build. Sage has **one run-time dependency**, the speech engine
+  `sherpa-onnx-node` 2.0.1 (with the ready-built package for the PC, such as `sherpa-onnx-win-x64`), at
+  an exact version, with no install scripts. zod is bundled into the bundles. So the app archive holds
+  `dist/`, `package.json` and the engine's JavaScript, without source maps, and the engine's native files
+  sit unpacked next to it (see T6). Renovate proposes the engine's packages together, in one pull
+  request that reminds the reviewer to check install scripts again and run the Voice checklist.
+  *Evidence:* `test/security.test.ts` ("the speech engine is the one run-time dependency…"), and
+  `npm install-scripts ls` reporting no unreviewed install scripts.
 - **Electron's fuses** are set on `Sage.exe` by electron-builder while packaging, from
   `electron-builder.json`, which `test/security.test.ts` checks against `src/main/fuses-config.ts`: no
   `ELECTRON_RUN_AS_NODE`, no `NODE_OPTIONS`, no `--inspect`, the app archive checked against the hash
@@ -220,6 +234,71 @@ compromised build tool, is the risk here.
   `@electron/asar` during review, and the "Installed app" section of the
   [Windows checklist](windows-checklist.md).
 
+### T6. Voice: the microphone, the download and the native code
+
+A bug could leave the microphone on; the recording or its words could end up on disk or in a log; the
+download could fetch something other than the model; the native speech engine could be swapped or
+crash; or a misheard word could be sent to the brain.
+
+- **The microphone only while held.** The window asks for the microphone (audio only, the one
+  permission it can get, unchanged) when the talk key or button is pressed, and stops every track as
+  soon as it is let go, after 30 seconds, when the window loses focus or is hidden, or on **New chat**.
+  A recording let go while the microphone was still opening is closed the moment it opens. Key repeats
+  start nothing. *Evidence:* `test/renderer-voice.test.ts` (the stand-in microphone's tracks are checked
+  after each of these).
+- **Sound in memory only.** The recording is decoded and turned into 16 kHz sound in the window's
+  memory, sent once to the main process, and passed to the helper; it is never written to disk or
+  logged, and neither are the words. The window uses no worklets, workers or `blob:` addresses, and the
+  content rule and permission rules are unchanged. *Evidence:* `test/voice.test.ts` ("nothing about voice
+  writes the sound or the words to a log"), `test/security.test.ts` (the helper never logs, writes files
+  or opens a connection; the CSP and permissions unchanged), `test/renderer-voice.test.ts` (no worklets,
+  workers, blob addresses or console logging).
+- **Words go into the box, never sent by themselves.** The transcript is added to the message box and
+  the user presses Enter. Only a fresh Enter press sends: not a held key repeating, and not while the key
+  that started a recording is still down (holding Enter on the Talk button can end with the focus in
+  the message box). Text from speech is like typed text: it goes only to the brain, and skills run
+  only from the model's tool calls, with the ask-first rule (T1). *Evidence:* `test/renderer-voice.test.ts`
+  ("Enter held on Talk while a reply arrives never sends the words it dictated").
+- **Checked at the boundary.** The transcribe channel accepts only an `Int16Array` of 1 to 480,000
+  samples (30 seconds), on a buffer no bigger than that, checked before it is read; one recording at a
+  time. *Evidence:* `test/ipc.test.ts`, `test/voice.test.ts`.
+- **The download is asked for, pinned and checked.** The window can only ask for it; the main process
+  shows its own box ("Voice needs a 44 MB speech file from Hugging Face. Download it now?", **Not now**
+  is the default) and downloads only on **Download**. The three addresses are fixed in
+  `src/core/voice/model.ts`, pinned to one commit of the model's repository, each with its exact size and
+  SHA-256. Only https is used, for the first address and every forward (at most five; relative forwards
+  are resolved against the current https address), with no cookies or credentials. A file is stopped as
+  soon as it is larger than expected, and the model folder is put in place only when all three files
+  match; anything half-finished is deleted after a failure, a cancel, a stall (30 seconds without a
+  reply or new bytes), or at the next start. None of the user's speech or text is sent: these are plain
+  GET requests, which show Hugging Face the PC's address like any download; the box says so.
+  *Evidence:* `test/voice-download.test.ts` (a fake server on `127.0.0.1`: a correct file, forwards, a
+  forward to plain http, too many forwards, a wrong fingerprint, too big and too small, a dropped
+  connection, a cancel, a server that never answers and one that stops sending, leftovers deleted),
+  `test/voice.test.ts` (nothing is fetched without **Download**), `test/security.test.ts` (the three
+  addresses are the only new ones in `src/`).
+- **Checked again before it is used.** Between runs, the folder only has to have the right sizes to
+  count as there. Once per run, before the first recording reaches the helper, the main process reads
+  all three files again and checks each SHA-256 (a download in the same run counts, since it just
+  checked them). If one doesn't match, Sage deletes the model folder, says the file was damaged or
+  changed, and offers the download again; the engine never loads it. This catches damage on disk and a
+  file replaced since the last run, not a change made during a run. *Evidence:* `test/voice.test.ts`
+  ("a speech file already on disk is checked by fingerprint once per run…", "the fingerprint check
+  refuses missing, short, long and changed files").
+- **The native code is kept small and apart.** The engine is one well-known package at an exact version
+  with no install scripts. It is loaded only in the speech helper, a separate process: a crash there
+  can't close or freeze the window, and the next recording starts a fresh helper; a recording that takes
+  over 60 seconds stops the helper. *Evidence:* `test/voice.test.ts` (a crash, a timeout, a helper that
+  can't start), `test/security.test.ts` (only `src/helper/voice-helper.ts` loads the engine).
+- **Native files outside the integrity check.** Windows can't load native code from inside the app
+  archive, so the engine's native files are unpacked next to it (`resources/app.asar.unpacked/`), where
+  the archive's integrity check (the fuse in T5) doesn't cover them. The installed app lives in the
+  user's own profile, so a program running as the user could replace them; that is the same as the
+  residual risk for any program running as you (section 5).
+- **Spoken replies stay on the PC.** Only voices installed on the PC (`localService`) are used, so the
+  reply text never goes to an online voice. Only Sage's final reply is spoken, never notices.
+  *Evidence:* `test/renderer-voice.test.ts` ("never an online voice").
+
 ### The window itself
 
 A bug in the window, or a hostile string displayed in it, must not become code execution.
@@ -232,8 +311,8 @@ A bug in the window, or a hostile string displayed in it, must not become code e
   `form-action 'none'`.
 - Every request from the window that isn't one of the app's own files is cancelled; navigation,
   redirects, `window.open` and `<webview>` are refused for every web contents.
-- Permission requests are refused except the microphone (audio only, for the coming voice job), and
-  only for the app's own page.
+- Permission requests are refused except the microphone (audio only, used by voice while the talk key
+  or button is held), and only for the app's own page.
 - Every IPC handler checks that the call came from Sage's window and its own page.
 - *Evidence:* `test/security.test.ts` (window options, the CSP matching the page, no inline scripts or
   handlers, no `innerHTML`, the preload's exposed methods, request, sender and permission rules, the
@@ -245,8 +324,10 @@ A bug in the window, or a hostile string displayed in it, must not become code e
 
 No telemetry, analytics or crash reporting exists in the code (`test/security.test.ts` checks the
 sources for them and lists every network address). With the local brain, only web searches leave the
-computer. With an online brain, the conversation, including tool results, goes to the service the user
-chose.
+computer, plus the one-time download of the speech file, an ordinary request that carries none of your
+speech or text. Speech is turned into text
+on the PC, and replies are read aloud with the PC's own voices. With an online brain, the conversation,
+including tool results and words that came from talking, goes to the service the user chose.
 
 ## 4. Verification
 
@@ -255,7 +336,10 @@ chose.
 - The tests never use the real network (fake servers on `127.0.0.1`), real settings or real data
   (temporary folders), a real key store or the real clock.
 - What the tests can't cover (Electron starting, the native box, notifications, `safeStorage` on a real
-  system) is in the [Windows checklist](windows-checklist.md), which the maintainer runs on Windows.
+  system, the microphone, the voices, the utility process and the engine in the installed app) is in the
+  [Windows checklist](windows-checklist.md), which the maintainer runs on Windows.
+- The speech engine and the real model are checked outside the tests during review: one real download
+  through Sage's own download code, and a real transcription through the built helper.
 
 ## 5. Residual risk
 
@@ -303,3 +387,12 @@ chose.
   look-alike file. Signing is on the roadmap.
 - **Not yet tried on Windows during review** (the review machine is Linux without a display); the
   Windows checklist covers it.
+- **Native code runs with Sage's full rights.** The speech engine runs as you, in its own process, and
+  its native files aren't covered by the archive's integrity check (T6). It is pinned, has no install
+  scripts, and is updated only through reviewed pull requests.
+- **The speech file depends on Hugging Face.** If the files are removed or moved, the download fails with
+  a plain message; a changed file is refused by its fingerprint. The addresses are in one place.
+- **Speech can be misheard**, especially names. The words go into the message box first so they can be
+  checked before sending.
+- **The talk key works only while Sage's window is focused.** Detecting a key held anywhere would need a
+  system-wide keyboard hook, which Sage doesn't use.
