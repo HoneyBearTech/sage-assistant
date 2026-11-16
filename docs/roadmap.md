@@ -53,10 +53,11 @@ later, and what Sage will not do.
       Also test the two fuses that `src/main/fuses-config.ts` doesn't set yet, and add them if the
       packaged app still works: `GrantFileProtocolExtraPrivileges` off (the window loads from
       `file://`, so check it still loads its script and styles) and `EnableCookieEncryption` on.
-- [ ] **Owner:** add the release workflow from [Releasing](releasing.md), then make the first release
+- [x] **Owner:** add the release workflow from [Releasing](releasing.md), then make the first release
       (`v0.1.0`) and check its installer against the checksum. The workflow is added (#16, the same text
-      as in Releasing) and the version pull request for 0.1.0 is done (the changelog has its 0.1.0
-      heading), so what is left is pushing the tag (step 6) and checking the installer.
+      as in Releasing). 0.1.0 was released on 2026-11-16 and its installer checked against the checksum
+      and build record; 0.1.1's version pull request is done and waits for the owner's tag (step 6 of
+      Releasing).
 - [x] **A Sage icon** (sage-icon): a white sage leaf on a green tile, in Sage's colours, for the
       installer, `Sage.exe`, the shortcuts, the taskbar and the window. The drawing and the picture made
       from it are in `build/`. The original item: for the installer, the shortcuts and the window (the

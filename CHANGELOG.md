@@ -6,6 +6,8 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-16
+
 ### Changed
 
 - **The chat window's script is now a function, `startChatWindow()`, so the coverage report counts it
@@ -131,5 +133,6 @@ All notable changes to Sage are documented here. The format follows
 - The talk key (Ctrl+Space) works only while the chat is shown, and Sage's window starts with the chat
   hidden until it knows whether to show the Welcome screen.
 
-[Unreleased]: https://github.com/HoneyBearTech/sage-assistant/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/HoneyBearTech/sage-assistant/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.1.1
 [0.1.0]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.1.0
