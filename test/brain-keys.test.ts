@@ -382,10 +382,10 @@ test("a key must be printable ASCII: anything else gets a plain message and noth
   }
   await assert.rejects(keys.setCompanyKey("claude", "fake key with space"), /spaces/);
   assert.deepEqual(await keys.hasKeys(), { claude: false, openai: false, gemini: false, other: false });
-  await keys.setCompanyKey("claude", "  sk-ant-api03-Fake_Key-For.Tests~0123  ");
+  await keys.setCompanyKey("claude", "  fake-claude_key.for-tests~0123  ");
   assert.equal(
     await keys.keyForRequest("claude", "https://api.anthropic.com/v1/messages"),
-    "sk-ant-api03-Fake_Key-For.Tests~0123",
+    "fake-claude_key.for-tests~0123",
   );
 });
 
