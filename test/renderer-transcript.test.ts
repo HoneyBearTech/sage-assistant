@@ -158,3 +158,20 @@ test("a newer reply ends the older one's typing, and New chat ends it too", asyn
   assert.equal(newest.classList.contains("typing"), false);
   t.mock.timers.tick(TYPE_MAX_MS);
 });
+
+test("reduced motion switched on while a reply types shows the rest at once", async (t) => {
+  const reply = "A reply long enough to still be typing when the setting changes.";
+  const { el } = await startWindow(t, async () => reply);
+  setReducedMotion(false);
+  el("input").value = "go";
+  el("composer").dispatch("submit");
+  await settled();
+  const row = el("messages").children[1]!;
+  t.mock.timers.tick(32);
+  assert.equal(row.classList.contains("typing"), true, "typing");
+
+  setReducedMotion(true);
+  t.mock.timers.tick(16);
+  assert.equal(row.classList.contains("typing"), false, "the whole reply, at the next step");
+  assert.equal(row.children.length, 0);
+});

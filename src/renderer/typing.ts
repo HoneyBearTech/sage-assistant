@@ -4,7 +4,7 @@ import { TYPE_FRAME_MS, typedCount } from "./typing-time.js";
 // from the start (screen readers get it at once, and the row has its final size, so nothing jumps);
 // the typing is a copy laid over it that grows to full length, while the row's own text is drawn
 // transparent. Any click or key shows the whole reply at once, and with reduced motion there is no
-// typing at all.
+// typing at all (checked on every step, so switching it on mid-reply shows the rest at once).
 
 export interface Typist {
   /** Types `text` out over `item`, which already holds it. Ends any typing still running. */
@@ -39,6 +39,11 @@ export function createTypist(reducedMotion: () => boolean): Typist {
     item.append(overlay);
     const started = Date.now();
     const step = () => {
+      // The system's "reduce motion" can be switched on while a reply types: then all of it, now.
+      if (reducedMotion()) {
+        finish();
+        return;
+      }
       const shown = typedCount(characters.length, Date.now() - started);
       overlay.textContent = characters.slice(0, shown).join("");
       if (shown >= characters.length) finish();
