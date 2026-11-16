@@ -72,11 +72,20 @@ export function isPlaceholderUser(name: string): boolean {
   return PLACEHOLDER_USERS.has(name.trim().toLowerCase());
 }
 
+/**
+ * True for a `"deprecated":` notice in package-lock.json. npm copies these from the registry, and
+ * some name the package author's public contact address. Only e-mail findings are skipped there.
+ */
+function isLockfileDeprecation(file: string, content: string): boolean {
+  return /(^|[\\/])package-lock\.json$/.test(file) && /^\s*"deprecated": "/.test(content);
+}
+
 /** Finds every problem in one file's text. */
 export function scanText(file: string, text: string): Finding[] {
   const findings: Finding[] = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((content, index) => {
+    const skipEmail = isLockfileDeprecation(file, content);
     const line = index + 1;
     for (const match of content.matchAll(IPV4)) {
       const octets = match.slice(1, 5).map(Number);
@@ -94,7 +103,8 @@ export function scanText(file: string, text: string): Finding[] {
         findings.push({ file, line, kind: "home-path", match: match[0] });
     }
     for (const match of content.matchAll(EMAIL)) {
-      if (!isAllowedEmail(match[0])) findings.push({ file, line, kind: "email", match: match[0] });
+      if (!skipEmail && !isAllowedEmail(match[0]))
+        findings.push({ file, line, kind: "email", match: match[0] });
     }
   });
   return findings;

@@ -82,6 +82,32 @@ test("e-mail addresses are found unless they are no-reply or example ones", () =
   assert.deepEqual(kinds("npm i @electron/fuses@2.1.3 zod@4.6.7"), []);
 });
 
+test("package-lock.json deprecation notices may name the author's address; nothing else is skipped", () => {
+  const notice = `      "deprecated": "Old versions are not supported. Contact ${at("author", "maintainer.org")}",`;
+  assert.deepEqual(
+    scanText("package-lock.json", notice).map((f) => f.kind),
+    [],
+  );
+  assert.deepEqual(
+    scanText("sub/package-lock.json", notice).map((f) => f.kind),
+    [],
+  );
+  // The same line elsewhere, or another field in the lockfile, is still checked.
+  assert.deepEqual(
+    scanText("docs/notes.md", notice).map((f) => f.kind),
+    ["email"],
+  );
+  assert.deepEqual(
+    scanText("package-lock.json", `      "author": "${at("author", "maintainer.org")}",`).map((f) => f.kind),
+    ["email"],
+  );
+  // Addresses and host names in a deprecation notice are still found.
+  assert.deepEqual(
+    scanText("package-lock.json", `      "deprecated": "moved to ${ip(10, 0, 0, 5)}",`).map((f) => f.kind),
+    ["private-ip"],
+  );
+});
+
 test("findings carry the file and line, and binary files are recognised", () => {
   const findings = scanText("docs/x.md", `fine\nsee ${ip(192, 168, 0, 9)}`);
   assert.deepEqual(findings, [{ file: "docs/x.md", line: 2, kind: "private-ip", match: ip(192, 168, 0, 9) }]);
