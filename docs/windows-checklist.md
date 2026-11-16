@@ -116,11 +116,12 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
       downloaded, and nothing downloads.
 - [ ] **Cancel.** **Download**, then **Download** in the box: a progress bar and "Downloading… N of M MB"
       appear within a second, with **Cancel**. Choose **Cancel**: it says "Cancelled." and offers **Try
-      again**. Settings → Local model is unchanged. (Whether the runner keeps the part it already has is
-      up to the runner; note what you see.)
+      again**. (Whether the runner keeps the part it already has is up to the runner; note what you see.
+      The model in Settings stays as it was; you can check it after the next steps.)
 - [ ] **Offline.** **Try again**, then **Download**; once it is downloading, turn the network off. Within
       about 2 minutes Sage stops it with a plain message (that this PC may be offline, or "The download
-      made no progress for 2 minutes…"), never the runner's own wording, and offers **Try again**. Turn
+      made no progress for 2 minutes…"), in Sage's plain words rather than a technical error from the
+      runner, and offers **Try again**. Turn
       the network back on.
 - [ ] **A real download.** **Try again**, then **Download**: the progress goes up to the full size, then
       it says "The Smaller model is ready." with **Next**, and no warning about skills. Choose **Next**:
@@ -128,8 +129,9 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
       Choose **Start chatting**: the chat opens, the header shows "Brain: on this computer (qwen3:1.7b)",
       and a message gets a reply.
 - [ ] **Already there.** **Settings → Set up Sage** → **On this computer** → **Next** → **Standard** →
-      **Use this model**: no box and no download; it says the Standard model is ready. **Start chatting**:
-      the header shows qwen3:4b again.
+      **Use this model**: no box and no download; it says the Standard model is ready. **Next**, then
+      **Start chatting**: the header shows qwen3:4b again. (The Smaller model stays on your PC; remove it
+      with the runner afterwards if you don't want to keep the 1.4 GB.)
 - [ ] **Skip.** **Settings → Set up Sage**, then **Skip setup**: the chat opens and nothing in Settings
       changed. Close Sage and start it again: it opens on the chat.
 - [ ] **An online service.** **Settings → Set up Sage** → **An online service**: Settings opens with "An
@@ -138,11 +140,11 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
 - [ ] **From the online service back to local.** If you have an online service set up (see "The online
       key" above), save it with "An online model service", then **Settings → Set up Sage** → **On this
       computer** → **Next** → **Standard** → **Use this model**: it says the Standard model is ready, and
-      after **Start chatting** the header shows "Brain: on this computer (qwen3:4b)". In Settings, the
+      after **Next** and **Start chatting** the header shows "Brain: on this computer (qwen3:4b)". In Settings, the
       online address and model are still there, and the key is still saved.
 - [ ] **Notices and the talk key.** Add a reminder for one minute from now, then **Settings → Set up
-      Sage** and wait on the Welcome screen until it is due (with notifications off in Windows, it goes to
-      the window): when you choose **Skip setup**, the reminder is in the chat. On the Welcome screen,
+      Sage** and wait on the Welcome screen until it is due (with notifications turned off for Sage in
+      Windows Settings → System → Notifications, it goes to the chat window instead): when you choose **Skip setup**, the reminder is in the chat. On the Welcome screen,
       Ctrl+Space does nothing.
 
 ## Voice

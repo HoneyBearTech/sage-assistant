@@ -133,7 +133,8 @@ The first time Sage starts, it opens a **Welcome screen** instead of the chat. I
 
 1. **Where should Sage think?** **On this computer** (recommended, private) or **An online service**.
    The online choice opens Settings, where you enter the service's address, model and key (see
-   [The online brain](#the-online-brain-optional)).
+   [The online brain](#the-online-brain-optional)), then choose **Save settings**. Setup counts as done
+   from that choice, so if you close Sage before saving, use **Settings → Set up Sage** to start again.
 2. **The local model runner.** Sage checks whether the runner is running. If it can't reach it (not
    installed yet, or not started; Sage can't tell which), it shows short install steps and **Open the
    install guide**. Sage first asks in its own box, then opens the
@@ -145,8 +146,9 @@ The first time Sage starts, it opens a **Welcome screen** instead of the chat. I
    internet connection and free disk space. The local model runner downloads the model and checks its
    files (Sage doesn't download or check it itself, unlike the speech file). You see the progress, and
    can **Cancel** at any time; a download that makes no progress for 2 minutes is stopped. Once it is
-   there, Sage uses it as the local model **and switches the brain to On this computer**, even if you
-   were using an online service (the box says so; your online settings and key stay saved, and you can
+   there (downloaded, or chosen with **Use this model** when it already was), Sage uses it as the local
+   model **and switches the brain to On this computer**, even if you were using an online service (the
+   download box says so; your online settings and key stay saved, and you can
    switch back in Settings). Then it checks with the runner that the model can use Sage's skills.
 4. **Done.** **Start chatting** opens the chat.
 
