@@ -317,16 +317,24 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   choice to `qwen3:4b` or `qwen3:1.7b`. It asks in its own box ("Download the Standard model (about
   2.5 GB)?", with a note that it needs an internet connection and free disk space and that the runner
   downloads and checks the files), **Not now** by default, and asks the runner only on **Download**. One
-  download at a time; Cancel, Sage quitting, and 2 minutes without progress stop it. *Evidence:*
-  `test/setup.test.ts` (no request without **Download**, a model name from the window refused, one at a
-  time, cancel, quit), `test/runner.test.ts` (the stall limit, cancel).
+  download at a time. Cancel, Skip and Sage quitting cancel the request at any step, including while
+  the box is open or the save waits for the settings lock, so nothing starts or is saved afterwards; 2
+  minutes without a line that moves the download on (repeated lines and bytes with no end of line
+  don't count) stop it. *Evidence:* `test/setup.test.ts` (no request without **Download**, a model name
+  from the window refused, one at a time, cancel at each step, quit), `test/runner.test.ts` (the stall
+  limit, a trickle of bytes, repeated lines, cancel).
+- **Moving to the local brain stops the online turn.** A finished download sets the brain to local (the
+  box says so); a turn still running against the online service stops, as it does when Settings changes
+  the brain, so its late reply runs no skill and nothing more is sent there. *Evidence:*
+  `test/setup-turn.test.ts`.
 - **The download is the runner's, not Sage's.** Unlike the speech file, Sage doesn't fingerprint the
   model: the runner downloads it from its own registry and checks its files, and the box and the docs
   say so. The speech file stays the only thing Sage itself downloads.
 - **The runner's replies are data.** Every reply is size-capped (1 MB for a list or details, 64 KB per
-  progress line) and checked against a schema; a malformed, oversized or unexpected reply stops with a
+  progress line, at most 1,000 layers) and checked against a schema; a malformed, oversized or unexpected reply stops with a
   plain message. Errors are mapped to Sage's own fixed messages (offline, not enough disk space, model
-  not found, other) by keyword; the runner's text is never shown or logged. The client uses the same
+  not found, other) by keyword; the runner's text is never shown or logged, and unexpected errors are
+  logged as fixed lines with the error's type only. The client uses the same
   fixed `127.0.0.1` address as chat and refuses redirects. *Evidence:* `test/runner.test.ts` (an error
   line with marker text that never reaches the result, oversized and malformed lines, a redirect not
   followed).

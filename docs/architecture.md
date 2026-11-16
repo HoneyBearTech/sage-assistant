@@ -50,7 +50,7 @@ used.
 | Voice | `src/core/voice/` | `model.ts`: the speech model's three files (pinned address, exact size, SHA-256). `download.ts`: the download (https only, at most five forwards, size cap, fingerprint check, 30-second stall limit, moved into place only when all match, leftovers deleted). `transcriber.ts`: starts the speech helper, one recording at a time, 60-second limit, a fresh helper after a crash. `helper-protocol.ts`: the validated messages between the two, and the helper's own logic. `voice.ts`: ties them together; the download only after the main process's own box says Download, and the files' fingerprints checked again once per run before first use. |
 | Speech helper | `src/helper/voice-helper.ts` | Built as `dist/voice-helper.cjs` and run as Electron's utility process. The only code that loads the speech engine (`sherpa-onnx-node`); gets sound, sends back text. |
 | Window voice | `src/renderer/voice-controls.ts`, `voice.ts`, `voice-text.ts` | Hold to talk (Ctrl+Space or the Talk button), recording with the standard recorder, turning it into 16 kHz mono sound, the download offer, and spoken replies with the window's own speech and the PC's installed voices. `renderer.ts` only finds the elements. |
-| Runner client | `src/core/brain/runner.ts` | The local model runner's other requests on the same fixed `127.0.0.1` address as chat: the model list (`/api/tags`), a model download (`/api/pull`, progress read line by line, each line capped at 64 KB and checked, stopped after 2 minutes without a new line) and a model's details (`/api/show`, whether it can use tools). No redirects, short time limits for the quick requests, replies size-capped; the runner's own text is never shown or logged. |
+| Runner client | `src/core/brain/runner.ts` | The local model runner's other requests on the same fixed `127.0.0.1` address as chat: the model list (`/api/tags`), a model download (`/api/pull`, progress read line by line, each line capped at 64 KB and checked, at most 1,000 layers, stopped after 2 minutes without a line that moves it on) and a model's details (`/api/show`, whether it can use tools). No redirects, short time limits for the quick requests, replies size-capped; the runner's own text is never shown or logged. |
 | Setup | `src/core/setup.ts` | First-run setup: the runner's status for the saved local model and Sage's two models, one download at a time of one of those two (only after the main process's box says Download, stopped when Sage quits), saving it as the local model once it is there, the skills check, opening the install guide's one fixed address after asking, and marking setup done. |
 | Window welcome | `src/renderer/welcome.ts`, `welcome-text.ts` | The Welcome screen's steps and texts: where Sage thinks, the runner, a model (with progress polled every half second) and Done. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
@@ -151,10 +151,18 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
    in its own box (the size, and that it needs an internet connection and free disk space and that the
    runner downloads and checks the files), then asks the runner to download it (`/api/pull`, streamed).
    The window asks for the progress every half second. Cancel, Sage quitting, an error line or 2 minutes
-   without a new line stop it, each with Sage's own message. Only once the model is there is it saved as
-   the local model (with the brain set to local), and the runner is asked whether the model can use tools.
+   without a line that moves the download on (a new status, a new layer, or more bytes; repeated lines
+   and bytes with no end of line don't count) stop it, each with Sage's own message. Only once the model
+   is there is it saved as the local model, with the brain set to local (the box and the model step say
+   so), and the runner is asked whether the model can use tools. Switching the brain this way stops a
+   turn running against the online service, as a Settings save does.
+   Cancel, Skip and quitting cancel the whole request at whatever step it is on (asking the runner for
+   its models, the box, the download, or the save waiting for the settings lock, where it is checked
+   inside the lock); a cancelled request opens no box, starts no download and saves nothing.
 5. **Done** says which model Sage uses and how to talk to it; **Start chatting** marks setup as done.
-   **Skip setup** does the same at any step, and stops a download in progress. **Set up Sage** in Settings
+   **Skip setup** does the same at any step, and cancels a model request in progress. If setup can't be
+   saved as done, the Welcome screen stays and says so. Afterwards, Settings updates only the fields setup
+   saved, and only where the form still shows what it showed when the Welcome screen closed. **Set up Sage** in Settings
    opens the Welcome screen again.
 
 `setupDone` is changed only by the Welcome screen's own request; a Settings save keeps the stored value.
