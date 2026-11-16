@@ -85,6 +85,9 @@ export class FakeElement {
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
   }
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
   scrollIntoView() {}
   focus() {
     focused = this;
@@ -128,6 +131,8 @@ export function installFakeDom(ids: readonly string[], sage: unknown): Map<strin
 function fakeDocument(elements: Map<string, FakeElement>) {
   const listeners = new FakeElement("document");
   return {
+    /** The page's <html> element: the theme is set on it. */
+    documentElement: new FakeElement("html"),
     visibilityState: "visible" as "visible" | "hidden",
     getElementById: (id: string) => elements.get(id) ?? null,
     createElement: (tag: string) => new FakeElement(tag),
@@ -148,6 +153,13 @@ export function pressKey(type: "keydown" | "keyup", init: Partial<FakeEvent>): {
     },
   });
   return result;
+}
+
+/** The page's <html> element, where the window sets its theme. */
+export function rootElement(): FakeElement {
+  const document = (globalThis as { document?: ReturnType<typeof fakeDocument> }).document;
+  if (!document) throw new Error("the fake DOM isn't installed");
+  return document.documentElement;
 }
 
 /** The window loses focus (another app was clicked). */

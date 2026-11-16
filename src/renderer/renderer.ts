@@ -1,4 +1,5 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
+import { applyTheme, toTheme } from "./look.js";
 import { createVoiceControls } from "./voice-controls.js";
 import { createWelcome } from "./welcome.js";
 
@@ -305,6 +306,7 @@ export function startChatWindow(): void {
   const settingsStatus = byId<HTMLSpanElement>("settings-status");
   const brainStatus = byId<HTMLSpanElement>("brain-status");
   const speakReplies = byId<HTMLSelectElement>("speak-replies");
+  const themeChoice = byId<HTMLSelectElement>("theme");
 
   function describeBrain(current: PublicSettings): string {
     return current.brain === "local"
@@ -352,6 +354,8 @@ export function startChatWindow(): void {
     onlineUrl.value = settings.online.baseUrl;
     onlineModel.value = settings.online.model;
     speakReplies.value = settings.speakReplies;
+    themeChoice.value = settings.theme;
+    applyTheme(settings.theme);
     renderKeyStatus();
     brainStatus.textContent = describeBrain(settings);
     renderLists();
@@ -405,6 +409,7 @@ export function startChatWindow(): void {
         apps: settings.apps,
         folders: settings.folders,
         speakReplies: readSpeakReplies(),
+        theme: toTheme(themeChoice.value),
       })
       .then(async (result) => {
         if (!result.ok) {
@@ -414,6 +419,12 @@ export function startChatWindow(): void {
         settingsStatus.textContent = result.message ? `Saved. ${result.message}` : "Saved.";
         await loadSettings();
       });
+  });
+
+  // The theme is tried out as soon as it is picked; it is kept once Save settings is chosen.
+  themeChoice.addEventListener("change", () => {
+    applyTheme(toTheme(themeChoice.value));
+    settingsStatus.textContent = "Not saved yet: choose Save settings.";
   });
 
   byId<HTMLButtonElement>("save-key").addEventListener("click", () => {

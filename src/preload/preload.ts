@@ -23,6 +23,7 @@ const api: SageApi = {
   cancelPull: () => ipcRenderer.invoke(CHANNELS.cancelPull),
   openInstallGuide: () => ipcRenderer.invoke(CHANNELS.openInstallGuide),
   finishSetup: () => ipcRenderer.invoke(CHANNELS.finishSetup),
+  setSound: (on) => ipcRenderer.invoke(CHANNELS.setSound, { on }),
 };
 
 contextBridge.exposeInMainWorld("sage", api);

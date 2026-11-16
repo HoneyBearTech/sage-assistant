@@ -39,6 +39,7 @@ export async function startWindow(
     pulls: [] as string[],
     cancelPull: 0,
     openGuide: 0,
+    sound: [] as boolean[],
   };
   const settings: PublicSettings = {
     brain: "local",
@@ -49,6 +50,8 @@ export async function startWindow(
     speakReplies: "voice",
     // Existing window tests start as "already set up"; the Welcome screen's tests say otherwise.
     setupDone: true,
+    theme: "dark",
+    sound: false,
     ...options.settings,
   };
   const api: SageApi = {
@@ -101,6 +104,11 @@ export async function startWindow(
     finishSetup: async () => {
       calls.finishSetup++;
       settings.setupDone = true;
+      return { ok: true };
+    },
+    setSound: async (on) => {
+      calls.sound.push(on);
+      settings.sound = on;
       return { ok: true };
     },
     ...overrides,

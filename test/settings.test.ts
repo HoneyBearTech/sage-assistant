@@ -53,7 +53,13 @@ test("a settings file saved before voice loads unchanged, with Read replies alou
   await writeFile(join(dir, "settings.json"), text);
   const { logger, lines } = captureLogs();
   const loaded = await new SettingsStore(dir, logger).load();
-  assert.deepEqual(loaded, { ...before, speakReplies: "voice", setupDone: false });
+  assert.deepEqual(loaded, {
+    ...before,
+    speakReplies: "voice",
+    setupDone: false,
+    theme: "dark",
+    sound: false,
+  });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
   assert.equal(defaultSettings().speakReplies, "voice");
@@ -76,12 +82,52 @@ test("a settings file saved before first-run setup loads unchanged, and shows th
   await writeFile(join(dir, "settings.json"), text);
   const { logger, lines } = captureLogs();
   const store = new SettingsStore(dir, logger);
-  assert.deepEqual(await store.load(), { ...before, setupDone: false });
+  assert.deepEqual(await store.load(), { ...before, setupDone: false, theme: "dark", sound: false });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
   assert.equal(defaultSettings().setupDone, false);
   for (const bad of ["yes", 1, null]) {
     assert.equal((await store.save({ ...before, setupDone: bad })).ok, false, String(bad));
+  }
+});
+
+test("a settings file saved by Sage 0.1.1 loads unchanged, with the dark look and sound off", async (t) => {
+  const dir = await tempDir(t);
+  // Exactly what Sage 0.1.1 wrote, before the look and the sound switch existed.
+  const before = {
+    version: 1,
+    brain: "local",
+    local: { model: "qwen3:4b" },
+    online: { baseUrl: "", model: "" },
+    apps: [],
+    folders: ["/docs"],
+    speakReplies: "voice",
+    setupDone: true,
+  };
+  const text = `${JSON.stringify(before, null, 2)}\n`;
+  await writeFile(join(dir, "settings.json"), text);
+  const { logger, lines } = captureLogs();
+  const store = new SettingsStore(dir, logger);
+  assert.deepEqual(await store.load(), { ...before, theme: "dark", sound: false });
+  assert.deepEqual(lines, [], "not treated as unreadable");
+  assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
+  assert.equal(defaultSettings().theme, "dark");
+  assert.equal(defaultSettings().sound, false);
+});
+
+test("the theme is saved, and only its three choices are accepted; sound is a true or false", async (t) => {
+  const store = new SettingsStore(await tempDir(t), captureLogs().logger);
+  for (const theme of ["light", "system", "dark"] as const) {
+    assert.ok((await store.save({ ...defaultSettings(), theme })).ok);
+    assert.equal((await store.load()).theme, theme);
+  }
+  for (const bad of ["blue", "", 1, null]) {
+    assert.equal((await store.save({ ...defaultSettings(), theme: bad })).ok, false, String(bad));
+  }
+  assert.ok((await store.save({ ...defaultSettings(), sound: true })).ok);
+  assert.equal((await store.load()).sound, true);
+  for (const bad of ["on", 1, null]) {
+    assert.equal((await store.save({ ...defaultSettings(), sound: bad })).ok, false, String(bad));
   }
 });
 

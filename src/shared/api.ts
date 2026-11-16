@@ -21,6 +21,7 @@ export const CHANNELS = {
   cancelPull: "sage:setup-pull-cancel",
   openInstallGuide: "sage:setup-open-guide",
   finishSetup: "sage:setup-finish",
+  setSound: "sage:sound-set",
 } as const;
 
 /** The longest message the window may send; the message box has the same limit. */
@@ -58,9 +59,13 @@ export interface PublicSettings {
   speakReplies: "voice" | "always" | "never";
   /** The Welcome screen was finished or skipped. Changed only by `finishSetup`. */
   setupDone: boolean;
+  /** The window's look: dark (the default), light, or the system's choice. */
+  theme: "dark" | "light" | "system";
+  /** Sound effects in the window. Changed only by `setSound` (the top bar's switch). */
+  sound: boolean;
 }
 
-export type SettingsInput = Omit<PublicSettings, "online" | "setupDone"> & {
+export type SettingsInput = Omit<PublicSettings, "online" | "setupDone" | "sound"> & {
   online: { baseUrl: string; model: string };
 };
 
@@ -173,4 +178,6 @@ export interface SageApi {
   openInstallGuide(): Promise<GuideResult>;
   /** Saves that setup was finished or skipped, so the Welcome screen isn't shown at start-up. */
   finishSetup(): Promise<Result>;
+  /** The top bar's sound switch: saves only whether sound effects are on. */
+  setSound(on: boolean): Promise<Result>;
 }
