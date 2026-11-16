@@ -52,9 +52,12 @@ This job is the first; the rest each get their own plan and pull request.
    as small bordered cards. Text is still only ever inserted as text, never as HTML.
 
    *Check:* the existing chat tests pass; new tests for the labels and for skipping the typing.
-4. **The asking box.** The box that asks before Sage changes anything becomes a bright amber panel with
-   corner marks, showing exactly what Sage wants to do, with Allow and Decline. Every safety rule stays
-   (only you can answer it, no "always allow", it never answers itself).
+4. **The asking box.** The question itself stays in Windows' own box, opened by the part of Sage the
+   chat window can't control, so nothing shown in the chat can ever answer it. While it is open, the chat
+   shows a bright amber card with corner marks saying exactly what Sage is asking, and afterwards whether
+   you allowed it. Every safety rule stays (only you can answer, no "always allow", it never answers
+   itself). (Changed after approval: the first version put Allow and Decline in the chat window, which
+   would have let the window answer.)
 
    *Check:* the existing asking-box and security tests pass unchanged.
 5. **Sounds and a sound switch.** Short tones made by the window itself (no sound files): a blip when you
