@@ -2,6 +2,7 @@ import type { ModelChoice, PullResult, Result, RunnerStatus, SageApi, VoiceStatu
 import { type DiagnosticStep, RUNNER_STATE_CODES, type SupportCode } from "../shared/support-codes.js";
 import type { Typist } from "./typing.js";
 import {
+  ANNOUNCE_DELAY_MS,
   announcement,
   type CheckLine,
   doneLines,
@@ -131,8 +132,21 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
       list.append(item);
       queue.push({ item, text: check.text });
     }
-    el.announce.textContent = announcement(lines, code);
+    announce(announcement(lines, code));
     typeNext();
+  }
+
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * Clears the status area, then sets it a moment later, so a screen reader reads a result out
+   * again even when it is the same as last time.
+   */
+  function announce(text: string): void {
+    clearTimeout(announceTimer);
+    el.announce.textContent = "";
+    announceTimer = setTimeout(() => {
+      el.announce.textContent = text;
+    }, ANNOUNCE_DELAY_MS);
   }
 
   /** Shows (or clears) a step's support code and its Copy diagnostics button. */
@@ -467,6 +481,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
       setFailed("model", null);
       stopTyping();
       for (const list of Object.values(el.checks)) list.replaceChildren();
+      clearTimeout(announceTimer);
       el.announce.textContent = "";
       renderModelButtons();
       el.modelNext.hidden = true;

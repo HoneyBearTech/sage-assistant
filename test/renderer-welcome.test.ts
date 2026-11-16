@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { Diagnostics } from "../src/core/diagnostics.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { TYPE_FRAME_MS } from "../src/renderer/typing-time.js";
-import { PULL_POLL_MS, WELCOME_TEXT } from "../src/renderer/welcome-text.js";
+import { ANNOUNCE_DELAY_MS, PULL_POLL_MS, WELCOME_TEXT } from "../src/renderer/welcome-text.js";
 import type {
   DiagnosticsResult,
   Notice,
@@ -722,6 +722,7 @@ test("the runner step lists its real checks, with a support code and Copy diagno
   assert.equal(el("runner-code").hidden, false);
   assert.equal(el("runner-code").textContent, "Support code: SAGE-RUN-01");
   assert.equal(el("runner-diagnostics").hidden, false);
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS);
   assert.equal(
     el("welcome-checks-status").textContent,
     "Looking for the local model runner... not found. Support code: SAGE-RUN-01.",
@@ -755,6 +756,7 @@ test("the runner step lists its real checks, with a support code and Copy diagno
   assert.equal(el("runner-code").hidden, true, "no code once the check passes");
   assert.equal(el("runner-code").textContent, "");
   assert.equal(el("runner-diagnostics").hidden, true);
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS);
   assert.equal(
     el("welcome-checks-status").textContent,
     "Looking for the local model runner... found. Runner version 0.12.3... ok. Model qwen3:4b... not downloaded yet. Model qwen3:1.7b... downloaded.",
@@ -1009,4 +1011,28 @@ test("two quick Copy diagnostics, answered out of order: the shown text is the o
   await click("diagnostics-copy");
   assert.equal(el("diagnostics-status").textContent, WELCOME_TEXT.copied);
   assert.deepEqual(clipboard, [el("diagnostics-text").textContent], "exactly the text on screen");
+});
+
+test("the same check with the same result is read out again: the status area is cleared first", async (t) => {
+  const { el, click } = await welcomeWindow(t, { runnerStatus: async () => runner("unreachable") });
+  const writes: string[] = [];
+  const area = el("welcome-checks-status");
+  let current = "";
+  Object.defineProperty(area, "textContent", {
+    get: () => current,
+    set: (value: string) => {
+      current = value;
+      writes.push(value);
+    },
+  });
+  const said = "Looking for the local model runner... not found. Support code: SAGE-RUN-01.";
+  await click("place-local");
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS);
+  assert.equal(area.textContent, said);
+  writes.length = 0;
+  await click("runner-check");
+  assert.equal(area.textContent, "", "cleared at once");
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS);
+  assert.equal(area.textContent, said, "then set again, a moment later");
+  assert.deepEqual(writes.slice(-2), ["", said]);
 });

@@ -285,7 +285,9 @@ or not, its version, which of Sage's two models it has), the model request's res
 downloaded, cancelled or failed, and whether the model can use skills) and, on Ready, the voice status.
 The lines type out one after another with the chat's typist (`typing.ts`); a click or a key shows them
 all, and with reduced motion they appear at once. Each new set is read out once, in full, through one
-polite status area (`welcome-checks-status`); the lists themselves aren't live regions.
+polite status area (`welcome-checks-status`), which is cleared first and set a moment later
+(`ANNOUNCE_DELAY_MS`) so the same result is read out again after Check again; the lists themselves
+aren't live regions.
 
 **Support codes.** A failed check shows a short code next to its plain sentence, from the one table in
 `src/shared/support-codes.ts`. Each code is a failure Sage can tell apart: the runner's two failed

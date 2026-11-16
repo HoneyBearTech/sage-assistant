@@ -13,6 +13,12 @@ import type { SupportCode } from "../shared/support-codes.js";
 export const WELCOME_STEPS = ["place", "runner", "model", "done"] as const;
 export type WelcomeStep = (typeof WELCOME_STEPS)[number];
 
+/**
+ * The status area that reads out check lines is cleared, then set this much later, so a screen
+ * reader hears a result again even when it is the same as last time.
+ */
+export const ANNOUNCE_DELAY_MS = 100;
+
 /** How often the window asks how far the model download has got. */
 export const PULL_POLL_MS = 500;
 
