@@ -116,8 +116,12 @@ later, and what Sage will not do.
       window reloads.
 - [ ] **Minor:** a morning brief whose claim comes back after the window was hidden or Brief me was
       pressed still uses up the day (undoing it would need another write request).
-- [ ] **A new look, part 3: the Welcome screen as a start-up sequence.** The same steps as numbered
-      sections with typed check lines, plus a support code and Copy diagnostics when something fails.
+- [x] **A new look, part 3: the Welcome screen as a start-up sequence** (welcome-boot). Numbered steps,
+      typed lines from real checks, support codes with a Troubleshooting table in
+      [the install guide](installing.md#support-codes), and Copy diagnostics (built and copied by Sage
+      itself, shown in full first, never sent anywhere).
+- [ ] **Owner:** run the "First-run setup" section of [the Windows checklist](windows-checklist.md) after
+      the next install, including a failed step, Copy diagnostics pasted into Notepad, and Narrator.
 - [x] **More online brains** (brains-api): Claude, OpenAI and Gemini with the user's own API key, next
       to On this computer and Another online service. One key per company, kept in the system's protected
       storage and only ever sent to that company's own address; Load models, Test and Get a key (opened

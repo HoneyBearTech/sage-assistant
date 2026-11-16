@@ -2,6 +2,39 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - welcome-boot
+
+**Context:** the owner asked for the Welcome screen as a start-up sequence, part 3 of the new look, together
+with the OpenSSF badge (#26) and the Home screen (#27).
+
+**Decisions:**
+- **Numbered steps** ("01 Where Sage thinks" to "04 Ready") in the new look's panels; the flow, buttons and
+  Skip setup are unchanged.
+- **Check lines only from real results** (the runner's status and version, the download result, the voice
+  status), typed by the chat's typist and read out once per set through one status area. Step 01 has no
+  check, so it has no lines.
+- **Support codes from the failure states Sage already tells apart**, in one table in the code and a
+  Troubleshooting table in `docs/installing.md`; a test keeps the two identical. No voice-download code
+  (Welcome never downloads voice) and no "runner too old" code (Sage has no minimum version to compare).
+- **Copy diagnostics is built by the main process** from a fixed list of fields, scrubbed (keys first, then
+  home path, user name, e-mail addresses and web addresses), shown in full in a read-only box, and copied
+  by the main process on a second click. The window sends only the step, the code and an id, so it can't
+  choose the copied text. A text can be copied for 2 minutes and at most 3 times; only the newest build
+  counts. It shows both the model a failed step tried and the saved model.
+- **The runner's version** comes from a new request on the same fixed loopback address, asked at the same
+  time as the model list, strictly checked, and kept only when the list answered.
+
+**Review:** QA passed every plan step. The Security Officer cleared it, asking for limits on how the
+window can trigger a copy and for the runner's two requests to run at once; both done. The Auditor found,
+over two rounds: scrubbing that could break a key's redaction and leave parts of it, diagnostics naming
+the saved model instead of the one that failed, an older build making the shown text uncopyable, a save
+failure described as a download failure, and an old result read out after a retry, a step change or a
+change of model. All fixed with tests. GitHub's code scanning flagged a test that stripped tags with a
+pattern; it now matches the heading exactly. 574 tests; GitHub's Windows tests pass. No second security
+review (quota out). The window was not seen on screen; the owner got a private preview page.
+
+**Rejected findings:** none.
+
 ## 2026-11-16 - home-brief
 
 **Context:** the owner asked for the Home screen with a daily brief, part 2 of the new look, together
