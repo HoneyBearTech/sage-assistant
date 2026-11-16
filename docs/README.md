@@ -11,8 +11,9 @@
 
 ## Getting started
 
-- [Installing](installing.md): running Sage from source on Windows and Linux, installing Ollama and a
-  small model, setting up the online brain, updating, and what to expect from the future installer.
+- [Installing](installing.md): the Windows installer from the Releases page (checking it, SmartScreen,
+  updating and uninstalling), running Sage from source on Windows and Linux, installing the local model
+  runner and a small model, setting up the online brain, and updating.
 - [Windows checklist](windows-checklist.md): short manual checks to run on a Windows PC.
 
 ## How Sage works
@@ -28,6 +29,8 @@
 - [Roadmap](roadmap.md): what has shipped, what comes next, what comes later, and what Sage will not do.
 - [GitHub checks](github-checks.md): what runs on GitHub (CI, DCO, secret scan, CodeQL, dependency review,
   Scorecard), how Renovate keeps dependencies current, and the branch rule. Locally, run `npm run verify`.
+- [Releasing](releasing.md): the release workflow (ready for the owner to add), how to make a release,
+  and how to check a downloaded installer's checksum and provenance.
 - [Plans](plans/) and [reports](reports/): the plan for each job and the research behind it.
 
 The repository's root holds the [README](../README.md), the [security policy](../SECURITY.md), the
