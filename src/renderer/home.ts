@@ -92,6 +92,11 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
     el.greeting.textContent = greeting(now.getHours());
   }
 
+  function stopClock(): void {
+    clearTimeout(timer);
+    timer = undefined;
+  }
+
   /** The clock changes on the minute, never in between; the panels load again with it. */
   function tickNextMinute(): void {
     clearTimeout(timer);
@@ -211,14 +216,17 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
   el.talk.addEventListener("click", () => hooks.talk());
   el.briefMe.addEventListener("click", () => void brief(++briefs, "button"));
 
-  // The window coming back into view counts as showing Home again; hiding it drops the brief.
+  // Hiding the window stops the clock and drops the brief; coming back into view counts as showing
+  // Home again: the clock is redrawn and restarted, and the panels load.
   document.addEventListener("visibilitychange", () => {
     if (el.view.hidden) return;
     if (document.visibilityState === "hidden") {
+      stopClock();
       cancelBrief();
       return;
     }
     showClock();
+    tickNextMinute();
     void load();
     void morningBrief();
   });
@@ -231,8 +239,7 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
       void morningBrief();
     },
     hidden() {
-      clearTimeout(timer);
-      timer = undefined;
+      stopClock();
       cancelBrief();
     },
     reminderArrived() {

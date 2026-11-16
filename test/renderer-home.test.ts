@@ -117,6 +117,42 @@ test("the clock is in the PC's own format, changes only on the minute, and the g
   assert.equal(el("home-greeting").textContent, "Good evening");
 });
 
+test("the clock's timer stops while the window is hidden and restarts, redrawn, when it is back", async (t) => {
+  const { el, calls } = await homeWindow(t, { now: on16th(10, 0, 0).getTime() });
+  // Watch the window's timers from here on: the clock's is the one set for the next minute.
+  const set = t.mock.method(globalThis, "setTimeout");
+  const clear = t.mock.method(globalThis, "clearTimeout");
+  const clockTimers = () =>
+    set.mock.calls.filter((call) => call.arguments[1] === 60_000).map((call) => call.result);
+  const loads = calls.homeSummary;
+
+  setWindowVisibility("hidden");
+  assert.equal(clear.mock.callCount() > 0, true, "hiding clears the clock's timer");
+  t.mock.timers.tick(5 * 60_000);
+  await settled();
+  assert.deepEqual(clockTimers(), [], "no clock timer is set while hidden");
+  assert.equal(el("home-clock").textContent, clockText(on16th(10, 0)), "so the clock didn't move");
+  assert.equal(calls.homeSummary, loads);
+
+  setWindowVisibility("visible");
+  await settled();
+  assert.equal(el("home-clock").textContent, clockText(on16th(10, 5)), "redrawn at once");
+  assert.equal(calls.homeSummary, loads + 1, "and loaded at once");
+  assert.equal(clockTimers().length, 1, "one clock timer again");
+  t.mock.timers.tick(60_000);
+  await settled();
+  assert.equal(el("home-clock").textContent, clockText(on16th(10, 6)));
+  assert.equal(calls.homeSummary, loads + 2, "one load a minute, not two");
+
+  // Hidden again: the timer that was set is the one cleared.
+  const current = clockTimers().at(-1);
+  setWindowVisibility("hidden");
+  assert.equal(
+    clear.mock.calls.some((call) => call.arguments[0] === current),
+    true,
+  );
+});
+
 test("the panels show today's reminders with times, missed ones marked, notes and the status", async (t) => {
   const { el } = await homeWindow(t, { summary: SAMPLE });
   assert.deepEqual(rows(el("home-today")), [
