@@ -35,6 +35,11 @@ later, and what Sage will not do.
   - [x] add the checks ([the GitHub checks](github-checks.md));
   - [x] turn on private vulnerability reporting (SECURITY.md relies on it);
   - [ ] run the [Windows checklist](windows-checklist.md) on a Windows PC.
+- [x] **Dependency updates with Renovate** (`renovate.json`; see [the GitHub checks](github-checks.md)).
+- [ ] **Owner:** check the settings listed under "Settings to check" in [the GitHub checks](github-checks.md),
+      and compare the "Main" ruleset with the recommended branch rule there.
+- [ ] **Owner, optional:** make the DCO check's bot exemption stricter. Check that the commit really comes
+      from the bot (`.author.type == "Bot"`), not just its name.
 - [ ] **Windows one-click installer.** A build that produces a checksummed installer on GitHub
       Releases, with the fuses set. It needs a GitHub workflow that the maintainer adds; the
       ready-to-paste text comes with the job. Starts with [the GitHub checks](github-checks.md).
