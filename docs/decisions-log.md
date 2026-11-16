@@ -2,6 +2,28 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - release-0-1-0
+
+**Context:** the owner asked to "start the release workflow job".
+
+**Decisions:**
+- **The owner adds the workflow; the team prepares the version.** The team doesn't add or change
+  workflow files, so the owner added `.github/workflows/release.yml` through GitHub from the text in
+  [Releasing](releasing.md) (#16). Before he merged it, the CEO checked it was the same text, byte for
+  byte, and a workflow checker found no problems. The team's part is the version pull request (#15).
+- **The tag stays with the owner.** Pushing `v0.1.0` publishes Sage, so the owner does it (step 6).
+- **The first release only changes the changelog:** `package.json` already says `0.1.0`. The entries
+  move under `## [0.1.0] - 2026-11-16`, unchanged, with Keep a Changelog links. If the tag is pushed on a
+  later day, the date can be left or corrected in a small pull request.
+
+**What we learned:** a commit made on GitHub's website has no sign-off line, so the required "DCO
+sign-off" check failed on #16. The owner re-saved it with a sign-off. GitHub can add the line itself
+(**Settings → General → Require contributors to sign off on web-based commits**).
+
+**Review:** the Security Officer found nothing to fix; the Auditor approved, and confirmed the workflow
+doesn't read the changelog, so its format can't break the release. A note that the changelog's opening
+line still said versions "will follow" Semantic Versioning was taken.
+
 ## 2026-11-16 - sage-icon
 
 **Context:** the owner asked to "start the Sage icon job", the roadmap item "A Sage icon for the
