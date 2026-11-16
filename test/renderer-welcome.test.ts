@@ -584,3 +584,72 @@ test("Cancel after the download finished is too late: the window keeps the model
   assert.equal(el("model-status").textContent, "The Standard model is ready.");
   assert.equal(el("model-next").hidden, false);
 });
+
+test("a late setup refresh never overwrites a Settings save that finished first", async (t) => {
+  // What the main process has stored; the fake's getSettings answers with it as it was when asked.
+  const stored = {
+    brain: "online" as "local" | "online",
+    local: { model: "small-model" },
+    online: { baseUrl: "https://api.example.com", model: "m", hasKey: false },
+    apps: [],
+    folders: [],
+    speakReplies: "voice" as const,
+    setupDone: false,
+  };
+  let holdNext: ReturnType<typeof deferred<void>> | undefined;
+  const { el, click, calls } = await welcomeWindow(t, {
+    runnerStatus: async () => runner("no-model"),
+    getSettings: async () => {
+      const answer = structuredClone(stored);
+      const hold = holdNext;
+      holdNext = undefined;
+      await hold?.promise;
+      return answer;
+    },
+    saveSettings: async (input) => {
+      calls.saved.push(structuredClone(input));
+      Object.assign(stored, { brain: input.brain, local: { ...input.local } });
+      return { ok: true };
+    },
+    pullModel: async () => {
+      Object.assign(stored, { brain: "local", local: { model: "qwen3:1.7b" } });
+      return { status: "done", skills: "yes" };
+    },
+    finishSetup: async () => {
+      stored.setupDone = true;
+      return { ok: true };
+    },
+  });
+  await click("place-local");
+  await click("runner-next");
+  await click("model-download");
+  await click("model-next");
+  // Setup's refresh asks for the settings, and its answer is slow.
+  const slow = deferred<void>();
+  holdNext = slow;
+  await click("start-chatting");
+  // Meanwhile the user saves Settings: online again, with a model of their own. The save and its
+  // reload finish first.
+  el("tab-settings").click();
+  for (const radio of el("settings-form").radios) radio.checked = radio.value === "online";
+  el("local-model").value = "users-own-model";
+  el("settings-form").dispatch("submit");
+  await settled();
+  await settled();
+  assert.equal(el("brain-status").textContent, "Brain: online (m)");
+  // The old answer (local, qwen3:1.7b) arrives last: it is dropped.
+  slow.resolve();
+  await settled();
+  assert.equal(el("brain-status").textContent, "Brain: online (m)");
+  assert.equal(el("local-model").value, "users-own-model");
+  assert.deepEqual(
+    el("settings-form")
+      .radios.filter((radio) => radio.checked)
+      .map((radio) => radio.value),
+    ["online"],
+  );
+  // The next save sends what the user stored, not the stale answer.
+  el("settings-form").dispatch("submit");
+  await settled();
+  assert.equal((calls.saved.at(-1) as { brain: string }).brain, "online");
+});

@@ -293,7 +293,14 @@ function renderKeyStatus(): void {
     : "No key saved.";
 }
 
+/**
+ * Goes up on every Settings save and every settings reload. A refresh after the Welcome screen
+ * that was overtaken by one of them is dropped, so it never overwrites newer settings.
+ */
+let settingsGeneration = 0;
+
 async function loadSettings(): Promise<void> {
+  settingsGeneration++;
   settings = await sage.getSettings();
   render();
 }
@@ -314,6 +321,7 @@ function readSpeakReplies(): PublicSettings["speakReplies"] {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!settings) return;
+  settingsGeneration++;
   const brain =
     form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value === "online"
       ? "online"
@@ -472,12 +480,15 @@ function setBrainRadios(brain: string): void {
  * it showed when the Welcome screen closed, so edits made since (or other unsaved changes) stay.
  */
 async function refreshAfterSetup(shown: { brain: string | undefined; model: string }): Promise<void> {
+  const generation = settingsGeneration;
   let latest: PublicSettings;
   try {
     latest = await sage.getSettings();
   } catch {
     return;
   }
+  // A Settings save or reload happened meanwhile: what it shows is newer than this answer.
+  if (generation !== settingsGeneration) return;
   if (!settings) {
     settings = latest;
     render();
