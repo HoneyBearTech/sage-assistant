@@ -26,6 +26,7 @@ function due(id: string, at: Date, missed = false, text = id): HomeReminder {
 function summary(parts: Partial<HomeSummary> = {}): HomeSummary {
   return {
     reminders: [],
+    missedMore: 0,
     next: null,
     notes: [],
     status: { brain: "local", voiceReady: true, sound: false },
@@ -121,6 +122,18 @@ test("the brief with several reminders, missed ones and notes", () => {
       "What would you like to start with?",
     ].join("\n"),
   );
+});
+
+test("the brief says how many more missed ones were left out", () => {
+  const text = briefText(
+    summary({
+      reminders: [due("Old one", new Date(2026, 10, 14, 9), true), due("Dentist", on16th(15))],
+      missedMore: 3,
+    }),
+    on16th(9),
+    time,
+  );
+  assert.match(text, /\nYou missed: Old one on Saturday 14 November at 09:00; and 3 more\.\n/);
 });
 
 test("the brief with only missed ones today says nothing else is due", () => {

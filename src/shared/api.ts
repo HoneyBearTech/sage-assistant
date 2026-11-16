@@ -110,8 +110,10 @@ export interface Notice {
 
 export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
 
-/** The most reminders Home is given at once. */
+/** The most of today's reminders (still to come first, then ones already shown) Home is given. */
 export const MAX_HOME_REMINDERS = 10;
+/** The most missed reminders Home is given, the newest; `missedMore` counts the rest. */
+export const MAX_HOME_MISSED = 5;
 /** The longest reminder text Home is given; longer ones are shortened, ending in "…". */
 export const MAX_HOME_REMINDER_TEXT = 200;
 /** The most note titles Home is given: the most recently changed ones. */
@@ -129,13 +131,16 @@ export interface HomeReminder {
 }
 
 /**
- * What Home shows, and all the window can read for it: reminders due today on the PC's own day, or
- * missed and not yet shown (soonest first, at most MAX_HOME_REMINDERS); the next reminder after
- * today when nothing more is to come today; the titles of the most recently changed notes; and the
- * status values. Read-only: asking for it changes nothing.
+ * What Home shows, and all the window can read for it: reminders due today on the PC's own day (at
+ * most MAX_HOME_REMINDERS, the ones still to come kept first) and missed ones not yet shown (at most
+ * MAX_HOME_MISSED, the newest), together soonest first; how many more missed ones were left out; the
+ * next reminder after today when nothing more is to come today; the titles of the most recently
+ * changed notes; and the status values. Read-only: asking for it changes nothing.
  */
 export interface HomeSummary {
   reminders: HomeReminder[];
+  /** Missed reminders left out of `reminders` (beyond MAX_HOME_MISSED). */
+  missedMore: number;
   next: HomeReminder | null;
   notes: string[];
   status: {

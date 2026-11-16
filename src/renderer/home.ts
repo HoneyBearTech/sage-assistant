@@ -125,6 +125,7 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
       part(li, "home-what", reminder.text);
       if (reminder.missed) part(li, "home-tag", HOME_TEXT.missed);
     }
+    if (summary.missedMore > 0) item(el.today, "more").textContent = HOME_TEXT.missedMore(summary.missedMore);
     el.notes.replaceChildren();
     if (summary.notes.length === 0) item(el.notes, "empty").textContent = HOME_TEXT.noNotes;
     for (const title of summary.notes) item(el.notes).textContent = title;

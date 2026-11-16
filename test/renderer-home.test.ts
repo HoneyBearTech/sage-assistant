@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { homeSummary } from "../src/core/home.js";
 import type { HomeSummary } from "../src/shared/api.js";
 import {
   type FakeElement,
@@ -28,6 +29,7 @@ const SAMPLE: HomeSummary = {
     { id: "a", text: "Water the plants", due: on16th(9).toISOString(), missed: true },
     { id: "b", text: "Dentist", due: on16th(14, 30).toISOString(), missed: false },
   ],
+  missedMore: 0,
   next: null,
   notes: ["Shopping", "Ideas"],
   status: { brain: "claude", voiceReady: true, sound: true },
@@ -130,6 +132,44 @@ test("the panels show today's reminders with times, missed ones marked, notes an
   assert.equal(el("home-sound").textContent, "On");
   assert.equal(el("home-next").textContent, `Dentist at ${clockText(on16th(14, 30))}`);
   assert.equal(el("home-status").textContent, "");
+});
+
+test("ten old missed reminders don't hide the one still to come: panels and brief agree", async (t) => {
+  // End to end: the real summary from the main process, shown by the window.
+  const missed = Array.from({ length: 10 }, (_, i) => ({
+    id: `m${i}`,
+    text: `Missed ${i}`,
+    due: new Date(2026, 10, 5 + i, 9).toISOString(),
+    created: new Date(2026, 10, 1).toISOString(),
+    firedAt: null,
+  }));
+  const dentist = {
+    id: "d",
+    text: "Dentist",
+    due: on16th(15).toISOString(),
+    created: new Date(2026, 10, 1).toISOString(),
+    firedAt: null,
+  };
+  const summary = homeSummary({
+    reminders: [...missed, dentist],
+    notes: [],
+    now: on16th(10),
+    brain: "local",
+    voiceReady: false,
+    sound: false,
+  });
+  const { el } = await homeWindow(t, { summary });
+  const today = rows(el("home-today"));
+  assert.equal(today.length, 7);
+  assert.deepEqual(today.at(-2), { className: "", parts: [clockText(on16th(15)), "Dentist"] });
+  assert.deepEqual(today.at(-1), { className: "more", parts: ["5 more missed"] });
+  assert.equal(el("home-next").textContent, `Dentist at ${clockText(on16th(15))}`);
+  el("home-brief").click();
+  await settled();
+  const brief = el("home-brief-text").textContent;
+  assert.match(brief, new RegExp(`\nToday: Dentist at ${clockText(on16th(15))}.\n`));
+  assert.doesNotMatch(brief, /Nothing is due today/);
+  assert.match(brief, /; and 5 more\.\n/);
 });
 
 test("empty panels say so plainly", async (t) => {

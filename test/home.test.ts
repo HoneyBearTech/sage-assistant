@@ -10,6 +10,7 @@ import { createIpcHandlers } from "../src/main/ipc.js";
 import {
   CHANNELS,
   type HomeSummary,
+  MAX_HOME_MISSED,
   MAX_HOME_NOTE_TITLE,
   MAX_HOME_NOTES,
   MAX_HOME_REMINDER_TEXT,
@@ -135,9 +136,64 @@ test("the limits: at most 10 reminders of 200 characters, 5 note titles of 80, n
   for (const title of summary.notes) assert.equal(Array.from(title).length, MAX_HOME_NOTE_TITLE);
   assert.doesNotMatch(JSON.stringify(summary), /private text/);
   // Only these fields, so nothing else can slip through.
-  assert.deepEqual(Object.keys(summary).sort(), ["next", "notes", "reminders", "status"]);
+  assert.deepEqual(Object.keys(summary).sort(), ["missedMore", "next", "notes", "reminders", "status"]);
   assert.deepEqual(Object.keys(summary.reminders[0]!).sort(), ["due", "id", "missed", "text"]);
   assert.deepEqual(Object.keys(summary.status).sort(), ["brain", "sound", "voiceReady"]);
+});
+
+test("missed ones are capped on their own: old missed reminders never hide what is still to come", () => {
+  // Ten missed from earlier days, one shown this morning, and one due this afternoon.
+  const missed = Array.from({ length: 10 }, (_, i) => reminder(`m${i}`, new Date(2026, 10, 5 + i, 9)));
+  const summary = homeSummary({
+    reminders: [...missed, reminder("shown", on16th(8), on16th(8)), reminder("dentist", on16th(15))],
+    notes: [],
+    now: on16th(12),
+    ...STATUS,
+  });
+  assert.equal(MAX_HOME_MISSED, 5);
+  // The five newest missed ones, then today's; soonest first.
+  assert.deepEqual(
+    summary.reminders.map((r) => r.id),
+    ["m5", "m6", "m7", "m8", "m9", "shown", "dentist"],
+  );
+  assert.equal(summary.missedMore, 5);
+  assert.equal(summary.next, null, "something is still to come today");
+
+  // Many still to come today: they are kept before ones already shown today.
+  const many = homeSummary({
+    reminders: [
+      ...missed,
+      ...Array.from({ length: 4 }, (_, i) => reminder(`s${i}`, on16th(8, i), on16th(8, i))),
+      ...Array.from({ length: 12 }, (_, i) => reminder(`u${i}`, on16th(13, i))),
+    ],
+    notes: [],
+    now: on16th(12),
+    ...STATUS,
+  });
+  const today = many.reminders.filter((r) => !r.missed).map((r) => r.id);
+  assert.deepEqual(
+    today,
+    Array.from({ length: 10 }, (_, i) => `u${i}`),
+  );
+  assert.equal(many.reminders.filter((r) => r.missed).length, 5);
+  assert.equal(many.missedMore, 5);
+
+  // Only shown ones today, nothing still to come: the latest shown are kept, and "next" is given.
+  const shown = homeSummary({
+    reminders: [
+      ...Array.from({ length: 12 }, (_, i) => reminder(`s${i}`, on16th(8, i), on16th(8, i))),
+      reminder("friday", new Date(2026, 10, 20, 9)),
+    ],
+    notes: [],
+    now: on16th(12),
+    ...STATUS,
+  });
+  assert.deepEqual(
+    shown.reminders.map((r) => r.id),
+    ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"],
+  );
+  assert.equal(shown.next?.id, "friday");
+  assert.equal(shown.missedMore, 0);
 });
 
 test("a reminder with an unreadable time is left out; an empty note title shows as Untitled", () => {

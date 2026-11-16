@@ -51,6 +51,7 @@ const SAMPLE_HOME: HomeSummary = {
     { id: "r3", text: "Dentist appointment", due: todayAt(23, 15), missed: false },
     { id: "r4", text: "Call Sam about the weekend", due: todayAt(23, 45), missed: false },
   ],
+  missedMore: 2,
   next: null,
   notes: ["Shopping list", "Ideas for the garden", "Holiday packing", "Book recommendations", "Wi-Fi setup"],
   status: { brain: "local", voiceReady: false, sound: false },
@@ -58,6 +59,7 @@ const SAMPLE_HOME: HomeSummary = {
 
 const EMPTY_HOME: HomeSummary = {
   reminders: [],
+  missedMore: 0,
   next: { id: "r9", text: "Renew the passport", due: dayAt(3, 10), missed: false },
   notes: [],
   status: { brain: "claude", voiceReady: true, sound: false },

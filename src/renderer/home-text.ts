@@ -16,6 +16,7 @@ export const HOME_TEXT = {
   loadFailed: "Sage couldn't load Home just now. It tries again every minute.",
   briefFailed: "Sage couldn't put the brief together just now. Try again.",
   question: "What would you like to start with?",
+  missedMore: (count: number) => `${count} more missed`,
 } as const;
 
 export type Greeting = "Good morning" | "Good afternoon" | "Good evening";
@@ -107,7 +108,10 @@ export function briefText(summary: HomeSummary, now: Date, time: TimeFormat): st
     if (summary.next) line += ` The next reminder is ${describe(summary.next)}.`;
     lines.push(line);
   }
-  if (missed.length > 0) lines.push(`You missed: ${missed.map(describe).join("; ")}.`);
+  if (missed.length > 0) {
+    const more = summary.missedMore > 0 ? `; and ${summary.missedMore} more` : "";
+    lines.push(`You missed: ${missed.map(describe).join("; ")}${more}.`);
+  }
   if (summary.notes.length > 0) lines.push(`Your latest notes: ${joinList(summary.notes.map(words))}.`);
   lines.push(HOME_TEXT.question);
   return lines.join("\n");

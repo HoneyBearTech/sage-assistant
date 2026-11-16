@@ -25,6 +25,7 @@ export const NO_KEYS: PublicSettings["keys"] = { claude: false, openai: false, g
 /** Home's summary with nothing in it. */
 export const EMPTY_HOME: HomeSummary = {
   reminders: [],
+  missedMore: 0,
   next: null,
   notes: [],
   status: { brain: "local", voiceReady: false, sound: false },

@@ -1,6 +1,7 @@
 import {
   type HomeReminder,
   type HomeSummary,
+  MAX_HOME_MISSED,
   MAX_HOME_NOTE_TITLE,
   MAX_HOME_NOTES,
   MAX_HOME_REMINDER_TEXT,
@@ -47,8 +48,10 @@ export interface HomeInputs {
 }
 
 /**
- * What Home shows. Reminders: those due on the PC's day (shown or not, past or to come) and those
- * whose time has passed without being shown (`missed`), soonest first, at most MAX_HOME_REMINDERS.
+ * What Home shows. Reminders: those due on the PC's day (shown or still to come; at most
+ * MAX_HOME_REMINDERS, keeping the ones still to come first) and those whose time has passed without
+ * being shown (`missed`; at most MAX_HOME_MISSED, the newest, with `missedMore` counting the rest),
+ * capped separately so old missed ones can never hide what is still to come, then soonest first.
  * `next`: when nothing more is to come today, the first reminder after today that isn't shown yet.
  * Notes: the titles of the MAX_HOME_NOTES most recently changed notes, newest first.
  */
@@ -64,13 +67,21 @@ export function homeSummary(input: HomeInputs): HomeSummary {
     missed: missed(reminder),
   });
   const valid = input.reminders.filter((reminder) => Number.isFinite(dueAt(reminder)));
-  const today = valid
-    .filter((reminder) => {
-      const due = dueAt(reminder);
-      return missed(reminder) || (due >= start.getTime() && due < end.getTime());
-    })
-    .sort((a, b) => dueAt(a) - dueAt(b));
-  const toCome = today.some((reminder) => reminder.firedAt === null && dueAt(reminder) > now);
+  const soonest = (a: Reminder, b: Reminder) => dueAt(a) - dueAt(b);
+  const latest = (a: Reminder, b: Reminder) => dueAt(b) - dueAt(a);
+  const allMissed = valid.filter(missed).sort(latest);
+  const today = valid.filter((reminder) => {
+    const due = dueAt(reminder);
+    return !missed(reminder) && due >= start.getTime() && due < end.getTime();
+  });
+  // Still to come today, soonest first; then the ones already shown today, the latest first.
+  const toComeToday = today.filter((reminder) => dueAt(reminder) > now).sort(soonest);
+  const shownToday = today.filter((reminder) => dueAt(reminder) <= now).sort(latest);
+  const kept = [
+    ...allMissed.slice(0, MAX_HOME_MISSED),
+    ...[...toComeToday, ...shownToday].slice(0, MAX_HOME_REMINDERS),
+  ].sort(soonest);
+  const toCome = toComeToday.length > 0;
   const later = valid
     .filter((reminder) => reminder.firedAt === null && dueAt(reminder) >= end.getTime())
     .sort((a, b) => dueAt(a) - dueAt(b));
@@ -80,7 +91,8 @@ export function homeSummary(input: HomeInputs): HomeSummary {
     .slice(0, MAX_HOME_NOTES)
     .map((note) => shorten(note.title, MAX_HOME_NOTE_TITLE) || "Untitled");
   return {
-    reminders: today.slice(0, MAX_HOME_REMINDERS).map(toHome),
+    reminders: kept.map(toHome),
+    missedMore: Math.max(0, allMissed.length - MAX_HOME_MISSED),
     next: next ? toHome(next) : null,
     notes,
     status: { brain: input.brain, voiceReady: input.voiceReady, sound: input.sound },
