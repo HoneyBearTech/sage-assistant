@@ -7,6 +7,7 @@ import type { Brain, BrainReply, ChatMessage, ToolCall, ToolSpec } from "../src/
 import type { Encryptor, KeyStore, SavedKey } from "../src/core/keystore.js";
 import { createLogger, type Logger, SecretRedactor } from "../src/core/log.js";
 import type { Clock } from "../src/core/scheduler.js";
+import type { Timers } from "../src/core/voice/download.js";
 import type { ConfirmPresenter, ConfirmRequest } from "../src/core/skills/gate.js";
 
 export async function tempDir(t: { after(fn: () => Promise<void> | void): void }): Promise<string> {
@@ -199,4 +200,26 @@ export function toolReply(...calls: ToolCall[]): BrainReply {
 
 export function textReply(content: string): BrainReply {
   return { ok: true, content, toolCalls: [] };
+}
+
+/** The stall check's timer, fired by the test instead of by time passing. */
+export class ManualTimers implements Timers {
+  private next = 1;
+  readonly pending = new Map<number, { callback: () => void; ms: number }>();
+  readonly started: number[] = [];
+  setTimeout(callback: () => void, ms: number) {
+    const id = this.next++;
+    this.pending.set(id, { callback, ms });
+    this.started.push(ms);
+    return id;
+  }
+  clearTimeout(handle: unknown) {
+    this.pending.delete(handle as number);
+  }
+  /** As if the wait ran out now. */
+  fire() {
+    const due = [...this.pending.values()];
+    this.pending.clear();
+    for (const timer of due) timer.callback();
+  }
 }
