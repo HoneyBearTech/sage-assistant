@@ -19,8 +19,9 @@ All notable changes to Sage are documented here. The format follows
   ("Download the Standard model (about 2.5 GB)?"), with progress, **Cancel** and **Try again**. The runner
   downloads the model and checks its files; Sage shows only its own messages (offline, not enough disk
   space, model not found, or another error), stops a download that makes no progress for 2 minutes, and
-  saves the model as the local model only once it is there. Afterwards Sage asks the runner whether the
-  model can use its skills and says so if not.
+  saves the model as the local model, and switches the brain to this computer, only once it is there
+  (the box and the Welcome screen say so). Afterwards Sage asks the runner whether the model can use
+  its skills and says so if not.
 - **Sage's first link out:** **Open the install guide** asks first ("Open Sage's install guide in your
   web browser?"), then opens one fixed address, the local model runner section of Sage's own install
   guide on GitHub. If no browser opens, Sage shows the address to copy. Nothing else can be opened.

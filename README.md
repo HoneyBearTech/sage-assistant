@@ -35,8 +35,9 @@ computer, or an online service), whether the local model runner is running (with
 and, after asking, a button that opens Sage's [install guide](docs/installing.md#local-model-runner) in
 your web browser), and a model: **Standard** (`qwen3:4b`, about 2.5 GB) or **Smaller** (`qwen3:1.7b`,
 about 1.4 GB, for PCs with less memory). Sage asks in its own box before the download; the local model
-runner downloads the model and checks its files, with progress and **Cancel**. **Skip setup** is always
-there, and **Settings → Set up Sage** brings the screen back.
+runner downloads the model and checks its files, with progress and **Cancel**, and Sage then thinks on
+this computer with it (the brain switches to local, even if you were using an online service). **Skip
+setup** is always there, and **Settings → Set up Sage** brings the screen back.
 
 ## What Sage can do
 

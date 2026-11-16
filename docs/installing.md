@@ -145,8 +145,9 @@ The first time Sage starts, it opens a **Welcome screen** instead of the chat. I
    internet connection and free disk space. The local model runner downloads the model and checks its
    files (Sage doesn't download or check it itself, unlike the speech file). You see the progress, and
    can **Cancel** at any time; a download that makes no progress for 2 minutes is stopped. Once it is
-   there, Sage uses it as the local model, and checks with the runner that the model can use Sage's
-   skills.
+   there, Sage uses it as the local model **and switches the brain to On this computer**, even if you
+   were using an online service (the box says so; your online settings and key stay saved, and you can
+   switch back in Settings). Then it checks with the runner that the model can use Sage's skills.
 4. **Done.** **Start chatting** opens the chat.
 
 **Skip setup** is always there. Skipping or finishing changes nothing else (apps, folders, the online

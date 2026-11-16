@@ -25,7 +25,7 @@ export function pullQuestion(choice: ModelChoice): string {
   return `Download the ${model.label} model (${model.size})?`;
 }
 export const PULL_DETAIL =
-  "This needs an internet connection and free disk space. The local model runner downloads the model and checks its files; it can take a while. You can cancel at any time.";
+  "This needs an internet connection and free disk space. The local model runner downloads the model and checks its files; it can take a while. You can cancel at any time. Once it is downloaded, Sage will use it on this computer: the brain in Settings switches to On this computer.";
 
 /** The main process's box before the install guide opens. */
 export const GUIDE_QUESTION = "Open Sage's install guide in your web browser?";

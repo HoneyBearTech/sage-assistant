@@ -110,8 +110,9 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
       the setup at the top of this checklist) and its button says **Use this model**. Choose **Smaller**:
       the button says **Download**.
 - [ ] **The download box.** Choose **Download**: Sage's box asks *"Download the Smaller model (about 1.4
-      GB)?"*, says it needs an internet connection and free disk space and that the local model runner
-      downloads and checks the files, with **Not now** selected. **Not now**: it says the model wasn't
+      GB)?"*, says it needs an internet connection and free disk space, that the local model runner
+      downloads and checks the files, and that Sage will then use it on this computer (the brain switches
+      to On this computer), with **Not now** selected. **Not now**: it says the model wasn't
       downloaded, and nothing downloads.
 - [ ] **Cancel.** **Download**, then **Download** in the box: a progress bar and "Downloading… N of M MB"
       appear within a second, with **Cancel**. Choose **Cancel**: it says "Cancelled." and offers **Try
@@ -134,6 +135,11 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
 - [ ] **An online service.** **Settings → Set up Sage** → **An online service**: Settings opens with "An
       online model service" picked (not saved) and a line saying what to fill in. Choose "On this
       computer" again and **Save settings**. Restart Sage: it opens on the chat.
+- [ ] **From the online service back to local.** If you have an online service set up (see "The online
+      key" above), save it with "An online model service", then **Settings → Set up Sage** → **On this
+      computer** → **Next** → **Standard** → **Use this model**: it says the Standard model is ready, and
+      after **Start chatting** the header shows "Brain: on this computer (qwen3:4b)". In Settings, the
+      online address and model are still there, and the key is still saved.
 - [ ] **Notices and the talk key.** Add a reminder for one minute from now, then **Settings → Set up
       Sage** and wait on the Welcome screen until it is due (with notifications off in Windows, it goes to
       the window): when you choose **Skip setup**, the reminder is in the chat. On the Welcome screen,

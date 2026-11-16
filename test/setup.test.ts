@@ -157,6 +157,11 @@ test("nothing is downloaded unless the user chooses Download in the main process
   assert.equal(pullQuestion("smaller"), "Download the Smaller model (about 1.4 GB)?");
   assert.match(PULL_DETAIL, /internet connection and free disk space/);
   assert.match(PULL_DETAIL, /local model runner downloads the model and checks its files/);
+  // Someone on an online service learns before agreeing that Sage moves to the local brain.
+  assert.match(
+    PULL_DETAIL,
+    /Sage will use it on this computer: the brain in Settings switches to On this computer/,
+  );
 });
 
 test("after Download the runner downloads the model; only then is it saved as the local model", async (t) => {
