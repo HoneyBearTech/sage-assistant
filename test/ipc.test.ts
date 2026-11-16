@@ -297,6 +297,37 @@ test("an unreadable settings, notes or reminders file is kept aside and the wind
   assert.deepEqual(await handlers[CHANNELS.takeNotices](undefined), []);
 });
 
+test("the sound switch saves only itself, and a Settings save keeps it", async (t) => {
+  const { handlers, sage } = await setup(t);
+  for (const bad of [undefined, {}, { on: "yes" }, { on: true, theme: "light" }]) {
+    assert.deepEqual(await handlers[CHANNELS.setSound](bad), {
+      ok: false,
+      message: "Sage couldn't read that choice.",
+    });
+  }
+  assert.equal((await sage.settings.load()).sound, false, "nothing saved for a bad request");
+  assert.ok((await sage.settings.save({ ...defaultSettings(), folders: ["/docs"], theme: "light" })).ok);
+  assert.deepEqual(await handlers[CHANNELS.setSound]({ on: true }), { ok: true });
+  const saved = await sage.settings.load();
+  assert.equal(saved.sound, true);
+  assert.deepEqual(saved.folders, ["/docs"], "the rest is kept");
+  assert.equal(saved.theme, "light");
+
+  // A Settings save carries the theme but not the sound switch: whatever it sends, the switch stays.
+  const shown = (await handlers[CHANNELS.getSettings](undefined)) as any;
+  const { online, setupDone: _setupDone, ...rest } = shown;
+  const result = await handlers[CHANNELS.saveSettings]({
+    ...rest,
+    online: { baseUrl: online.baseUrl, model: online.model },
+    theme: "system",
+    sound: false,
+  });
+  assert.deepEqual(result, { ok: true });
+  const after = await sage.settings.load();
+  assert.equal(after.theme, "system");
+  assert.equal(after.sound, true, "only the top bar's switch changes it");
+});
+
 test("toPublicSettings copies only the public fields", () => {
   const settings = { ...defaultSettings(), apps: [{ name: "A", path: "/a", args: ["x"] }] };
   const out = toPublicSettings(settings, true);
@@ -308,9 +339,13 @@ test("toPublicSettings copies only the public fields", () => {
     "local",
     "online",
     "setupDone",
+    "sound",
     "speakReplies",
+    "theme",
   ]);
   assert.equal(out.speakReplies, "voice");
+  assert.equal(out.theme, "dark");
+  assert.equal(out.sound, false);
   assert.equal(out.setupDone, false);
   out.apps[0]!.args.push("y");
   assert.deepEqual(settings.apps[0]!.args, ["x"], "a copy, not the stored object");

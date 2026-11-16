@@ -1,5 +1,6 @@
 {
-  // The chat window: browser code with the DOM, and no Node types at all.
+  // The chat window, and the preview page's own script: browser code with the DOM, and no Node
+  // types at all.
   "compilerOptions": {
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -15,5 +16,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts", "../shared/**/*.ts"]
+  "include": ["./**/*.ts", "../shared/**/*.ts", "../../scripts/preview/**/*.ts"]
 }

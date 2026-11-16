@@ -55,8 +55,8 @@ strike them through with a reason.
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
 | `src/main/` | The Electron main process: `main.ts` (thin wiring), `security.ts` (window options, CSP, URL and permission rules), `ipc.ts` (validated handlers), `fuses-config.ts`. |
 | `src/preload/preload.ts` | Exposes the typed `window.sage` API through `contextBridge`; nothing else. |
-| `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. Voice is in `voice-controls.ts` (hold to talk, the download offer, spoken replies), `voice.ts` (recorder, 16 kHz conversion, speech) and `voice-text.ts`; the Welcome screen is in `welcome.ts` and `welcome-text.ts`; `main.ts` is the entry the build bundles into `renderer.js`; it calls `startChatWindow()` from `renderer.ts`, which finds the elements and wires them up. |
-| `scripts/` | Build, public-repo checker, secret scan. |
+| `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. Voice is in `voice-controls.ts` (hold to talk, the download offer, spoken replies), `voice.ts` (recorder, 16 kHz conversion, speech) and `voice-text.ts`; the Welcome screen is in `welcome.ts` and `welcome-text.ts`; the look's parts are `look.ts` (theme, reduced motion), `orb.ts`, `typing.ts`, `asking-cards.ts` and `sounds.ts` (with DOM-free `orb-state.ts`, `typing-time.ts` and `asking-text.ts` for the tests); `main.ts` is the entry the build bundles into `renderer.js`; it calls `startChatWindow()` from `renderer.ts`, which finds the elements and wires them up. Colours are `light-dark()` tokens in `styles.css` (`test/look.test.ts` checks contrast). |
+| `scripts/` | Build, public-repo checker, secret scan, and the preview page (`npm run preview` into `out/preview/`, review only, never packed). |
 | `build/` | The icon: `icon.svg` (the drawing) and `icon.png` (512 by 512, made from it; `build/README.md` says how). `electron-builder.json` names it for `Sage.exe` and the installer, and `npm run build` copies it to `dist/icon.png` for the window. |
 | `electron-builder.json` | The installer settings: app id, the name "Sage" (only here; never `productName` in `package.json`, which would move the data folder), the NSIS installer, `asarUnpack` for the speech engine's native files, and the fuses, which must match `src/main/fuses-config.ts` (a test checks). |
 | `test/` | Tests and saved search pages (`test/fixtures/`). `test/window.ts` starts the real window script on the fake DOM (`fake-dom.ts`) with stand-ins for the microphone, recorder, audio and speech (`fake-media.ts`). |
@@ -67,7 +67,8 @@ strike them through with a reason.
   `risk: "confirm"`. It runs only after the main-process dialog returns Allow for that exact call (call id
   plus a hash of the arguments, the exact action from `prepare` and the sentence shown), and each approval
   is used once. `run` acts only on the approved action and never looks anything up again. Never add an
-  "always allow", a bypass, or a skill that runs commands.
+  "always allow", a bypass, or a skill that runs commands. The chat's asking card is one-way news from
+  `src/core/asking.ts` (the `sage:asking` event); never give the window a way to answer the box.
 - **Skills that write without asking are capped per message** (`PER_TURN_SKILL_LIMITS` in
   `src/core/assistant.ts`); a new safe skill that writes something gets a cap too.
 - **Skills come only from the model's tool-call output.** Text in replies, web pages, notes and files is

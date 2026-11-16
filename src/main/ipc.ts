@@ -50,6 +50,9 @@ const transcribePayload = z.strictObject({
     ),
 });
 
+// The top bar's sound switch: on or off, nothing else.
+const soundPayload = z.strictObject({ on: z.boolean() });
+
 // The window picks one of Sage's two models; it never sends a model name.
 const pullPayload = z.strictObject({ choice: z.enum(MODEL_CHOICES) });
 
@@ -66,6 +69,8 @@ export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSet
     folders: [...settings.folders],
     speakReplies: settings.speakReplies,
     setupDone: settings.setupDone,
+    theme: settings.theme,
+    sound: settings.sound,
   };
 }
 
@@ -92,12 +97,13 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.getSettings]: async () =>
       toPublicSettings(await sage.settings.load(), await sage.keyStore.has()),
     [CHANNELS.saveSettings]: async (payload): Promise<Result> => {
-      // The Settings screen saves everything it shows; "set up" isn't one of them, so the saved
-      // value is kept (read and written under the settings lock).
+      // The Settings screen saves everything it shows; "set up" and the sound switch aren't among
+      // them, so their saved values are kept (read and written under the settings lock).
       const result = await sage.settings.update((current) => ({
         ...(payload as object),
         version: 1,
         setupDone: current.setupDone,
+        sound: current.sound,
       }));
       if (!result.ok) return fail(result.message);
       const previous = result.previous;
@@ -175,5 +181,13 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     // Asks first, then opens the one fixed address; nothing from the window is used.
     [CHANNELS.openInstallGuide]: () => sage.setup.openInstallGuide(),
     [CHANNELS.finishSetup]: () => sage.setup.finish(),
+    // Changes only the sound switch, so unsaved changes on the Settings screen are neither saved
+    // nor lost.
+    [CHANNELS.setSound]: async (payload): Promise<Result> => {
+      const parsed = soundPayload.safeParse(payload);
+      if (!parsed.success) return fail("Sage couldn't read that choice.");
+      const result = await sage.settings.update((current) => ({ ...current, sound: parsed.data.on }));
+      return result.ok ? { ok: true } : fail(result.message);
+    },
   };
 }

@@ -11,6 +11,9 @@ export const DEFAULT_LOCAL_MODEL = SAGE_MODELS.standard.name;
 /** The choices for "Read replies aloud". */
 export const SPEAK_REPLIES = ["voice", "always", "never"] as const;
 
+/** The window's look: the dark "sage HUD" (the default), a light version, or whatever the system uses. */
+export const THEMES = ["dark", "light", "system"] as const;
+
 export const appEntrySchema = z.object({
   name: z.string().trim().min(1).max(60),
   /** The full path to the program. */
@@ -56,6 +59,17 @@ export const settingsSchema = z.object({
    * once. Changed only by the Welcome screen's own requests, never by a Settings save.
    */
   setupDone: z.boolean().default(false),
+  /**
+   * The window's look. Added without a new version: a settings file saved before it existed loads
+   * unchanged, with the dark look.
+   */
+  theme: z.enum(THEMES).default("dark"),
+  /**
+   * Short sound effects in the window (a blip on send, a tone when Sage asks). Off unless switched on
+   * in the top bar. Added without a new version, like `theme`. Changed only by the top bar's switch,
+   * never by a Settings save.
+   */
+  sound: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

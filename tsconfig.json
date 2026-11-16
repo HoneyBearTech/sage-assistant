@@ -1,6 +1,7 @@
 {
-  // The main process, preload, tests and scripts. The chat window has its own config in
-  // src/renderer/tsconfig.json, with the DOM instead of Node.
+  // The main process, preload, tests and scripts. The chat window (and the preview page's own
+  // script, scripts/preview/) has its own config in src/renderer/tsconfig.json, with the DOM instead
+  // of Node.
   "compilerOptions": {
     "module": "nodenext",
     "target": "es2023",
@@ -19,5 +20,5 @@
     "skipLibCheck": true
   },
   "include": ["src", "test", "scripts"],
-  "exclude": ["src/renderer"]
+  "exclude": ["src/renderer", "scripts/preview"]
 }

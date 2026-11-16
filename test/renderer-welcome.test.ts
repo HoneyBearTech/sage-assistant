@@ -401,6 +401,8 @@ test("after a download, Settings shows the new local model without losing other 
       folders: [],
       speakReplies: "voice",
       setupDone: model !== "small-model",
+      theme: "dark",
+      sound: false,
     }),
     pullModel: async () => {
       model = "qwen3:1.7b";
@@ -524,6 +526,8 @@ test("a late answer after setup doesn't overwrite edits made since", async (t) =
         folders: [],
         speakReplies: "voice" as const,
         setupDone: model !== "small-model",
+        theme: "dark" as const,
+        sound: false,
       };
       await hold?.promise;
       return answer;
@@ -595,6 +599,8 @@ test("a late setup refresh never overwrites a Settings save that finished first"
     folders: [],
     speakReplies: "voice" as const,
     setupDone: false,
+    theme: "dark" as const,
+    sound: false,
   };
   let holdNext: ReturnType<typeof deferred<void>> | undefined;
   const { el, click, calls } = await welcomeWindow(t, {
