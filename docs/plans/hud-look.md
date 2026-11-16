@@ -48,8 +48,10 @@ This job is the first; the rest each get their own plan and pull request.
 
    *Check:* window tests that the orb's state follows listening, thinking, speaking and resting.
 3. **The chat as a transcript.** Rows labelled `YOU` (amber) and `SAGE` (green) instead of bubbles; the
-   newest reply types itself out quickly, and a click or key shows it all at once; actions Sage took show
-   as small bordered cards. Text is still only ever inserted as text, never as HTML.
+   newest reply types itself out quickly, and a click or key shows it all at once. Text is still only
+   ever inserted as text, never as HTML. (Changed during the build: small cards for actions Sage took
+   without asking moved to the Home screen job, because they need a new message from Sage's main part to
+   the window. Every action that changes the computer already shows in the amber asking card below.)
 
    *Check:* the existing chat tests pass; new tests for the labels and for skipping the typing.
 4. **The asking box.** The question itself stays in Windows' own box, opened by the part of Sage the
@@ -92,5 +94,5 @@ is done.
 ## Out of scope
 
 - The Home screen, the daily brief and the start-up sequence (next jobs).
-- New brains (Claude, OpenAI, Gemini, Copilot): a separate job.
+- New online brains: a separate job (#25).
 - Several agents, Slack, business dashboards, a TV-wall mode.

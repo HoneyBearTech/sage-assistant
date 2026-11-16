@@ -97,6 +97,26 @@ later, and what Sage will not do.
       including once with the runner stopped and once with a model not yet downloaded.
 - [ ] **Later idea:** tell "not installed" from "installed but not started" without running anything
       (for example by looking for the runner's program files), if the single message proves confusing.
+- [x] **A new look, part 1** (hud-look): a dark "HUD in green" theme (Dark, Light or Match system), an orb
+      that shows when Sage is resting, listening, thinking or speaking, the chat as a YOU / SAGE
+      transcript whose newest reply types itself out, an amber card in the chat while Sage's system box
+      asks, short sound effects with a Sound switch (off at first), all motion off under reduced motion,
+      and `npm run preview`, a review-only page of the look. See
+      [the interface study](reports/2026-11-16-jarvis-look.md).
+- [ ] **Owner:** run the "New look" section of [the Windows checklist](windows-checklist.md) after the
+      next install.
+- [ ] **A new look, part 2: a Home screen.** A large orb, a clock, a greeting for the time of day, and
+      panels for today's reminders, recent notes and Sage's status; then a daily brief that reads them
+      out. Also from part 1: small cards in the chat for actions Sage took without asking (they need a
+      new one-way message to the window), and showing a question that is still open after the window
+      reloads.
+- [ ] **A new look, part 3: the Welcome screen as a start-up sequence.** The same steps as numbered
+      sections with typed check lines, plus a support code and Copy diagnostics when something fails.
+- [ ] **More online brains** (brains-api, plan approved in #25): three more
+      online services with the user's own API key, one key per company, a Test button and plain error
+      messages. Starts after the new look's part 1 is merged.
+- [ ] **Sign-in with an existing subscription** for one more online service, after a trial that checks
+      it can answer without using its own tools. Its own plan.
 
 ## Later
 

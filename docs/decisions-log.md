@@ -2,6 +2,47 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - hud-look
+
+**Context:** the owner asked for Sage's interface, visuals and experience to closely follow
+jarvis-agent.tech. The study is in [docs/reports/2026-11-16-jarvis-look.md](reports/2026-11-16-jarvis-look.md);
+the work is split into three jobs, and this is the first.
+
+**Decisions:**
+- **Follow the patterns, not the product.** Sage takes the dark heads-up display, the voice orb, corner
+  ticks, monospace labels, typed replies and short tones, with its own name, leaf, green palette, artwork,
+  tones and words. The study lists patterns only and leaves out the product's exact colours, sound
+  settings, wording and artwork (trimmed after the security review), and the orb's resting breath is
+  4.4 seconds rather than the product's.
+- **The question stays in the system box** (changed after the plan was approved, and told to the owner).
+  The first plan put Allow and Decline in the chat window, which would have let the window answer. The
+  window now only receives a one-way `sage:asking` message (open, then allowed or not) and shows a
+  read-only amber card; the answer still comes only from the box. The preload exposes one listener and
+  copies only known fields; the security test allows exactly one `ipcRenderer.on`.
+- **Sound starts off** and is saved through its own `setSound` channel, which takes only on or off;
+  Save settings keeps the stored value.
+- **Dark is the default theme**, with Light and Match system kept. Text is never under 12 px, and a test
+  checks 4.5 to 1 contrast for the main colours in both themes.
+- **A review-only preview page** (`npm run preview`) is built from the real window files with a stand-in
+  for Sage's main part, because the team's machine can't take screenshots of the window. It is never
+  packaged.
+- **Deferred to part 2:** cards for actions Sage took without asking (they need a new message from
+  Sage's main part to the window), and showing a still-open question after the window reloads (the
+  card is lost, while the box still works and decides).
+
+**Review:** QA passed every step except the action cards (deferred, above). The Security Officer found no
+problem in the code: the asking message is one-way, the box alone decides, the `setSound` channel and the
+settings schema are tight, and the window's content rules are unchanged; it asked for the study to be
+trimmed and the online services' names taken out of the plan, both done. The Auditor found two must-fix
+problems (held notices showing before they were confirmed, because a display rule beat the hidden
+attribute; the orb not pausing while minimised) and three should-fix ones (a slow settings read undoing a
+mute, muting not stopping notes already scheduled, reduced motion not checked during typing); all were
+fixed with tests. A second security review wasn't available this month.
+
+**Rejected findings:**
+- *Keep an open question's card across a window reload* (Auditor). Deferred, not fixed here: it is
+  cosmetic, and the system box still asks and decides.
+
 ## 2026-11-16 - release-0-1-1
 
 **Context:** the owner asked for the next item: a release with everything merged since 0.1.0, so one
