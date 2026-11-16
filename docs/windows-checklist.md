@@ -110,6 +110,13 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
 - [ ] Type "Note:" in the box first, then talk again: the words go after "Note:" with a space.
 - [ ] Press and hold the **Hold to talk** button with the mouse while you speak, then release: the words
       appear. Tab to the button, hold **Space** while you speak, and let go: the same.
+- [ ] On the button, hold **Space**, press **Tab** while still holding, then let go: the microphone icon
+      disappears as soon as you press Tab (not after 30 seconds), and the words appear.
+- [ ] Hold Ctrl+Space, let go, and press Ctrl+Space again at once while it says "Working out what you
+      said…": it says it is still working, and only the first words appear. Talk again, let go and
+      click **New chat** at once: the status line clears and no words appear.
+- [ ] Type or paste almost 8,000 characters in the box, then talk: the words aren't added, the text is
+      kept as it was, and Sage says they don't fit.
 - [ ] Tap Ctrl+Space quickly: it says to hold the key while you speak, and nothing appears in the box.
 - [ ] Hold Ctrl+Space and keep talking for over 30 seconds: it stops by itself at 0:30 and the words
       appear.
