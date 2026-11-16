@@ -225,15 +225,29 @@ test("words that would push the message box past its limit aren't added, and the
   assert.equal(status(), "");
 });
 
-test("New chat clears the mark that the words came from talking", async (t) => {
-  const { el, media, hold, calls } = await voiceWindow(t);
+test("New chat keeps the box's words, and with them the mark that they came from talking", async (t) => {
+  const { el, media, hold, calls } = await voiceWindow(t, {
+    before: (m) => {
+      m.speech.voices = [voice("Local English")];
+    },
+  });
   await hold(1_000);
   el("new-chat").click();
   await settled();
+  assert.equal(el("input").value, "hello Sage", "New chat leaves the box alone");
   el("input").dispatch("keydown", { key: "Enter" });
   await settled();
   assert.deepEqual(calls.send, ["hello Sage"]);
-  assert.equal(media.speech.spoken.length, 0, "not counted as a voice message after New chat");
+  assert.deepEqual(
+    media.speech.spoken.map((u) => u.text),
+    ["The reply."],
+    "still a voice message, so the reply is read aloud",
+  );
+  // The mark goes with the send: a typed message afterwards isn't a voice message.
+  el("input").value = "typed";
+  el("input").dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.equal(media.speech.spoken.length, 1);
 });
 
 test("the message box's limit is the one the main process accepts", async () => {

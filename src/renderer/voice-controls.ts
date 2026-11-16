@@ -305,9 +305,8 @@ export function createVoiceControls(
       cancelTalk("");
       generation++;
       speaker.stop();
-      // The old chat's words are gone from Sage's point of view, and so is their status line; a
-      // download keeps its progress line.
-      fromVoice = false;
+      // The status line goes (a download keeps its progress line). The message box keeps its text,
+      // so the mark that some of it came from talking stays until the box is emptied or sent.
       if (!downloading) show("");
     },
     takeFromVoice() {
