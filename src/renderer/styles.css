@@ -1,28 +1,58 @@
+/*
+ * Sage's look: a calm heads-up display in green. Dark is the default; the light version is chosen
+ * with data-theme="light" on <html>, and data-theme="system" follows the system's choice.
+ *
+ * Every colour is a token here, written as light-dark(<light>, <dark>): the page's color-scheme picks
+ * one, so each theme is defined once. test/look.test.ts reads these tokens and checks that the main
+ * text and accent colours keep a contrast of at least 4.5 to 1 on the backgrounds, in both themes,
+ * and that no text is smaller than 12 px.
+ */
 :root {
-  color-scheme: light dark;
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --text: #1b1f24;
-  --muted: #5b6573;
-  --accent: #2f6f5e;
-  --accent-text: #ffffff;
-  --border: #d6dae0;
-  --user: #e5f1ed;
-  font-family: system-ui, "Segoe UI", sans-serif;
+  color-scheme: dark;
+  /* Backgrounds */
+  --ground: light-dark(#eef3f0, #050f0c);
+  --panel: light-dark(#ffffff, #0a1914);
+  --panel-2: light-dark(#f5f9f7, #0e221b);
+  /* Hairlines */
+  --line: light-dark(#c3d4cb, #1d3b31);
+  --line-bright: light-dark(#7da695, #2f6b58);
+  /* Text */
+  --text: light-dark(#10221b, #d6efe4);
+  --muted: light-dark(#4a6158, #8aae9e);
+  /* Sage's accent, and the text on it */
+  --accent: light-dark(#1d6a52, #5fd3a8);
+  --accent-dim: light-dark(#5a9c84, #2f8a6c);
+  --accent-ink: light-dark(#ffffff, #03140e);
+  /* Amber: you, and anything waiting on you */
+  --amber: light-dark(#8a5200, #ffc266);
+  --danger: light-dark(#b3261e, #ff7a70);
+  /* Glows and washes */
+  --glow: light-dark(rgb(29 106 82 / 0.18), rgb(95 211 168 / 0.38));
+  --amber-glow: light-dark(rgb(138 82 0 / 0.16), rgb(255 194 102 / 0.3));
+  --accent-wash: light-dark(rgb(29 106 82 / 0.06), rgb(95 211 168 / 0.06));
+  --amber-wash: light-dark(rgb(138 82 0 / 0.06), rgb(255 194 102 / 0.06));
+  --grid: light-dark(rgb(29 106 82 / 0.07), rgb(95 211 168 / 0.045));
+  --scanline: light-dark(transparent, rgb(0 0 0 / 0.14));
+  --glass: light-dark(rgb(255 255 255 / 0.86), rgb(10 25 20 / 0.84));
+
+  /* The PC's own fonts only: monospace for the window's chrome, the system font for reading. */
+  --mono:
+    ui-monospace, "Cascadia Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono",
+    "Liberation Mono", monospace;
+  --sans: system-ui, "Segoe UI", sans-serif;
+  --label-size: 12px;
+  --label-spacing: 0.16em;
+
+  font-family: var(--sans);
   font-size: 15px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171c;
-    --panel: #1d2128;
-    --text: #e8ebef;
-    --muted: #9aa4b1;
-    --accent: #5fb39b;
-    --accent-text: #0d1512;
-    --border: #2f3540;
-    --user: #22332e;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="system"] {
+  color-scheme: light dark;
 }
 
 * {
@@ -34,56 +64,293 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
   color: var(--text);
+  background-color: var(--ground);
+  /* A soft glow from the top and a faint 32 px grid. */
+  background-image:
+    radial-gradient(ellipse 70% 45% at 50% 0%, var(--accent-wash), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    32px 32px,
+    32px 32px;
+}
+
+/* Very faint scanlines in the dark look; nothing in the light one. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, var(--scanline) 2px 3px);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- Chrome: the labels, tabs and status are monospace capitals with wide spacing --- */
+
+.bar,
+legend,
+label:not(.choice),
+.step h2,
+.tab {
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: var(--label-spacing);
 }
 
 .bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--glass);
+  min-width: 0;
 }
 
 .brand {
-  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  color: var(--accent);
+  text-shadow: 0 0 12px var(--glow);
+}
+
+/* Sage's leaf, drawn as one shape. */
+.brand::before {
+  content: "";
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 1px 100%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--glow);
 }
 
 .status {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--label-size);
   color: var(--muted);
-  font-size: 0.85rem;
+}
+
+.status:not(:empty)::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
 }
 
 .tabs {
   margin-left: auto;
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
+
+.tab {
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--text);
+  box-shadow: none;
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  text-shadow: 0 0 10px var(--glow);
+}
+
+/* --- Buttons: hairline by default, the main ones filled with cut corners --- */
 
 button {
-  font: inherit;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border-radius: 2px;
+  border: 1px solid var(--line-bright);
+  background: transparent;
   color: var(--text);
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
 }
 
-button.primary,
-.tab.active {
-  background: var(--accent);
-  color: var(--accent-text);
+button:hover:not(:disabled) {
   border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px -2px var(--glow);
+}
+
+button:active:not(:disabled) {
+  background: var(--accent-wash);
+}
+
+button.primary {
+  --cut: 9px;
+  padding: 9px 18px;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+}
+
+button.primary:hover:not(:disabled) {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 88%, white);
+}
+
+/* The cut corners would clip an outline drawn outside, so the focus ring sits inside. */
+button.primary:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -5px;
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
 }
+
+/* --- Fields --- */
+
+textarea,
+select,
+input[type="text"],
+input[type="url"],
+input[type="password"] {
+  font: inherit;
+  padding: 7px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  min-width: 0;
+}
+
+textarea:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 14px -4px var(--glow);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+input[type="radio"],
+progress {
+  accent-color: var(--accent);
+}
+
+label:not(.choice) {
+  font-size: var(--label-size);
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* --- Panels: hairline frames with corner ticks --- */
+
+fieldset,
+.step,
+.composer {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--glass);
+}
+
+/* The four corner ticks: eight short lines, drawn over the frame. */
+fieldset::before,
+.step::before,
+.composer::before {
+  --tick: 10px;
+  --tick-color: var(--accent);
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--tick-color), var(--tick-color)) top left / var(--tick) 1px no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) top left / 1px var(--tick) no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) top right / var(--tick) 1px no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) top right / 1px var(--tick) no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) bottom left / var(--tick) 1px no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) bottom left / 1px var(--tick) no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) bottom right / var(--tick) 1px no-repeat,
+    linear-gradient(var(--tick-color), var(--tick-color)) bottom right / 1px var(--tick) no-repeat;
+}
+
+fieldset {
+  margin: 0;
+  padding: 14px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+legend {
+  padding: 0 8px;
+  margin-left: -8px;
+  font-size: var(--label-size);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+legend::before {
+  content: "// ";
+  color: var(--muted);
+}
+
+/* --- Views --- */
 
 .view {
   flex: 1;
@@ -96,30 +363,24 @@ button:disabled {
   display: none;
 }
 
+/* --- Chat: a transcript, one row per message --- */
+
 .messages {
   list-style: none;
   margin: 0;
-  padding: 16px;
+  padding: 16px clamp(16px, 4vw, 40px) 8px;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  scrollbar-color: var(--line-bright) transparent;
 }
 
 .message {
-  max-width: 80%;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--panel);
-  border: 1px solid var(--border);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.message.user {
-  align-self: flex-end;
-  background: var(--user);
+  font-size: 16px;
+  line-height: 1.55;
 }
 
 .message.pending {
@@ -129,35 +390,37 @@ button:disabled {
 
 .message.notice {
   align-self: center;
-  border-color: var(--accent);
-  border-style: dashed;
-}
-
-textarea,
-select,
-input[type="text"],
-input[type="url"],
-input[type="password"] {
-  font: inherit;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  min-width: 0;
+  margin: 8px 0;
+  padding: 8px 14px;
+  border: 1px dashed var(--accent-dim);
+  border-radius: 2px;
+  background: var(--accent-wash);
 }
 
 .composer {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--panel);
+  gap: 10px;
+  margin: 0 16px 16px;
+  padding: 10px;
+}
+
+.composer:focus-within {
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 22px -10px var(--glow);
 }
 
 .composer textarea {
   flex: 1;
   resize: none;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* The frame shows the focus for the message box. */
+.composer textarea:focus-visible {
+  box-shadow: none;
 }
 
 .composer-actions {
@@ -183,37 +446,28 @@ input[type="password"] {
   user-select: none;
 }
 
-.talk.active {
-  background: var(--accent);
-  color: var(--accent-text);
-  border-color: var(--accent);
+/* Talking is your turn: amber, like your rows. */
+.talk.active,
+.talk.active:hover:not(:disabled) {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: var(--amber-wash);
+  box-shadow: 0 0 14px -2px var(--amber-glow);
 }
 
+/* --- Settings --- */
+
 .settings {
-  padding: 16px;
+  padding: 20px clamp(16px, 4vw, 40px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-fieldset {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--panel);
-}
-
-legend {
-  font-weight: 600;
+  gap: 22px;
 }
 
 .choice {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -230,7 +484,7 @@ legend {
 
 .hint {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 13px;
   margin: 0;
 }
 
@@ -255,10 +509,12 @@ legend {
   clip-path: inset(50%);
 }
 
+/* --- Welcome --- */
+
 .welcome {
   overflow-y: auto;
-  padding: 16px;
-  gap: 16px;
+  padding: 20px clamp(16px, 4vw, 40px);
+  gap: 18px;
 }
 
 .welcome-top {
@@ -276,7 +532,8 @@ legend {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 640px;
+  max-width: 680px;
+  padding: 16px 18px 18px;
 }
 
 .step[hidden],
@@ -285,8 +542,10 @@ legend {
 }
 
 .step h2 {
-  font-size: 1.1rem;
   margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .steps {
@@ -302,9 +561,31 @@ legend {
 .address {
   user-select: all;
   word-break: break-all;
-  font-family: ui-monospace, monospace;
+  font-family: var(--mono);
 }
 
 progress {
   width: 100%;
+}
+
+/* --- Motion --- */
+
+/* With the system's "reduce motion" on, nothing moves: no animation, no transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: the system's setting must win over every animation. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above, for transitions. */
+    transition: none !important;
+  }
+}
+
+/* Windows' high-contrast mode: the cut-corner buttons keep a visible frame. */
+@media (forced-colors: active) {
+  button.primary {
+    border: 1px solid ButtonText;
+    clip-path: none;
+  }
 }
