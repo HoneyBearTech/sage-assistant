@@ -60,7 +60,11 @@ test("the page's CSP is strict and matches the one in the code", async () => {
 });
 
 test("the renderer never inserts text as HTML", async () => {
-  for (const file of ["renderer.ts", "main.ts", "welcome.ts", "welcome-text.ts"]) {
+  const files = (await readdir(join(root, "src", "renderer"))).filter((name) => name.endsWith(".ts"));
+  for (const file of ["renderer.ts", "main.ts", "welcome.ts", "welcome-text.ts", "asking-cards.ts"]) {
+    assert.ok(files.includes(file), file);
+  }
+  for (const file of files) {
     const source = await readFile(join(root, "src", "renderer", file), "utf8");
     assert.doesNotMatch(
       source,
@@ -76,7 +80,19 @@ test("the preload exposes only the named methods, never ipcRenderer itself", asy
   assert.match(source, /exposeInMainWorld\("sage", api\)/);
   const invoked = [...source.matchAll(/invoke\(CHANNELS\.(\w+)/g)].map((m) => m[1]).sort();
   assert.deepEqual(invoked, Object.keys(CHANNELS).sort());
-  assert.doesNotMatch(source, /ipcRenderer\.(on|send|sendSync|postMessage)\b/);
+  // The window never sends anything except through those calls.
+  assert.doesNotMatch(source, /ipcRenderer\.(send|sendSync|sendToHost|postMessage|once|addListener)\b/);
+  // The one thing it listens for: news of Sage's asking box, one way. Exactly one listener, which
+  // hands the page only the checked fields, never the IPC event (which could send a reply).
+  const used = [...source.matchAll(/ipcRenderer\.(\w+)/g)]
+    .map((m) => m[1])
+    .filter((name) => name !== "invoke");
+  assert.deepEqual(used, ["on"]);
+  assert.match(
+    source,
+    /ipcRenderer\.on\(EVENTS\.asking, \(_event, payload: unknown\) => \{\s*const event = readAskingEvent\(payload\);\s*if \(event\) listener\(event\);\s*\}\);/,
+  );
+  assert.equal(source.match(/_event/g)?.length, 1, "the IPC event is never passed on or used");
 });
 
 test("only the app's own page counts as the sender", () => {

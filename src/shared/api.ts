@@ -21,7 +21,43 @@ export const CHANNELS = {
   cancelPull: "sage:setup-pull-cancel",
   openInstallGuide: "sage:setup-open-guide",
   finishSetup: "sage:setup-finish",
+  setSound: "sage:sound-set",
 } as const;
+
+/**
+ * What the main process tells the window by itself, one way. The window can't answer these, and no
+ * channel above takes anything back about them.
+ */
+export const EVENTS = {
+  /** Sage's own asking box opened (with the question it shows), or closed (with the answer). */
+  asking: "sage:asking",
+} as const;
+
+/** The longest question the window shows; Sage's questions are far shorter. */
+export const MAX_ASKING_TEXT = 4_000;
+
+/**
+ * News of Sage's asking box, for the chat. "open": the box is showing `text`, word for word.
+ * "closed": the box was answered (`allowed` is true only for Allow). `id` pairs the two.
+ */
+export type AskingEvent =
+  | { id: string; state: "open"; text: string }
+  | { id: string; state: "closed"; allowed: boolean };
+
+/**
+ * Checks an asking event and copies only its known fields, or gives null. The preload passes the
+ * window nothing else.
+ */
+export function readAskingEvent(value: unknown): AskingEvent | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { id, state, text, allowed } = value as Record<string, unknown>;
+  if (typeof id !== "string" || !/^ask-\d{1,12}$/.test(id)) return null;
+  if (state === "open" && typeof text === "string" && text.trim() !== "") {
+    return { id, state, text: text.slice(0, MAX_ASKING_TEXT) };
+  }
+  if (state === "closed" && typeof allowed === "boolean") return { id, state, allowed };
+  return null;
+}
 
 /** The longest message the window may send; the message box has the same limit. */
 export const MAX_MESSAGE_CHARS = 8_000;
@@ -58,9 +94,13 @@ export interface PublicSettings {
   speakReplies: "voice" | "always" | "never";
   /** The Welcome screen was finished or skipped. Changed only by `finishSetup`. */
   setupDone: boolean;
+  /** The window's look: dark (the default), light, or the system's choice. */
+  theme: "dark" | "light" | "system";
+  /** Sound effects in the window. Changed only by `setSound` (the top bar's switch). */
+  sound: boolean;
 }
 
-export type SettingsInput = Omit<PublicSettings, "online" | "setupDone"> & {
+export type SettingsInput = Omit<PublicSettings, "online" | "setupDone" | "sound"> & {
   online: { baseUrl: string; model: string };
 };
 
@@ -173,4 +213,11 @@ export interface SageApi {
   openInstallGuide(): Promise<GuideResult>;
   /** Saves that setup was finished or skipped, so the Welcome screen isn't shown at start-up. */
   finishSetup(): Promise<Result>;
+  /** The top bar's sound switch: saves only whether sound effects are on. */
+  setSound(on: boolean): Promise<Result>;
+  /**
+   * Called when Sage's own asking box opens and when it closes, so the chat can show what is being
+   * asked. Only news: the box is answered in the box, and nothing here can answer it.
+   */
+  onAsking(listener: (event: AskingEvent) => void): void;
 }

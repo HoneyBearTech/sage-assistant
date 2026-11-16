@@ -19,6 +19,15 @@
         <button type="button" id="tab-chat" class="tab active" aria-pressed="true">Chat</button>
         <button type="button" id="tab-settings" class="tab" aria-pressed="false">Settings</button>
       </nav>
+      <button
+        type="button"
+        id="sound-toggle"
+        class="sound-toggle"
+        aria-pressed="false"
+        title="Sound effects are off"
+      >
+        Sound
+      </button>
     </header>
 
     <main id="view-welcome" class="view welcome" hidden>
@@ -95,6 +104,35 @@
 
     <main id="view-chat" class="view" hidden>
       <ol id="messages" class="messages" aria-live="polite"></ol>
+      <div class="orb-dock">
+        <!-- Sage's orb, drawn here and animated by styles.css; its state is set by orb.ts. -->
+        <div id="orb" class="orb" data-state="idle" aria-hidden="true">
+          <svg class="orb-art" viewBox="0 0 200 200" focusable="false" aria-hidden="true">
+            <defs>
+              <radialGradient id="orb-core-fill" cx="0.5" cy="0.42" r="0.6">
+                <stop offset="0" class="orb-stop-hot" />
+                <stop offset="0.55" class="orb-stop-mid" />
+                <stop offset="1" class="orb-stop-edge" />
+              </radialGradient>
+            </defs>
+            <circle class="orb-ripple" cx="100" cy="100" r="48" />
+            <circle class="orb-ripple orb-ripple-late" cx="100" cy="100" r="48" />
+            <circle class="orb-frame" cx="100" cy="100" r="97" />
+            <circle class="orb-ticks" cx="100" cy="100" r="90" />
+            <circle class="orb-ticks-major" cx="100" cy="100" r="90" />
+            <circle class="orb-arcs" cx="100" cy="100" r="76" />
+            <circle class="orb-inner" cx="100" cy="100" r="62" />
+            <g class="orb-core">
+              <circle class="orb-disc" cx="100" cy="100" r="46" fill="url(#orb-core-fill)" />
+              <g transform="rotate(38 100 100)">
+                <path class="orb-leaf" d="M100 74 C117 85 119 109 100 126 C81 109 83 85 100 74 Z" />
+                <path class="orb-vein" d="M100 81 L100 120" />
+              </g>
+            </g>
+          </svg>
+        </div>
+        <p id="orb-state" class="orb-caption">Ready</p>
+      </div>
       <div class="voice-bar">
         <span id="voice-status" class="hint" role="status"></span>
         <button type="button" id="voice-download" hidden>Download</button>
@@ -186,6 +224,17 @@
             <option value="never">Never</option>
           </select>
           <p id="voice-note" class="hint"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Look</legend>
+          <label for="theme">Theme</label>
+          <select id="theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">Match system</option>
+          </select>
+          <p class="hint">Sound effects are switched on and off with Sound in the top bar.</p>
         </fieldset>
 
         <div class="row">

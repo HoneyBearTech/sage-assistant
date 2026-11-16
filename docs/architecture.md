@@ -33,12 +33,13 @@ used.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat, the settings screen and, on first start, the Welcome screen. Runs sandboxed with no Node access; inserts text only with `textContent`. |
-| Preload | `src/preload/preload.ts` | Exposes `window.sage` with twenty typed methods through `contextBridge`; nothing else. |
+| Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat, the settings screen and, on first start, the Welcome screen, in the dark "sage HUD" look or its light version (see [The window's look](#the-windows-look)). Runs sandboxed with no Node access; inserts text only with `textContent`. |
+| Preload | `src/preload/preload.ts` | Exposes `window.sage` through `contextBridge`, and nothing else: twenty-one typed calls to the main process, and one listener, `onAsking`, for the main process's news about its asking box (one way; it passes on only the checked fields). |
 | IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service, saves a new key only when the address on screen is the saved one, and stops a turn in progress when the brain or the service changes. |
 | Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits up to 5 seconds for the system to confirm it. Reports whether it was confirmed; it never reports a guess. |
-| Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog, the Welcome screen's two boxes (before a model download and before opening the install guide), notifications, `shell.openPath`, `shell.openExternal` (used only for the install guide's fixed address), the app launcher and the encrypted key store. Checks the sender of every IPC call. |
+| Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog (wrapped so the window hears when it opens and closes), the Welcome screen's two boxes (before a model download and before opening the install guide), notifications, `shell.openPath`, `shell.openExternal` (used only for the install guide's fixed address), the app launcher and the encrypted key store. Checks the sender of every IPC call. |
 | Window security | `src/main/security.ts` | The window options, the CSP and the URL and permission rules, as pure functions the tests check. |
+| Asking news | `src/core/asking.ts` | Wraps the confirmation dialog: tells the window when it opens (with the sentence it shows) and when it closes (allowed or not). The answer comes only from the dialog. |
 | Assistant | `src/core/assistant.ts` | Sends the conversation and the skill list to the brain, runs the tool calls it returns through the registry, and stops after six tool calls or six rounds per message (three each for `add_note` and `add_reminder`). **New chat** abandons a turn in progress: it runs no further tool calls and writes nothing to the history. |
 | Brain | `src/core/brain/` | `LocalBrain` (Ollama's `/api/chat` on `127.0.0.1:11434`) and `OnlineBrain` (`<base>/v1/chat/completions`). Settings pick one for each message. |
 | Skills | `src/core/skills/` | The registry, the eleven built-in skills, the ask-first gate, the untrusted-text wrapper and the action log. |
@@ -92,9 +93,56 @@ used.
      registry then uses the approval up (`consume`), runs `prepare` again (it must give the same hash),
      and runs the skill with the approved action. If the chat was cleared or the brain settings
      changed at any point between the box and the action, nothing runs. The decision and the outcome
-     are appended to `action-log.jsonl`.
+     are appended to `action-log.jsonl`. While the box is open, the chat shows the same sentence in an
+     amber card, and afterwards whether it was allowed (see [the asking card](#the-windows-look)); the
+     card is only news.
 5. The results go back to the brain, which answers or asks for more tools. The final text is shown in
    the window.
+
+## The window's look
+
+The window is a calm heads-up display in green: a deep green-black ground with a faint grid and
+scanlines, one sage-mint accent, amber for you and for anything waiting on you, hairline panels with
+corner ticks, cut-corner main buttons, and monospace capitals for the chrome (tabs, labels, status,
+headings) in the PC's own fonts; messages are in the system font at 16 px. Nothing is loaded from
+outside the app: no fonts, images, video or sound files.
+
+- **Theme.** Settings → Look → **Theme**: *Dark* (the default), *Light* or *Match system*. It is set as
+  `data-theme` on the page, and every colour in `styles.css` is a token written once as
+  `light-dark(<light>, <dark>)`, so the page's `color-scheme` picks the theme. `test/look.test.ts`
+  checks the contrast of the main pairs in both themes (at least 4.5 to 1) and that no text is under
+  12 px. The setting has a schema default, so a settings file from before it loads with *Dark*.
+- **The orb.** Above the message box, drawn as inline SVG in `index.html` and animated by
+  `styles.css`; `orb.ts` sets its state as `data-state`, with a word underneath. *Ready* (a slow
+  breath), *Listening* (quick pulses and amber rings while the talk key or button is held), *Thinking*
+  (the rings turn while a reply is on its way) and *Speaking* (an uneven pulse while a reply is read
+  aloud). Your voice wins over Sage's, which wins over thinking. The drawing is hidden from screen
+  readers; **Hold to talk** stays a real button. Its animation pauses while the window is hidden.
+- **The transcript.** Each message is a row labelled `YOU` (amber) or `SAGE` (accent); the labels are
+  drawn by the stylesheet (with "You:" and "Sage:" for screen readers), so the row's text is exactly
+  the message. The newest reply types itself out (`typing.ts`: 12 ms a character, at most 1.2 s): the
+  row holds the whole reply from the start and a copy laid over it grows, so screen readers get it at
+  once and nothing moves; any click or key shows it all. Notices keep their dashed card.
+- **The asking card.** `src/core/asking.ts` wraps the confirmation dialog in the main process. When the
+  dialog opens, the main process sends the window `{ id, state: "open", text }` on the `sage:asking`
+  event (`webContents.send`), with the sentence the dialog shows; when it closes,
+  `{ id, state: "closed", allowed }`. The preload's `onAsking` listener checks the fields
+  (`readAskingEvent`) and passes on only those, never the IPC event. The ids are the wrapper's own
+  counter, not call ids. The chat shows an amber card with corner ticks, "Sage is asking: …", then
+  **Allowed** or **Not allowed**. The card has no buttons, no channel takes anything back about it,
+  and nothing the listener does changes the dialog's answer: the dialog stays the only way to answer.
+  The Welcome screen's and voice's download boxes don't send this news; only the box before an action.
+- **Sounds.** `sounds.ts` makes three short tones with Web Audio oscillators (no files): a blip when you
+  send, two rising notes when you allow an action, a low tone when the asking card appears. They are
+  off unless the **Sound** switch in the top bar is on; the switch saves only itself (`setSound`), so a
+  Settings save neither changes it nor is needed for it. No audio context exists until the first sound
+  is wanted while sound is on.
+- **Reduced motion.** With the system's "reduce motion" setting (Windows: Settings → Accessibility →
+  Visual effects → Animation effects off), nothing moves: no breathing, turning, fading in or typing.
+  The orb still shows its state, standing still.
+- **Preview page.** `npm run preview` builds `out/preview/`, a page made from the real built window
+  files with a stand-in for the main process (sample chat, asking cards) and a control strip, for
+  review in a browser. It isn't part of Sage: `out/` isn't in git, and the installer packs only `dist/`.
 
 ## How voice works
 
@@ -180,7 +228,7 @@ Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Win
 
 | File | Written by | Contents |
 | --- | --- | --- |
-| `settings.json` | `SettingsStore` | Brain switch, model names, online address, app list, approved folders, Read replies aloud, and whether setup is done. No secrets: the schema has no field for one and drops unknown fields. |
+| `settings.json` | `SettingsStore` | Brain switch, model names, online address, app list, approved folders, Read replies aloud, whether setup is done, the theme and the sound switch. No secrets: the schema has no field for one and drops unknown fields. |
 | `online-key.bin` | `EncryptedFileKeyStore` | The online key, encrypted with Electron `safeStorage` (DPAPI on Windows, the desktop keyring on Linux). |
 | `notes.json` | `NotesStore` | Notes (id, title, text, times). |
 | `reminders.json` | `RemindersStore` | Reminders (id, text, due time, when it fired). |

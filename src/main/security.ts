@@ -36,7 +36,7 @@ export function windowOptions(
     show: false,
     title: "Sage",
     icon: iconPath,
-    backgroundColor: "#14171c",
+    backgroundColor: "#050f0c",
     autoHideMenuBar: true,
     webPreferences: {
       preload: preloadPath,

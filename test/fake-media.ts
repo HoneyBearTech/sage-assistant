@@ -117,6 +117,10 @@ export interface FakeMedia {
   /** The level of every sample the "recording" turns into. */
   level: number;
   speech: FakeSpeech;
+  /** Every audio context the window made (for decoding recordings, or for sounds). */
+  readonly audioContexts: unknown[];
+  /** Every note the window's sounds started, by starting frequency. */
+  readonly tones: number[];
 }
 
 const saved = new Map<string, PropertyDescriptor | undefined>();
@@ -137,11 +141,46 @@ export function installFakeMedia(): FakeMedia {
     recordingSeconds: 2,
     level: 0.5,
     speech: new FakeSpeech(),
+    audioContexts: [],
+    tones: [],
   };
   media.speech.voices = [voice("Local English", { default: true })];
 
+  const param = () => {
+    const values: number[] = [];
+    return {
+      values,
+      setValueAtTime: (value: number) => values.push(value),
+      linearRampToValueAtTime: (value: number) => values.push(value),
+      exponentialRampToValueAtTime: (value: number) => values.push(value),
+    };
+  };
   class FakeAudioContext {
     closed = false;
+    readonly currentTime = 0;
+    readonly destination = {};
+    state = "running";
+    constructor() {
+      media.audioContexts.push(this);
+    }
+    async resume() {}
+    createOscillator() {
+      const frequency = param();
+      return {
+        type: "sine",
+        frequency,
+        onended: null,
+        connect() {},
+        disconnect() {},
+        start() {
+          media.tones.push(frequency.values[0] ?? 0);
+        },
+        stop() {},
+      };
+    }
+    createGain() {
+      return { gain: param(), connect() {}, disconnect() {} };
+    }
     async decodeAudioData(data: ArrayBuffer) {
       if (data.byteLength === 0) throw new DOMException("empty", "EncodingError");
       return { duration: media.recordingSeconds, numberOfChannels: 2, sampleRate: 48_000 };

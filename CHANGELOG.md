@@ -6,6 +6,33 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **A new look: a calm heads-up display in green.** The window is dark by default: a deep green-black
+  ground with a faint grid, one sage-mint accent, amber for you and for anything waiting on you,
+  hairline panels with corner ticks, cut-corner main buttons, and small monospace capitals for tabs,
+  labels and status, all in the PC's own fonts. Messages stay in the system font, larger (16 px). No
+  text is smaller than 12 px, and the main colours keep at least 4.5 to 1 contrast in both themes.
+- **The chat is a transcript.** Rows labelled `YOU` and `SAGE` instead of bubbles; Sage's newest reply
+  types itself out in about a second at most, and a click or any key shows it all at once. Notices
+  keep their own dashed card.
+- **Reduced motion is honoured.** With the system's "reduce motion" setting on, nothing in the window
+  moves and replies appear at once.
+
+### Added
+
+- **Theme setting:** Settings → Look → Theme: *Dark* (the default), *Light* or *Match system*. Older
+  settings files load with *Dark*.
+- **The orb:** a glowing ring above the message box that shows what Sage is doing: ready, listening
+  while you hold the talk key or button, thinking while a reply is on its way, and speaking while a
+  reply is read aloud. **Hold to talk** stays a button.
+- **The asking card:** while Sage's box asks before an action, the chat shows the same question in an
+  amber card, then whether you allowed it. You still answer in the box, and only there.
+- **Sound effects,** made by the window itself: a blip when you send, two rising notes when you allow
+  an action, a low tone when Sage asks. Off until you switch on **Sound** in the top bar; remembered.
+- **A preview page for review** (`npm run preview`, into `out/preview/`): the real window with sample
+  data and a control strip. Not part of Sage.
+
 ## [0.1.1] - 2026-11-16
 
 ### Changed

@@ -39,8 +39,10 @@ risk that remains. The tests named here run with `npm run verify`.
    against a strict schema, and every "confirm" skill passes through the gate.
 2. **Outside text → model.** Web results, notes and reminders go back to the model inside a labelled
    untrusted block, and are never read as commands by Sage itself.
-3. **Window → main process.** The window is treated as untrusted input: it gets twenty typed methods,
-   and each handler checks the sender and validates the payload.
+3. **Window → main process.** The window is treated as untrusted input: it gets twenty-one typed
+   calls, and each handler checks the sender and validates the payload. The other way, the main
+   process sends the window one thing by itself, news of its asking box, which the window can only
+   listen to.
 4. **Sage → network.** The main process talks to `127.0.0.1:11434` (local brain, and the runner's model
    list, model download and model details), the online service the user configured, DuckDuckGo's HTML
    page, and, once and only after the user agrees, Hugging Face for the speech file. The window can
@@ -95,6 +97,16 @@ A confused or manipulated model asks to delete notes, open a program, or run a c
   another skill or another call id; a failing dialog counts as Don't allow) and `test/registry.test.ts`
   ("a confirm skill never runs when the user doesn't allow it, whatever the model sends": extra fields
   such as `approved: true`, strings, nulls and invented tool names like `approve`).
+- **The chat's asking card is news, not a second way to answer.** While the box is open, the chat
+  shows the same sentence in an amber card, and afterwards whether it was allowed. The main process
+  sends this one way (`webContents.send` on `sage:asking`); the preload's single listener passes the
+  page only the checked fields (`readAskingEvent`), never the IPC event, which could reply; no handler
+  answers to that name; the ids are a counter of its own, not call ids; and whatever the listener does
+  or throws, the answer is still the box's. The card has no buttons. *Evidence:* `test/asking.test.ts`
+  (the news uses the box's own sentence; a listener that throws or "answers" changes nothing; a failing
+  box still counts as Don't allow; no channel can answer), `test/security.test.ts` (the preload's one
+  listener and what it passes on) and `test/renderer-asking.test.ts` (the card is text, with no
+  buttons).
 - **The box says exactly what will happen**, in one sentence written by Sage from the validated
   arguments, for example *Open the app "Editor" ("/usr/bin/editor" with the arguments "--new-window").*
   The model doesn't write it. Note titles, reminder text, app names, arguments and paths in it are put

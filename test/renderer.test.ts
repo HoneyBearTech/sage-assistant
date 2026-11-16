@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { createSage } from "../src/core/sage.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS, MAX_ACK_IDS, type Notice } from "../src/shared/api.js";
-import { setWindowVisibility } from "./fake-dom.js";
+import { rootElement, setWindowVisibility } from "./fake-dom.js";
 import {
   deferred,
   FakeClock,
@@ -769,4 +769,39 @@ test("settings are loaded at startup and after a successful save, and save messa
   assert.equal(loads, 2, "once at startup, once after a successful save");
   assert.match(source, /\n\s*void loadSettings\(\)\s*\.then\(/);
   assert.match(source, /result\.message \? `Saved\. \$\{result\.message\}`/);
+});
+
+test("the saved theme is applied at start-up, tried out when picked, and saved with Settings", async (t) => {
+  const { el, calls } = await startWindow(t, async () => "", {}, { settings: { theme: "light" } });
+  assert.equal(rootElement().getAttribute("data-theme"), "light");
+  assert.equal(el("theme").value, "light");
+
+  el("tab-settings").click();
+  el("theme").value = "system";
+  el("theme").dispatch("change");
+  assert.equal(rootElement().getAttribute("data-theme"), "system", "tried out at once");
+  assert.equal(el("settings-status").textContent, "Not saved yet: choose Save settings.");
+
+  el("settings-form").dispatch("submit");
+  await settled();
+  assert.equal((calls.saved.at(-1) as { theme: string }).theme, "system");
+  assert.equal("sound" in (calls.saved.at(-1) as object), false, "the sound switch isn't part of a save");
+
+  // Anything unknown in the form counts as the default.
+  el("theme").value = "neon";
+  el("theme").dispatch("change");
+  assert.equal(rootElement().getAttribute("data-theme"), "dark");
+});
+
+test("without saved settings the window keeps the dark default", async (t) => {
+  await startWindow(t, async () => "", {
+    getSettings: async () => {
+      throw new Error("not readable");
+    },
+  });
+  assert.equal(
+    rootElement().getAttribute("data-theme"),
+    null,
+    "no theme set: styles.css shows the dark look",
+  );
 });
