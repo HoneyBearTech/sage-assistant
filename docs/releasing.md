@@ -20,9 +20,9 @@ The workflow below builds those three files on a GitHub Windows runner whenever 
 
 What it does, in order:
 
-1. **build** (Windows): checks out the tagged commit, installs the exact dependencies (`npm ci`), runs
-   `npm run verify`, checks that the tag is `v` plus the `version` in `package.json`, and builds the
-   installer with `npm run dist`. It writes `SHA256SUMS.txt` for the one installer file, makes the build
+1. **build** (Windows): checks out the tagged commit, stops unless that commit is on `main`, installs
+   the exact dependencies (`npm ci`), runs `npm run verify`, checks that the tag is `v` plus the
+   `version` in `package.json`, and builds the installer with `npm run dist`. It writes `SHA256SUMS.txt` for the one installer file, makes the build
    provenance for that file with `actions/attest`, and keeps the three files for the next job.
 2. **release** (Linux): takes the three files and publishes the GitHub release with exactly those files.
 
@@ -43,6 +43,9 @@ How it is kept safe:
   downloads every package fresh and checks it against `package-lock.json`.
 - **Only release versions.** Tags must look like `v1.2.3`, and a tag that doesn't match `package.json`
   stops the build before anything is published.
+- **Only commits on `main`.** The build stops unless the tagged commit is on `main`, so a tag on an
+  unreviewed branch publishes nothing. For extra protection the owner may later add a tag ruleset for
+  `v*` on GitHub, so only the owner can create or move release tags.
 
 ```yaml
 name: Release
@@ -69,6 +72,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Check that the tagged commit is on main
+        shell: bash
+        env:
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "The tag $TAG points to $SHA, which isn't on main. Only commits on main are released." >&2
+            exit 1
+          fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
