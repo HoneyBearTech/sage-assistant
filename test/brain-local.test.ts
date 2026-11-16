@@ -68,7 +68,7 @@ test("tool calls get Sage's own ids, and string arguments are parsed", async (t)
 test("says Ollama isn't running when nothing answers", async () => {
   const brain = new LocalBrain({ model: "m", port: REFUSED_PORT });
   assert.deepEqual(await brain.chat([], tools), { ok: false, message: UNREACHABLE_MESSAGE });
-  assert.match(UNREACHABLE_MESSAGE, /Is Ollama running\?/);
+  assert.match(UNREACHABLE_MESSAGE, /open Settings → Set up Sage/);
 });
 
 test("explains how to download a missing model", async (t) => {
@@ -76,7 +76,8 @@ test("explains how to download a missing model", async (t) => {
   const reply = await new LocalBrain({ model: "tiny:1b", port: server.port }).chat([], tools);
   assert.deepEqual(reply, {
     ok: false,
-    message: 'The local model "tiny:1b" isn\'t downloaded yet. Run: ollama pull tiny:1b',
+    message:
+      "The local model \"tiny:1b\" isn't downloaded yet. Open Settings → Set up Sage to download one of Sage's models.",
   });
 });
 

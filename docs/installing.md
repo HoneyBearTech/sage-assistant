@@ -87,7 +87,8 @@ smaller and faster, but makes more mistakes; put its name in Settings → Local 
 there with `ollama list`.
 
 Sage talks to Ollama only at `127.0.0.1:11434`, on the same computer, which is Ollama's standard address.
-If Sage says "Sage can't reach the local model runner. Is Ollama running?", start Ollama and try again.
+If Sage says "Sage can't reach the local model runner. Start it, or open Settings → Set up Sage for help,
+then try again.", start the runner and try again.
 
 ## 2. Install Node.js 24 and git
 
@@ -235,8 +236,8 @@ the local model runner (its models are in its own folder).
 
 | What you see | What to do |
 | --- | --- |
-| "Sage can't reach the local model runner. Is Ollama running?" | Start Ollama. On Windows, open it from the Start menu; on Linux, `systemctl status ollama` or `ollama serve`. |
-| "The local model "…" isn't downloaded yet." | Run the `ollama pull` command it shows, or change Settings → Local model to one from `ollama list`. |
+| "Sage can't reach the local model runner. Start it, or open Settings → Set up Sage for help, then try again." | Start the local model runner. On Windows, open it from the Start menu; on Linux, check its service, or start it from a terminal (see [step 1](#local-model-runner)). **Settings → Set up Sage** checks it for you. |
+| "The local model "…" isn't downloaded yet." | Open **Settings → Set up Sage** and download one of Sage's two models; or download the model with the local model runner's own command (see [step 1](#local-model-runner)), or change Settings → Local model to one the runner has. |
 | "The online service didn't accept the key." | Save the key again in Settings, and check it with the service. |
 | "Search is unavailable right now." | The search page didn't answer or blocked the request. Try again later. |
 | "Sage can't use the microphone because it's blocked." | Allow it in Windows's microphone settings; see [Voice and the microphone](#voice-and-the-microphone). |

@@ -21,7 +21,8 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 
 - [ ] Ask "What can you do?" and get a sensible reply.
 - [ ] Quit Ollama (its icon by the clock → Quit), send a message: the reply is "Sage can't reach the local
-      model runner. Is Ollama running?". Start Ollama again; the next message works.
+      model runner. Start it, or open Settings → Set up Sage for help, then try again.". Start the runner
+      again; the next message works.
 - [ ] Ask "Search the web for today's weather in Paris": you get a short answer based on search results.
 
 ## Notes and reminders

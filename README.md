@@ -103,7 +103,8 @@ Open **Settings** in Sage's window:
   switch takes effect with your next message.
 - **Local model** is the Ollama model name (default `qwen3:4b`). Sage only ever talks to Ollama at
   `127.0.0.1:11434`, on the same computer; that address can't be changed. If Ollama isn't running,
-  Sage says so in plain words ("Sage can't reach the local model runner. Is Ollama running?").
+  Sage says so in plain words ("Sage can't reach the local model runner. Start it, or open Settings →
+  Set up Sage for help, then try again.").
 - **Online service address**, **Online model name** and **Online service key** set up the online
   brain. Sage sends `POST <address>/v1/chat/completions` with the key as a bearer token. The address
   must start with `https://` (plain `http://` is accepted only for `127.0.0.1` or `localhost`, for a

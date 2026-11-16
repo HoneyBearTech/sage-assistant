@@ -17,7 +17,7 @@ export const LOCAL_HOST = "127.0.0.1";
 export const LOCAL_PORT = 11434;
 
 export const UNREACHABLE_MESSAGE =
-  "Sage can't reach the local model runner. Is Ollama running? Start it, then try again.";
+  "Sage can't reach the local model runner. Start it, or open Settings → Set up Sage for help, then try again.";
 
 const runnerReply = z.object({
   message: z.object({
@@ -83,7 +83,7 @@ export class LocalBrain implements Brain {
     if (response.status === 404) {
       return {
         ok: false,
-        message: `The local model "${this.options.model}" isn't downloaded yet. Run: ollama pull ${this.options.model}`,
+        message: `The local model "${this.options.model}" isn't downloaded yet. Open Settings → Set up Sage to download one of Sage's models.`,
       };
     }
     if (!response.ok) {
