@@ -1,9 +1,10 @@
-import type { AskingEvent, PublicSettings, SageApi } from "../../src/shared/api.js";
+import type { AskingEvent, HomeSummary, PublicSettings, SageApi } from "../../src/shared/api.js";
 
 // The preview page's own script (review only, never part of Sage). It runs before the real window
 // script and stands in for the main process: a fake window.sage with sample settings, a short
-// sample chat (a notice, replies that type themselves out, asking cards), and a control strip to
-// switch the view, the theme, the orb's state and the sound. Nothing here touches the network.
+// sample chat (a notice, replies that type themselves out, asking cards), sample reminders and notes
+// for Home, and a control strip to switch the view, the theme, the orb's state, the sound and
+// Home's sample data. Nothing here touches the network.
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -23,7 +24,48 @@ const settings: PublicSettings = {
   setupDone: true,
   theme: "dark",
   sound: false,
+  morningBrief: false,
 };
+
+// --- Home's sample data: made up for the preview, relative to the time the page is opened ---
+
+/** Today at this hour and minute, as an ISO time. */
+function todayAt(hour: number, minute = 0): string {
+  const date = new Date();
+  date.setHours(hour, minute, 0, 0);
+  return date.toISOString();
+}
+
+/** That many days from today, at this hour, as an ISO time. */
+function dayAt(days: number, hour: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
+}
+
+const SAMPLE_HOME: HomeSummary = {
+  reminders: [
+    { id: "r1", text: "Pay the electricity bill", due: dayAt(-1, 18), missed: true },
+    { id: "r2", text: "Water the plants", due: todayAt(0, 30), missed: true },
+    { id: "r3", text: "Dentist appointment", due: todayAt(23, 15), missed: false },
+    { id: "r4", text: "Call Sam about the weekend", due: todayAt(23, 45), missed: false },
+  ],
+  missedMore: 2,
+  next: null,
+  notes: ["Shopping list", "Ideas for the garden", "Holiday packing", "Book recommendations", "Wi-Fi setup"],
+  status: { brain: "local", voiceReady: false, sound: false },
+};
+
+const EMPTY_HOME: HomeSummary = {
+  reminders: [],
+  missedMore: 0,
+  next: { id: "r9", text: "Renew the passport", due: dayAt(3, 10), missed: false },
+  notes: [],
+  status: { brain: "claude", voiceReady: true, sound: false },
+};
+
+let homeSample: HomeSummary = SAMPLE_HOME;
 
 const askingListeners: ((event: AskingEvent) => void)[] = [];
 let askCount = 0;
@@ -110,6 +152,12 @@ const sage: SageApi = {
     settings.sound = on;
     return { ok: true };
   },
+  homeSummary: async () => ({
+    ...structuredClone(homeSample),
+    status: { ...homeSample.status, sound: settings.sound },
+  }),
+  // The preview never shows the morning brief by itself; Brief me on Home shows the same brief.
+  claimMorningBrief: async () => false,
   onAsking: (listener) => {
     askingListeners.push(listener);
   },
@@ -136,6 +184,7 @@ async function say(text: string): Promise<void> {
 }
 
 async function sampleChat(): Promise<void> {
+  // Sage opens on Home; the sample chat plays in Chat behind it (the strip's Chat shows it).
   await wait(400);
   await say("What's on my list for today?");
   await wait(1_600);
@@ -157,12 +206,15 @@ async function sampleChat(): Promise<void> {
 
 type Control = { label: string; run: () => void; group: string; value?: string };
 
+/** Both drawings of the orb, the chat's and Home's. */
 function setOrb(state: string, caption: string): void {
-  element("orb").setAttribute("data-state", state);
-  element("orb-state").textContent = caption;
+  for (const id of ["orb", "home-orb"]) {
+    element(id).setAttribute("data-state", state);
+    element(`${id}-state`).textContent = caption;
+  }
 }
 
-function showView(view: "chat" | "settings" | "welcome"): void {
+function showView(view: "home" | "chat" | "settings" | "welcome"): void {
   const welcomeOpen = !element("view-welcome").hidden;
   if (view === "welcome") {
     if (welcomeOpen) return;
@@ -170,13 +222,23 @@ function showView(view: "chat" | "settings" | "welcome"): void {
     element("setup-again").click();
   } else if (welcomeOpen) {
     element("welcome-skip").click();
-    if (view === "settings") setTimeout(() => element("tab-settings").click(), 50);
+    if (view !== "chat") setTimeout(() => element(`tab-${view}`).click(), 50);
   } else {
     element(`tab-${view}`).click();
   }
 }
 
+/** Switches Home's sample data and shows Home with it. */
+function homeData(sample: HomeSummary): void {
+  homeSample = sample;
+  // Home loads each time it is shown; clicking its tab while it is open does nothing, so go by Chat.
+  showView("home");
+  element("tab-chat").click();
+  element("tab-home").click();
+}
+
 const controls: Control[] = [
+  { group: "View", label: "Home", run: () => showView("home") },
   { group: "View", label: "Chat", run: () => showView("chat") },
   { group: "View", label: "Settings", run: () => showView("settings") },
   { group: "View", label: "Welcome", run: () => showView("welcome") },
@@ -190,6 +252,8 @@ const controls: Control[] = [
   { group: "System box (stand-in)", label: "Allow", run: () => pendingAnswer?.(true) },
   { group: "System box (stand-in)", label: "Don't allow", run: () => pendingAnswer?.(false) },
   { group: "Chat", label: "Type a reply", run: () => void say("Show me a longer reply.") },
+  { group: "Home", label: "Sample data", run: () => homeData(SAMPLE_HOME) },
+  { group: "Home", label: "Empty", run: () => homeData(EMPTY_HOME) },
 ];
 
 function buildStrip(): void {

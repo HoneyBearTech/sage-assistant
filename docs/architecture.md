@@ -12,10 +12,11 @@ used.
 |                                                                                         |
 |  Chat window (renderer)            Main process                                         |
 |  sandboxed, no Node      IPC       +-----------------------------------------------+    |
-|  chat, settings,    <----------->  | ipc.ts: validated handlers, sender checked     |    |
-|  microphone, voices window.sage    | Assistant: one conversation, tool-call loop    |    |
+|  home, chat,        <----------->  | ipc.ts: validated handlers, sender checked     |    |
+|  settings, voices   window.sage    | Assistant: one conversation, tool-call loop    |    |
 |  (src/renderer)     (src/preload)  | SkillRegistry + ApprovalGate + action log      |    |
 |                                    | Notes, reminders, scheduler, settings, keys    |    |
+|                                    | Home: a read-only summary, the brief's day     |    |
 |                                    | Voice: speech file, its download, recordings   |    |
 |                                    | Setup: the runner's status, a model download   |    |
 |                                    +-----------------------------------------------+    |
@@ -36,8 +37,8 @@ used.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat, the settings screen and, on first start, the Welcome screen, in the dark "sage HUD" look or its light version (see [The window's look](#the-windows-look)). Runs sandboxed with no Node access; inserts text only with `textContent`. |
-| Preload | `src/preload/preload.ts` | Exposes `window.sage` through `contextBridge`, and nothing else: twenty-four typed calls to the main process, and one listener, `onAsking`, for the main process's news about its asking box (one way; it passes on only the checked fields). |
+| Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows Home, the chat, the settings screen and, on first start, the Welcome screen, in the dark "sage HUD" look or its light version (see [The window's look](#the-windows-look)). Runs sandboxed with no Node access; inserts text only with `textContent`. |
+| Preload | `src/preload/preload.ts` | Exposes `window.sage` through `contextBridge`, and nothing else: twenty-six typed calls to the main process, and one listener, `onAsking`, for the main process's news about its asking box (one way; it passes on only the checked fields). |
 | IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service, saves a new key only when the address on screen is the saved one, and stops a turn in progress when the brain, the service, the chosen brain's model or its key changes. |
 | Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits up to 5 seconds for the system to confirm it. Reports whether it was confirmed; it never reports a guess. |
 | Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog (wrapped so the window hears when it opens and closes), the Welcome screen's two boxes (before a model download and before opening the install guide), notifications, `shell.openPath`, `shell.openExternal` (used only for the install guide's fixed address), the app launcher and the encrypted key store. Checks the sender of every IPC call. |
@@ -57,6 +58,8 @@ used.
 | Window voice | `src/renderer/voice-controls.ts`, `voice.ts`, `voice-text.ts` | Hold to talk (Ctrl+Space or the Talk button), recording with the standard recorder, turning it into 16 kHz mono sound, the download offer, and spoken replies with the window's own speech and the PC's installed voices. `main.ts` is the entry the build bundles into `renderer.js`; it calls `startChatWindow()` from `renderer.ts`, which finds the elements and wires them up. |
 | Runner client | `src/core/brain/runner.ts` | The local model runner's other requests on the same fixed `127.0.0.1` address as chat: the model list (`/api/tags`), a model download (`/api/pull`, progress read line by line, each line capped at 64 KB and checked, at most 1,000 layers, stopped after 2 minutes without real progress) and a model's details (`/api/show`, whether it can use tools). No redirects, short time limits for the quick requests, replies size-capped; the runner's own text is never shown or logged. |
 | Setup | `src/core/setup.ts` | First-run setup: the runner's status for the saved local model and Sage's two models, one download at a time of one of those two (only after the main process's box says Download, stopped when Sage quits), saving it as the local model once it is there, the skills check, opening the install guide's one fixed address after asking, and marking setup done. |
+| Home | `src/core/home.ts` | Home's summary for the window, read-only and bounded: the reminders due on the PC's own day (at most 10, the ones still to come first) and the missed ones not yet shown (at most 5, the newest, with a count of the rest), text cut to 200 characters, the next reminder after today when nothing more is to come today, the titles of the five most recently changed notes (cut to 80 characters, never the text), the brain, whether the speech file is there and the sound switch. Also the morning brief's once-a-day mark (`claimMorningBrief`), saved as `lastBrief` in the settings under the settings lock; the saved day never moves backwards. |
+| Window home | `src/renderer/home.ts`, `home-text.ts` | Home: the clock (the PC's own time format, changed on the minute), the greeting (morning 05:00 to 11:59, afternoon 12:00 to 17:59, evening otherwise), the Today, Notes and Status panels, **Talk to Sage**, and the daily brief, built in `home-text.ts` from the summary in fixed words, typed out with `typing.ts` and read aloud through voice's speaker. |
 | Window welcome | `src/renderer/welcome.ts`, `welcome-text.ts` | The Welcome screen's steps and texts: where Sage thinks, the runner, a model (with progress polled every half second) and Done. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
 
@@ -116,8 +119,9 @@ outside the app: no fonts, images, video or sound files.
   `light-dark(<light>, <dark>)`, so the page's `color-scheme` picks the theme. `test/look.test.ts`
   checks the contrast of the main pairs in both themes (at least 4.5 to 1) and that no text is under
   12 px. The setting has a schema default, so a settings file from before it loads with *Dark*.
-- **The orb.** Above the message box, drawn as inline SVG in `index.html` and animated by
-  `styles.css`; `orb.ts` sets its state as `data-state`, with a word underneath. *Ready* (a slow
+- **The orb.** Above the message box, and larger on Home, drawn as inline SVG in `index.html` and
+  animated by `styles.css`; `orb.ts` keeps one state and sets it on both drawings as `data-state`, with
+  a word underneath each. *Ready* (a slow
   breath), *Listening* (quick pulses and amber rings while the talk key or button is held), *Thinking*
   (the rings turn while a reply is on its way) and *Speaking* (an uneven pulse while a reply is read
   aloud). Your voice wins over Sage's, which wins over thinking. The drawing is hidden from screen
@@ -141,12 +145,58 @@ outside the app: no fonts, images, video or sound files.
   off unless the **Sound** switch in the top bar is on; the switch saves only itself (`setSound`), so a
   Settings save neither changes it nor is needed for it. No audio context exists until the first sound
   is wanted while sound is on.
+- **Home.** The first tab, and the view Sage opens on once set up. A large orb, a clock in the PC's
+  own time format (`Intl` with the system's language, hours and minutes, changed on the minute and
+  never animated), a greeting for the time of day, and three panels with corner ticks and monospace
+  labels: **Today**, **Notes** and **Status**; empty panels say so in a dashed box. Missed reminders are
+  amber. **Talk to Sage** opens Chat and puts the focus in the message box. Home asks the main process
+  for its summary (`homeSummary`, see [How Home and the brief work](#how-home-and-the-brief-work))
+  when it is shown, every minute while it is on screen, and when the notice collection brings a new
+  notice (usually a reminder that fired); there is no new message from the main process.
 - **Reduced motion.** With the system's "reduce motion" setting (Windows: Settings → Accessibility →
   Visual effects → Animation effects off), nothing moves: no breathing, turning, fading in or typing.
   The orb still shows its state, standing still.
 - **Preview page.** `npm run preview` builds `out/preview/`, a page made from the real built window
   files with a stand-in for the main process (sample chat, asking cards) and a control strip, for
   review in a browser. It isn't part of Sage: `out/` isn't in git, and the installer packs only `dist/`.
+
+## How Home and the brief work
+
+1. **The summary.** `homeSummary` takes an empty object and nothing else, and returns only what Home
+   shows (`src/core/home.ts`): reminders (id, text cut to 200 characters, due time, missed), soonest
+   first: at most 10 due on the PC's own day (still to come or already shown, the ones still to come
+   kept first) and, capped on their own, at most 5 missed ones (due and not shown yet, the newest),
+   with `missedMore` counting the missed ones left out, so old missed reminders never hide what is
+   still to come; the next
+   reminder after today, only when nothing more is to come today; at most 5 note titles, cut to 80
+   characters, newest first, never a note's text; and the brain, whether the speech file is there and
+   the sound switch. It only reads the stores and the settings; it writes nothing.
+2. **The brief.** **Brief me** asks for the summary again and builds the brief in the window
+   (`briefText` in `src/renderer/home-text.ts`) in fixed words: "Good morning. It's Monday 16
+   November.", today's reminders with their times ("Today: Dentist at 14:30; …") or "Nothing is due
+   today." with the next one, the missed ones ("You missed: …"), the latest note titles ("Your latest
+   notes: …") and "What would you like to start with?"; "and N more" ends the missed list when some
+   were left out. It is never sent to the brain and never added to the conversation. It is shown in
+   the Brief panel, typed out like a reply (`typing.ts`, with its skip and reduced-motion rules), and
+   read aloud through voice's speaker (the PC's own voices) unless Read replies aloud is *Never*;
+   never while the microphone is open. Each brief asked for has a number: after the summary arrives
+   (and after the morning claim) it goes on only if it is still the newest, Home is still shown and the
+   window is visible. Leaving Home or hiding the window drops a brief on its way, stops the brief being
+   read (a reply being read goes on) and shows its text in full; sending a message or holding Talk
+   also stops it. While the brief is read, the Brief panel has its own **Stop speaking** button (Chat's
+   is hidden with Chat); voice's controls know whether what is read is the brief.
+3. **The morning brief.** With **Brief me when Sage first opens each day** on (`morningBrief`, off by
+   default), each time Home is shown, or the window comes back into view on Home, the window asks
+   `claimMorningBrief`. The main process answers true only the first time on a new day (the PC's own
+   day), and saves that day as `lastBrief` in the settings under the settings lock, so a reload or a
+   restart the same day gets false. The saved day never moves backwards: a saved day later than today
+   (the clock was moved back) waits, unless it is more than two days ahead, which is taken as a broken
+   clock (today is claimed and saved). A Settings save keeps the saved day. The window then shows the
+   brief; it is read aloud only when Read replies aloud is *Always*.
+4. **The clock.** A fresh time formatter is made for each time shown, so a change of the PC's time
+   zone shows at the next minute. The minute timer runs only while Home is on screen: it stops when
+   Home is left or the window hidden, and restarts, with the clock redrawn and the panels loaded, when
+   the window is shown again on Home.
 
 ## How voice works
 
@@ -187,8 +237,8 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
 
 1. On start, the window loads the settings before it shows anything. If `setupDone` is false (a first
    start, or a settings file from before this setting existed), it shows the **Welcome screen**;
-   otherwise Chat. Reminders and other notices are collected only from then on, and confirmed only while
-   Chat is visible, so they wait while the Welcome screen is open. Ctrl+Space works only on Chat.
+   otherwise Home. Reminders and other notices are collected only from then on, and confirmed only while
+   Chat is visible, so they wait while the Welcome screen (or Home) is open. Ctrl+Space works only on Chat.
 2. **Where should Sage think?** *On this computer* goes on to the runner. *An online service (Claude,
    OpenAI, Gemini or another)* marks setup as done and opens Settings at the brain list, with a line on
    what to do there (pick one, save, then save its key; **Get a key** opens the company's key page). The
@@ -234,7 +284,7 @@ Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Win
 
 | File | Written by | Contents |
 | --- | --- | --- |
-| `settings.json` | `SettingsStore` | The brain (`local`, `claude`, `openai`, `gemini` or `other`; a 0.1.1 file's `online` loads as `other`), model names (one per company under `services`), another online service's address, app list, approved folders, Read replies aloud, whether setup is done, the theme and the sound switch. No secrets: the schema has no field for one and drops unknown fields. |
+| `settings.json` | `SettingsStore` | The brain (`local`, `claude`, `openai`, `gemini` or `other`; a 0.1.1 file's `online` loads as `other`), model names (one per company under `services`), another online service's address, app list, approved folders, Read replies aloud, whether setup is done, the theme, the sound switch, the morning brief switch and the day the morning brief was last shown (`lastBrief`). No secrets: the schema has no field for one and drops unknown fields. |
 | `claude-key.bin`, `openai-key.bin`, `gemini-key.bin` | `EncryptedFileKeyStore` | Each company's key with its fixed origin, encrypted with Electron `safeStorage` (DPAPI on Windows, the desktop keyring on Linux). |
 | `online-key.bin` | `EncryptedFileKeyStore` | Another online service's key with the origin it was entered for (the same file as in 0.1.1), encrypted the same way. |
 | `notes.json` | `NotesStore` | Notes (id, title, text, times). |

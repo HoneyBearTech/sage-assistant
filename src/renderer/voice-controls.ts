@@ -23,6 +23,8 @@ export interface VoiceElements {
   voiceDownload: HTMLButtonElement;
   voiceCancel: HTMLButtonElement;
   stopSpeaking: HTMLButtonElement;
+  /** Home's own Stop speaking, in the Brief panel: shown only while the brief is being read. */
+  briefStop: HTMLButtonElement;
   voiceNote: HTMLElement;
 }
 
@@ -38,6 +40,10 @@ export interface VoiceControls {
   holdingTalkKey(): boolean;
   /** Reads Sage's final reply aloud if the setting says so; never while Sage is listening. */
   replied(reply: string, fromVoice: boolean, setting: PublicSettings["speakReplies"]): void;
+  /** Reads the daily brief aloud; never while Sage is listening. */
+  speakBrief(text: string): void;
+  /** Stops the speech if it is the daily brief being read (a reply being read goes on). */
+  stopBrief(): void;
 }
 
 type TalkSource = "key" | "button" | "button-key";
@@ -73,12 +79,21 @@ export function createVoiceControls(
   let fromVoice = false;
   /** The key (or "ctrl-space") pressed to start a recording, until it is let go. */
   let heldKey: string | null = null;
+  /** True while what is being read aloud is the daily brief, not a reply. */
+  let speakingBrief = false;
 
   const speaker = new Speaker(synth, (current) => {
-    el.stopSpeaking.hidden = !current.speaking;
+    if (!current.speaking) speakingBrief = false;
+    showStopButtons(current.speaking);
     onActivity({ speaking: current.speaking });
     el.voiceNote.textContent = current.availability === "none" ? VOICE_TEXT.noVoice : "";
   });
+
+  /** Chat's Stop speaking while anything is read aloud; Home's only while it is the brief. */
+  function showStopButtons(speaking: boolean): void {
+    el.stopSpeaking.hidden = !speaking;
+    el.briefStop.hidden = !(speaking && speakingBrief);
+  }
 
   function show(text: string, buttons: { download?: string; cancel?: boolean } = {}): void {
     el.voiceStatus.textContent = text;
@@ -303,6 +318,9 @@ export function createVoiceControls(
     if (!el.input.value.trim()) fromVoice = false;
   });
   el.stopSpeaking.addEventListener("click", () => speaker.stop());
+  el.briefStop.addEventListener("click", () => {
+    if (speakingBrief) speaker.stop();
+  });
 
   // The download: the main process asks first in its own box, then fetches and checks the file.
   async function download(): Promise<void> {
@@ -353,7 +371,18 @@ export function createVoiceControls(
       return taken;
     },
     replied(reply, spoken, setting) {
-      if (!talk && shouldSpeak(setting, spoken)) speaker.speak(reply);
+      if (talk || !shouldSpeak(setting, spoken)) return;
+      speakingBrief = false;
+      speaker.speak(reply);
+    },
+    speakBrief(text) {
+      if (talk) return;
+      // Set once speaking has started: starting cancels what was being read, which clears it.
+      speakingBrief = speaker.speak(text);
+      showStopButtons(speaker.speaking);
+    },
+    stopBrief() {
+      if (speakingBrief) speaker.stop();
     },
   };
 }

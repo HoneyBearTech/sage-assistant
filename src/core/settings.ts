@@ -95,6 +95,22 @@ export const settingsSchema = z.object({
    * never by a Settings save.
    */
   sound: z.boolean().default(false),
+  /**
+   * Show the daily brief on Home the first time the window opens each day. Off by default. Added
+   * without a new version, like `theme`. Saved with Settings.
+   */
+  morningBrief: z.boolean().default(false),
+  /**
+   * The PC's own day (YYYY-MM-DD) the morning brief was last shown, so it shows once a day. Added
+   * without a new version. Changed only by the morning brief's own request, never by a Settings
+   * save; a value that can't be read counts as never, rather than making the whole file unreadable.
+   */
+  lastBrief: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .default(null)
+    .catch(null),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

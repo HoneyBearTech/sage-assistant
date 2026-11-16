@@ -10,6 +10,7 @@ import { RunnerClient } from "./brain/runner.js";
 import type { Launcher } from "./apps.js";
 import { type KeyStores, ServiceKeys } from "./keystore.js";
 import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
+import { Home } from "./home.js";
 import { NoticeBoard } from "./notices.js";
 import { NotesStore } from "./notes.js";
 import { OnlineServices } from "./online-services.js";
@@ -103,6 +104,8 @@ export interface Sage {
   setup: Setup;
   /** Settings' requests for a ready-made service: Load models, Test, Get a key. */
   services: OnlineServices;
+  /** Home's read-only summary, and the morning brief's once-a-day mark. */
+  home: Home;
 }
 
 export function createSage(deps: SageDeps): Sage {
@@ -190,7 +193,16 @@ export function createSage(deps: SageDeps): Sage {
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
 
+  const home = new Home({
+    reminders,
+    notes,
+    settings,
+    voiceReady: async () => (await voice.status()).model === "ready",
+    now,
+  });
+
   return {
+    home,
     services,
     assistant,
     settings,

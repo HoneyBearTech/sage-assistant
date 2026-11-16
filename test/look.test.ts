@@ -106,3 +106,32 @@ test("the hidden attribute wins over every display rule, so held notices stay hi
   assert.deepEqual(important, ["none"]);
   assert.match(css, /\.message \{[^}]*display: grid;/, "the case that needed it");
 });
+
+test("Home's clock, greeting, panels and brief use only the checked colours, at 12 px or more", () => {
+  // The rules for Home's own elements, outside the reduced-motion and short-window blocks too.
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) =>
+    /\.home|\.panel|\.brief-text|\.orb-large/.test(match[1]!),
+  );
+  assert.ok(rules.length >= 15, `found ${rules.length} Home rules`);
+  // The text colours whose contrast the test above checks on every background, in both themes.
+  const checked = new Set(["var(--text)", "var(--muted)", "var(--accent)", "var(--amber)", "transparent"]);
+  const seen = new Set<string>();
+  for (const [, selector, body] of rules) {
+    for (const color of body!.matchAll(/(?:^|[\s;])color:\s*([^;]+);/g)) {
+      assert.ok(checked.has(color[1]!.trim()), `${selector!.trim()}: color ${color[1]}`);
+      seen.add(color[1]!.trim());
+    }
+    for (const size of body!.matchAll(/font-size:\s*([^;]+);/g)) {
+      const value = size[1]!.trim();
+      if (value === "var(--label-size)") continue;
+      assert.ok(Number(value.match(/^(\d+)px$/)?.[1]) >= 12, `${selector!.trim()}: ${value}`);
+    }
+  }
+  for (const used of ["var(--text)", "var(--muted)", "var(--accent)", "var(--amber)"])
+    assert.ok(seen.has(used));
+  // The typed brief's own text is transparent only while its copy is drawn over it.
+  assert.match(css, /\.brief-text\.typing \{\s*color: transparent;\s*\}/);
+  assert.match(css, /\.brief-text \.typed \{[^}]*color: var\(--text\);/);
+  // The panels get the corner ticks, like the other panels.
+  assert.match(css, /fieldset::before,\s*\.step::before,\s*\.composer::before,\s*\.panel::before,/);
+});

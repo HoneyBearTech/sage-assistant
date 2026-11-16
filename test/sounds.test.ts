@@ -226,6 +226,7 @@ test("a settings read that started before the Sound switch was used doesn't undo
         setupDone: true,
         theme: "dark",
         sound: true,
+        morningBrief: false,
       };
     },
   });

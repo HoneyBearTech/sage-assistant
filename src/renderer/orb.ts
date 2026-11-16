@@ -1,27 +1,36 @@
-// The orb above the message box: Sage's presence. It shows one of four states, set here as
-// data-state on the orb (styles.css draws and animates each one) and as a word underneath it.
-// Its animation is paused while the window is hidden or minimised.
+// Sage's orb: its presence. It shows one of four states, set here as data-state on each drawing of
+// the orb (styles.css draws and animates each one) and as a word underneath it. There is one state
+// and two drawings, the small one above the message box and the large one on Home, so they always
+// agree. The animation is paused while the window is hidden or minimised.
 
 import { type OrbActivity, type OrbState, ORB_CAPTIONS, orbState } from "./orb-state.js";
 
 export interface Orb {
-  /** Changes part of the activity; the orb shows the state that follows from all of it. */
+  /** Changes part of the activity; every drawing shows the state that follows from all of it. */
   update(change: Partial<OrbActivity>): void;
   readonly state: OrbState;
 }
 
-export function createOrb(orb: HTMLElement, caption: HTMLElement): Orb {
+/** One drawing of the orb and the word under it. */
+export interface OrbDrawing {
+  orb: HTMLElement;
+  caption: HTMLElement;
+}
+
+export function createOrb(drawings: readonly OrbDrawing[]): Orb {
   const activity: OrbActivity = { listening: false, thinking: false, speaking: false };
   let state: OrbState = "idle";
 
   function render(): void {
-    orb.setAttribute("data-state", state);
-    caption.textContent = ORB_CAPTIONS[state];
+    for (const { orb, caption } of drawings) {
+      orb.setAttribute("data-state", state);
+      caption.textContent = ORB_CAPTIONS[state];
+    }
   }
 
   // Nobody sees a hidden window, so nothing in it needs to move.
   function pauseWhenHidden(): void {
-    orb.classList.toggle("paused", document.visibilityState === "hidden");
+    for (const { orb } of drawings) orb.classList.toggle("paused", document.visibilityState === "hidden");
   }
   document.addEventListener("visibilitychange", pauseWhenHidden);
 
