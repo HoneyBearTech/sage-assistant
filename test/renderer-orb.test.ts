@@ -147,3 +147,23 @@ test("the pause wins over every state's animation: core, rings, ripples and the 
     );
   }
 });
+
+test("the orb's resting breath is Sage's own pace, slower than its thinking", async () => {
+  const css = await readFile(new URL("../src/renderer/styles.css", import.meta.url), "utf8");
+  const seconds = (state: string) => {
+    const rule = css.match(
+      new RegExp(
+        `\\.orb\\[data-state="${state}"\\] \\.orb-core[^{]*\\{\\s*animation: orb-breathe ([\\d.]+)s`,
+      ),
+    );
+    assert.ok(rule, `${state} breathes`);
+    return Number(rule[1]);
+  };
+  const idle = seconds("idle");
+  const thinking = seconds("thinking");
+  assert.ok(
+    idle >= 4 && idle <= 5,
+    `resting breath ${idle}s: about 4.4 s, not the 3.4 to 3.6 s seen elsewhere`,
+  );
+  assert.ok(thinking < idle / 2, "thinking breathes clearly faster");
+});

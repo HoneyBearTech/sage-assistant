@@ -810,7 +810,7 @@ legend::before {
 /* Resting: a slow breath. */
 .orb[data-state="idle"] .orb-core,
 .orb[data-state="idle"]::before {
-  animation: orb-breathe 3.6s ease-in-out infinite;
+  animation: orb-breathe 4.4s ease-in-out infinite;
 }
 
 /* Listening: quick pulses and amber rings, while the microphone is open. */
