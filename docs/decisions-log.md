@@ -2,6 +2,30 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - notice-recollect
+
+**Context:** the owner asked to move to the next roadmap item: "re-collect window notices before showing
+them when Chat opens", the open point from the foundation review.
+
+**Decisions:**
+- **Collect, then confirm.** Opening Chat and the window coming back into view collect the notices
+  first. One collection runs at a time; a request that arrives meanwhile makes one more follow, and
+  confirming happens only after the last successful one.
+- **Held notices stay hidden** in the chat until the moment they are confirmed, so a notice withdrawn in
+  the meantime is never seen.
+- **The 5-second poll never queues** behind a running collection; only opening Chat and the window
+  coming back do.
+- **New chat forgets held notices** (except ones already being confirmed, which were already shown), so
+  the next collection adds them to the new list before they are confirmed.
+
+**Review:** the Security Officer found nothing to fix. The Auditor found four problems in the first
+version (a held notice visible for a moment before the check finished, a failed check confirming stale
+notices, a request dropped during a confirmation, and later batches confirmed while Chat was hidden, an
+older gap) and, in re-checks, three narrower ones the fixes opened (slow checks could starve
+confirmation, and New chat could let a notice be confirmed without ever appearing, in two ways). All
+were fixed with a test each. This took three fix rounds instead of the usual two, because the last
+problem was found in a fix and was a few lines to close.
+
 ## 2026-11-16 - docs-sync
 
 **Context:** the owner asked to "start the docs sync job" after merging Renovate's "Pin dependencies"
