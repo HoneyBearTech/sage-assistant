@@ -1,10 +1,21 @@
-import type { AskingEvent, HomeSummary, PublicSettings, SageApi } from "../../src/shared/api.js";
+import type {
+  AskingEvent,
+  DiagnosticsRequest,
+  HomeSummary,
+  PublicSettings,
+  PullResult,
+  RunnerStatus,
+  SageApi,
+} from "../../src/shared/api.js";
+import { SETUP_STEP_LABELS, SUPPORT_CODES } from "../../src/shared/support-codes.js";
 
 // The preview page's own script (review only, never part of Sage). It runs before the real window
 // script and stands in for the main process: a fake window.sage with sample settings, a short
 // sample chat (a notice, replies that type themselves out, asking cards), sample reminders and notes
-// for Home, and a control strip to switch the view, the theme, the orb's state, the sound and
-// Home's sample data. Nothing here touches the network.
+// for Home, made-up answers for the Welcome screen's checks (a runner that answers or not, a download
+// that works or fails with its support code, and a sample diagnostics text), and a control strip to
+// switch the view, the theme, the orb's state, the sound, Home's sample data and the Welcome screen's
+// steps. Nothing here touches the network.
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -66,6 +77,47 @@ const EMPTY_HOME: HomeSummary = {
 };
 
 let homeSample: HomeSummary = SAMPLE_HOME;
+
+// --- The Welcome screen's made-up answers, switched by the strip ---
+
+const RUNNER_OK: RunnerStatus = {
+  state: "no-model",
+  model: settings.local.model,
+  downloaded: { standard: false, smaller: true },
+  version: "0.12.3",
+};
+const RUNNER_MISSING: RunnerStatus = { ...RUNNER_OK, state: "unreachable", version: null };
+const PULL_DONE: PullResult = { status: "done", skills: "yes" };
+const PULL_FAILED: PullResult = {
+  status: "failed",
+  message: "There isn't enough free disk space for the model. Free up some space, then try again.",
+  code: "SAGE-MOD-02",
+};
+
+let runnerSample: RunnerStatus = RUNNER_OK;
+let pullSample: PullResult = PULL_DONE;
+
+/** A sample of what the main process builds: the same fields, with made-up values. */
+function sampleDiagnostics(request: DiagnosticsRequest): string {
+  return [
+    "Sage diagnostics",
+    "Built by Sage on this PC. Nothing in it was sent anywhere.",
+    "",
+    "Sage version: 0.2.0",
+    "System: Windows 10.0.26100",
+    "CPU: x64",
+    `Setup step: ${SETUP_STEP_LABELS[request.step]}`,
+    `Support code: ${request.code}: ${SUPPORT_CODES[request.code]}`,
+    "Brain: local",
+    `Local model runner: ${runnerSample.state === "unreachable" ? "didn't answer" : "answered"}`,
+    `Runner version: ${runnerSample.version ?? "not reported"}`,
+    "Chosen local model: qwen3:4b",
+    `Chosen model downloaded: ${runnerSample.state === "unreachable" ? "unknown (the runner didn't say)" : "no"}`,
+    "Voice: speech file not downloaded",
+    `Theme: ${document.documentElement.getAttribute("data-theme") ?? "dark"}`,
+    `Reduced motion: ${request.reducedMotion ? "on" : "off"}`,
+  ].join("\n");
+}
 
 const askingListeners: ((event: AskingEvent) => void)[] = [];
 let askCount = 0;
@@ -138,19 +190,21 @@ const sage: SageApi = {
   downloadVoice: async () => ({ status: "declined" }),
   cancelVoiceDownload: async () => {},
   transcribe: async () => ({ ok: false, message: "The preview has no microphone." }),
-  runnerStatus: async () => ({
-    state: "no-model",
-    model: settings.local.model,
-    downloaded: { standard: false, smaller: true },
-    version: "0.12.3",
-  }),
-  pullModel: async () => ({ status: "declined" }),
+  runnerStatus: async () => {
+    await wait(300);
+    return structuredClone(runnerSample);
+  },
+  pullModel: async () => {
+    await wait(300);
+    return structuredClone(pullSample);
+  },
   pullStatus: async () => ({ downloading: false, completed: 0, total: 0 }),
   cancelPull: async () => "idle",
   openInstallGuide: async () => ({ status: "declined" }),
   finishSetup: async () => ({ ok: true }),
-  diagnostics: async () => ({ ok: false, message: "The preview has no diagnostics." }),
-  copyDiagnostics: async () => ({ ok: false, message: "The preview has no clipboard." }),
+  diagnostics: async (request) => ({ ok: true, id: "diag-1", text: sampleDiagnostics(request) }),
+  // The preview copies nothing: Sage's main process does that.
+  copyDiagnostics: async () => ({ ok: true }),
   setSound: async (on) => {
     settings.sound = on;
     return { ok: true };
@@ -231,6 +285,39 @@ function showView(view: "home" | "chat" | "settings" | "welcome"): void {
   }
 }
 
+/** Opens the Welcome screen from its first step, with these made-up answers, and goes to `step`. */
+async function welcomeAt(
+  step: "place" | "runner" | "model" | "done",
+  runner: RunnerStatus,
+  pull: PullResult,
+) {
+  runnerSample = runner;
+  pullSample = pull;
+  if (!element("view-welcome").hidden) element("welcome-skip").click();
+  await wait(100);
+  element("tab-settings").click();
+  element("setup-again").click();
+  if (step === "place") return;
+  element("place-local").click();
+  if (step === "runner") return;
+  await wait(500);
+  element("runner-next").click();
+  element("model-download").click();
+  if (step === "model") return;
+  await wait(500);
+  element("model-next").click();
+}
+
+/** Opens the diagnostics box of whichever step shows Copy diagnostics. */
+function showDiagnostics(): void {
+  for (const id of ["runner-diagnostics", "model-diagnostics"]) {
+    const button = element(id);
+    if (!button.hidden && !element(id === "runner-diagnostics" ? "step-runner" : "step-model").hidden) {
+      button.click();
+    }
+  }
+}
+
 /** Switches Home's sample data and shows Home with it. */
 function homeData(sample: HomeSummary): void {
   homeSample = sample;
@@ -257,6 +344,13 @@ const controls: Control[] = [
   { group: "Chat", label: "Type a reply", run: () => void say("Show me a longer reply.") },
   { group: "Home", label: "Sample data", run: () => homeData(SAMPLE_HOME) },
   { group: "Home", label: "Empty", run: () => homeData(EMPTY_HOME) },
+  { group: "Welcome", label: "01", run: () => void welcomeAt("place", RUNNER_OK, PULL_DONE) },
+  { group: "Welcome", label: "02", run: () => void welcomeAt("runner", RUNNER_OK, PULL_DONE) },
+  { group: "Welcome", label: "02 failed", run: () => void welcomeAt("runner", RUNNER_MISSING, PULL_DONE) },
+  { group: "Welcome", label: "03", run: () => void welcomeAt("model", RUNNER_OK, PULL_DONE) },
+  { group: "Welcome", label: "03 failed", run: () => void welcomeAt("model", RUNNER_OK, PULL_FAILED) },
+  { group: "Welcome", label: "04", run: () => void welcomeAt("done", RUNNER_OK, PULL_DONE) },
+  { group: "Welcome", label: "Diagnostics", run: () => showDiagnostics() },
 ];
 
 function buildStrip(): void {
