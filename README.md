@@ -86,10 +86,25 @@ allowed it. The card is only a reminder: you answer in the box.
 
 Sage sends no telemetry, analytics or crash reports, and has no account.
 
+## Home and the daily brief
+
+Sage opens on **Home**: a large orb, a clock in your PC's own time format, a greeting for the time of
+day, and three panels. **Today** lists the reminders due today and any you missed, with their times;
+**Notes** shows the titles of your five most recently changed notes; **Status** shows the brain in use,
+whether voice is ready, whether sound is on, and the next reminder. **Talk to Sage** opens the chat.
+
+**Brief me** gives you a short daily brief: the date, today's reminders (or the next one), missed
+ones, your latest notes, and a question to start with. Sage writes it itself, on your PC, from your
+reminders and note titles: the brief is never sent to the brain, online or local, so it works offline
+and costs nothing. It types itself out and is read aloud with your PC's own voice, unless **Read
+replies aloud** is set to *Never*. To get it without asking, turn on **Settings → Home → Brief me when
+Sage first opens each day**: the first time Sage opens on a new day, Home shows the brief, and reads it
+aloud only when Read replies aloud is set to *Always*.
+
 ## The look
 
-Sage's window is dark by default, a calm heads-up display in green, with an orb above the message box
-that shows when Sage is listening, thinking or speaking. **Settings → Look → Theme** switches to
+Sage's window is dark by default, a calm heads-up display in green, with an orb (above the message box,
+and larger on Home) that shows when Sage is listening, thinking or speaking. **Settings → Look → Theme** switches to
 *Light* or *Match system*. **Sound** in the top bar turns on short sound effects (off until you do).
 With your system's "reduce motion" setting on, nothing in the window moves.
 
@@ -185,7 +200,7 @@ Everything lives in Sage's folder in your user profile (Electron's `userData` fo
 
 | File | What's in it |
 | --- | --- |
-| `settings.json` | The brain, model names, another online service's address, your app list and approved folders. No key. |
+| `settings.json` | The brain, model names, another online service's address, your app list and approved folders, your other settings, and the day the morning brief was last shown. No key. |
 | `claude-key.bin`, `openai-key.bin`, `gemini-key.bin` | Each company's key, encrypted with your system's protection. |
 | `online-key.bin` | Another online service's key, encrypted with your system's protection. |
 | `notes.json`, `reminders.json` | Your notes and reminders. |

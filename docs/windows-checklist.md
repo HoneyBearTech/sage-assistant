@@ -4,7 +4,8 @@ Short manual checks for a Windows 10 or 11 PC, for the parts the automated tests
 window, the native confirmation box, notifications, the key encryption, the microphone and the voices).
 Run them after a change to the window, the skills, the key store, voice or first-run setup, and before
 any release. It takes about 15 minutes, the [First-run setup](#first-run-setup) section about 20 more
-(it downloads a model), the [Voice](#voice) section about 10 more, and the
+(it downloads a model), the [Voice](#voice) section about 10 more, the [Home screen](#home-screen)
+section about 10 more, and the
 [Installed app](#installed-app) section about 10 more.
 
 Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (see
@@ -16,7 +17,7 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 - [ ] `npm start` opens Sage's window, titled "Sage", with no errors in the terminal. The first time
       after updating to a version with first-run setup, the Welcome screen opens instead of the chat
       (once): choose **Skip setup**. The chat opens, and your apps, folders and online settings are
-      unchanged in Settings.
+      unchanged in Settings. Close and start Sage again: it opens on **Home**.
 - [ ] Starting a second copy (`npm start` in another PowerShell window) brings the first window forward
       instead of opening another.
 - [ ] The header shows "Brain: on this computer (qwen3:4b)".
@@ -248,8 +249,8 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
 ## New look
 
 - [ ] The window opens dark: a green-black ground with a faint grid, `SAGE` and a small leaf at the top
-      left, monospace capital labels, and the orb above the message box saying *READY* and breathing
-      slowly. All text is easy to read.
+      left, and monospace capital labels. Open **Chat**: the orb above the message box says *READY* and
+      breathes slowly. All text is easy to read.
 - [ ] Settings → Look → Theme → *Light*: the window turns light at once, and the status line says the
       change isn't saved yet. Choose **Save settings**, close Sage and start it again: it opens light.
       Set *Match system*, save, and switch Windows between light and dark (Settings → Personalization →
@@ -271,6 +272,42 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
       the orb stands still (its word still changes), and replies appear at once without typing. Turn
       Animation effects back on.
 - [ ] Minimise Sage for a minute while the orb breathes: Task Manager shows Sage's CPU near zero.
+
+## Home screen
+
+Before you start: two reminders for later today and one for an earlier time today that Sage couldn't
+show (or set one for a minute ahead and quit Sage before it is due), a reminder for a later day, and a
+few notes. Ask Sage in Chat, for example "Remind me at 17:00 to call Sam".
+
+- [ ] Start Sage: it opens on **Home**, and the tab bar reads **Home**, **Chat**, **Settings**, with Home
+      underlined. The large orb says *READY*, the clock shows the time as the taskbar clock does (24-hour
+      or AM/PM, as Windows is set), and the greeting fits the time of day (*Good morning* from 05:00,
+      *Good afternoon* from 12:00, *Good evening* from 18:00).
+- [ ] Watch the clock across a minute: it changes once, on the minute, with no seconds ticking.
+- [ ] **Today** lists today's reminders with their times; a missed one is amber and marked *MISSED*.
+      **Notes** shows the titles of your five newest notes. **Status** shows the brain (*On this computer*
+      or the company's name), whether voice is ready, whether sound is on, and the next reminder. Click
+      **Sound** in the top bar: Status follows.
+- [ ] Wait for a reminder to fire while Home is open: within a minute it is no longer the next one in
+      Status. Delete all reminders and notes in Chat, then open Home: *Nothing due today*, *No notes yet*,
+      and the next reminder is *None*.
+- [ ] **Talk to Sage**: Chat opens with the cursor in the message box; type and press Enter.
+- [ ] **Brief me** with Read replies aloud on *After voice messages*: the Brief panel appears and the
+      brief types itself out ("Good morning. It's …", today's reminders, missed ones, your latest notes,
+      "What would you like to start with?"), and is read aloud; the large orb says *SPEAKING*. The chat
+      shows nothing new, and with an online brain nothing is sent (the brief works with the network
+      unplugged). Repeat with *Always* (read aloud) and *Never* (not read aloud).
+- [ ] Settings → Home → **Brief me when Sage first opens each day** on, *Save settings*. Set Read replies
+      aloud to *Always* and save. Close Sage, then set the PC's date to tomorrow (Settings → Time &
+      language → Date & time, automatic time off) and start Sage: Home shows the brief and reads it
+      aloud. Close and start Sage again: no brief. Set *After voice messages*, set the date one more day
+      ahead and start Sage: the brief shows but isn't read aloud. Turn the setting off, move the date
+      ahead again: no brief. Set the date and time back to automatic.
+- [ ] Animation effects off (Accessibility → Visual effects) and restart Sage: on Home the orb stands
+      still, the clock still changes on the minute, and **Brief me** shows the brief at once.
+- [ ] Keyboard only: Tab reaches the **Home**, **Chat** and **Settings** tabs, **Sound**, **Talk to
+      Sage** and **Brief me**, each with a visible focus ring; Enter or Space works on each. Narrator
+      reads each panel's name and its rows.
 
 ## The window
 
