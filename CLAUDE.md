@@ -5,8 +5,8 @@
 Sage (S.A.G.E., System for Assistance, Guidance & Execution) is a desktop assistant that runs on the
 owner's own computer: an Electron app with a text chat, a switchable brain (a local model runner on
 `127.0.0.1`, or an online service with the chat-completions format), a few skills, and an ask-first rule
-for anything that opens or deletes something. It installs on Windows (installer planned) and runs from
-source on Linux. Safety and privacy are the point of the project: no local server, no command skill, no
+for anything that opens or deletes something. It installs on Windows (a one-click installer, see
+`docs/releasing.md`) and runs from source on Windows and Linux. Safety and privacy are the point of the project: no local server, no command skill, no
 bypass mode, no telemetry, and the online key encrypted by the operating system.
 
 ## Before structural changes
@@ -32,7 +32,9 @@ strike them through with a reason.
 - `npm run check`: Biome lint and format check; `npm run format` rewrites.
 - `npm run check:public`: the public-repo checker; `npm run secret-scan`: gitleaks (skipped if missing).
 - `npm run verify`: all of the above; it must pass before any pull request.
-- `npm run fuses -- <packaged binary>`: Electron's hardening fuses, for the installer job only.
+- `npm run dist`: build, then make the Windows installer `out/Sage-Setup-<version>.exe` (Windows only).
+- `npm run dist:dir`: build, then make the unpacked Windows app in `out/win-unpacked/` (also on Linux;
+  read the fuses back with `npx @electron/fuses read --app out/win-unpacked/Sage.exe`).
 
 ## Architecture
 
@@ -49,7 +51,8 @@ strike them through with a reason.
 | `src/main/` | The Electron main process: `main.ts` (thin wiring), `security.ts` (window options, CSP, URL and permission rules), `ipc.ts` (validated handlers), `fuses-config.ts`. |
 | `src/preload/preload.ts` | Exposes the typed `window.sage` API through `contextBridge`; nothing else. |
 | `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. |
-| `scripts/` | Build, public-repo checker, secret scan, fuses. |
+| `scripts/` | Build, public-repo checker, secret scan. |
+| `electron-builder.json` | The installer settings: app id, the name "Sage" (only here; never `productName` in `package.json`, which would move the data folder), the NSIS installer and the fuses, which must match `src/main/fuses-config.ts` (a test checks). |
 | `test/` | Tests and saved search pages (`test/fixtures/`). |
 
 ## Rules
