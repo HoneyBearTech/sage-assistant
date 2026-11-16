@@ -1,3 +1,5 @@
+<img src="build/icon.png" alt="The Sage icon: a white leaf on a green tile" width="96" align="right">
+
 # Sage
 
 **S.A.G.E.** (System for Assistance, Guidance & Execution), "Sage" for short, is a desktop assistant

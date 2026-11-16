@@ -215,8 +215,8 @@ replies use the window's built-in speech, with no package.
 ## Packaging
 
 - `npm run build` writes everything the app needs into `dist/`: `main.cjs`, `preload.cjs`,
-  `voice-helper.cjs` and `renderer/` (`index.html`, `styles.css`, `renderer.js`, which includes the
-  Welcome screen). `package.json`'s `main`
+  `voice-helper.cjs`, `icon.png` (the window icon, copied from `build/icon.png`) and `renderer/`
+  (`index.html`, `styles.css`, `renderer.js`, which includes the Welcome screen). `package.json`'s `main`
   points at `dist/main.cjs`. zod is bundled into the bundles, so it is a dev dependency.
 - **The one run-time dependency** is the speech engine, `sherpa-onnx-node`, marked external in
   `scripts/build.ts` so the helper loads it from `node_modules`. npm installs only the ready-built package
@@ -228,6 +228,13 @@ replies use the window's built-in speech, with no package.
   next to the archive**, in `resources/app.asar.unpacked/node_modules/sherpa-onnx-<platform>-<arch>/`
   (`asarUnpack` in `electron-builder.json`), because the system can't load them from inside it. Unpacked
   files aren't covered by the archive's integrity check (see the assurance case, T6).
+- **The icon** is drawn in `build/icon.svg`, and `build/icon.png` (512 by 512, made from the drawing;
+  `build/README.md` has the command) is the one file used everywhere. `electron-builder.json` names it as
+  `win.icon`, and electron-builder makes the Windows icon sizes from it for `Sage.exe`, the installer, the
+  uninstaller and the shortcuts (the NSIS `installerIcon` and `uninstallerIcon` settings, which need
+  `.ico` files, default to the app icon, so they aren't set). `build/` isn't in the `files` list: the
+  window icon comes from `dist/icon.png`, which `scripts/build.ts` copies, and `windowOptions` in
+  `src/main/security.ts` takes its path (from `main.ts`) as `icon`. No tray or notification icon.
 - `npm run dist` builds, then makes the Windows installer `out/Sage-Setup-<version>.exe` with
   electron-builder; it works only on Windows. `npm run dist:dir` makes the unpacked app in
   `out/win-unpacked/` instead, and also works on Linux, for checks. `out/` is not in git. The settings

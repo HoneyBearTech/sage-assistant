@@ -231,8 +231,12 @@ haven't since the last update). The first `npm run dist` downloads a few hundred
       `out\Sage-Setup-<version>.exe` (the version in `package.json`), and no `.blockmap` file next to it.
 - [ ] Run the installer: SmartScreen may warn (**More info**, then **Run anyway**). It installs without
       asking for admin rights and starts Sage.
+- [ ] The installer, `Sage.exe` and the shortcuts show the leaf icon (white leaf on a green tile), not
+      Electron's default. Windows may keep showing an old shortcut icon until you sign out and in (or
+      uninstall the test copy first).
 - [ ] The Start menu has **Sage**, and so does the desktop. Close Sage and start it from each shortcut:
       it opens.
+- [ ] The taskbar button and the window show the leaf icon.
 - [ ] The window is titled "Sage" and looks the same as from source (styled, not plain black text on
       white). Ask "What can you do?": a reply comes back. **Settings** opens, and the chat comes back.
 - [ ] "What notes do I have?" lists the note made in the source copy (both use

@@ -57,6 +57,7 @@ strike them through with a reason.
 | `src/preload/preload.ts` | Exposes the typed `window.sage` API through `contextBridge`; nothing else. |
 | `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. Voice is in `voice-controls.ts` (hold to talk, the download offer, spoken replies), `voice.ts` (recorder, 16 kHz conversion, speech) and `voice-text.ts`; the Welcome screen is in `welcome.ts` and `welcome-text.ts`; `renderer.ts` only finds the elements. |
 | `scripts/` | Build, public-repo checker, secret scan. |
+| `build/` | The icon: `icon.svg` (the drawing) and `icon.png` (512 by 512, made from it; `build/README.md` says how). `electron-builder.json` names it for `Sage.exe` and the installer, and `npm run build` copies it to `dist/icon.png` for the window. |
 | `electron-builder.json` | The installer settings: app id, the name "Sage" (only here; never `productName` in `package.json`, which would move the data folder), the NSIS installer, `asarUnpack` for the speech engine's native files, and the fuses, which must match `src/main/fuses-config.ts` (a test checks). |
 | `test/` | Tests and saved search pages (`test/fixtures/`). `test/window.ts` starts the real window script on the fake DOM (`fake-dom.ts`) with stand-ins for the microphone, recorder, audio and speech (`fake-media.ts`). |
 

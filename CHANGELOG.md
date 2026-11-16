@@ -8,6 +8,9 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **A Sage icon:** a white leaf on a sage-green tile, for the installer, `Sage.exe`, the Start-menu and
+  desktop shortcuts, the taskbar and the window (also when run from source). The drawing is
+  `build/icon.svg`.
 - **First-run setup: a Welcome screen.** The first time Sage starts, a Welcome screen in its window sets
   it up step by step: where Sage thinks (on this computer, or an online service, which opens Settings);
   whether the local model runner is running, with **Check again**, short install steps and **Open the
