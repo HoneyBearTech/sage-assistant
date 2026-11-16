@@ -35,6 +35,11 @@ check, so CI on `main` was red until this job.
 install-script finding was raised by both security reviews, so it counted as confirmed. The checklist now
 covers any package that adds an install script, not only esbuild.
 
+**Windows test fix:** with `main`'s format error gone, CI ran the tests on Windows for the first time.
+Three file-opening tests failed there. The runner's temp folder has a short 8.3 name, while Sage
+correctly reports real (long) paths. The test helper now returns the real path. This was test-only; the
+app was right.
+
 **Rejected or deferred findings:**
 - *"Renovate is installed" can't be shown from the repo.* Rejected: the onboarding pull request (#2) was
   merged, and Renovate has opened update pull requests.
