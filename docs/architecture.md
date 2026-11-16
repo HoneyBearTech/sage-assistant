@@ -110,21 +110,38 @@ saying which file it was and where the old copy was kept. The chat history is ke
 | Build | esbuild 0.28.2 | Bundles the main process and preload (CommonJS) and the window (one script). |
 | Tests | Node's `node:test` through tsx | No extra test framework; fake servers on `127.0.0.1` for the brains. |
 | Lint and format | Biome 2.6.8 | One fast tool for both. |
-| Hardening | @electron/fuses 2.1.3 | Switches off Node entry points in the packaged app. |
+| Packaging | electron-builder 26.18.1 | Packs the app into an archive, sets the fuses and makes the one-click Windows installer (NSIS). A build tool only; nothing of it ships inside Sage. |
+| Hardening | @electron/fuses 2.1.3 | The fuse names for `src/main/fuses-config.ts`; electron-builder sets them in the packaged app. |
 
 There are no vendor SDKs: both brains and the search use `fetch`.
 
-## Packaging notes (for the installer job)
+## Packaging
 
 - `npm run build` writes everything the app needs into `dist/`: `main.cjs`, `preload.cjs` and
   `renderer/` (`index.html`, `styles.css`, `renderer.js`). `package.json`'s `main` points at
-  `dist/main.cjs`. The packaged app needs `dist/` and `package.json`, and zod is bundled into
-  `main.cjs`, so no `node_modules` are needed at run time.
-- After packaging the app into an ASAR archive, run `npm run fuses -- <path to the packaged Sage
-  executable>` to set the fuses in `src/main/fuses-config.ts` (RunAsNode off, `NODE_OPTIONS` off,
-  inspect arguments off, ASAR integrity validation on, load only from ASAR). The ASAR integrity hash must
-  be embedded by the packager for the integrity fuse to pass. Never run the script on
-  `node_modules/electron`: the script refuses that path, because "only load from ASAR" would stop
-  `npm start` from working.
+  `dist/main.cjs`. zod is bundled into `main.cjs`, so it is a dev dependency and Sage has no run-time
+  dependencies: the app archive holds only `dist/` (without source maps) and `package.json`, and no
+  `node_modules`.
+- `npm run dist` builds, then makes the Windows installer `out/Sage-Setup-<version>.exe` with
+  electron-builder; it works only on Windows. `npm run dist:dir` makes the unpacked app in
+  `out/win-unpacked/` instead, and also works on Linux, for checks. `out/` is not in git. The settings
+  are in `electron-builder.json`, which electron-builder reads by default:
+  - app id `com.honeybeartech.sage`, the same one `src/main/main.ts` gives Windows for notifications;
+  - the name "Sage" for the installer, the shortcuts and `Sage.exe` (`productName`), set only in that
+    file. The data folder comes from `package.json`'s `name`, `sage-assistant`, so the installed app and a
+    copy run from source share `%APPDATA%\sage-assistant`. Never add `productName` to `package.json` or
+    change the name through `extraMetadata`: that would move the data folder;
+  - a one-click NSIS installer for the current user (no admin rights), with Start-menu and desktop
+    shortcuts, that starts Sage when it finishes. Uninstalling keeps the data folder. No `.blockmap` or
+    other update files are made; those are for automatic updates, which come later.
+- **Fuses.** electron-builder sets the fuses from the `electronFuses` block in `electron-builder.json`
+  on `Sage.exe` while packaging, after it has embedded the archive's integrity hash and before any
+  signing. `src/main/fuses-config.ts` is the reviewed list: RunAsNode off, cookie encryption on,
+  `NODE_OPTIONS` off, inspect arguments off, ASAR integrity validation on, load only from ASAR, and no
+  extra privileges for `file://` pages. `test/security.test.ts` checks that the two lists match. To read
+  them back from a build: `npx @electron/fuses read --app out/win-unpacked/Sage.exe`. Never flip fuses on
+  `node_modules/electron`: "only load from ASAR" would stop `npm start` from working.
+- **Releases** are built by a GitHub workflow on a version tag, with a checksum file and build
+  provenance; see [releasing.md](releasing.md).
 - Reminders fire only while Sage is running; the scheduler checks every 15 seconds and fires reminders
   missed while it was closed on the first check after it starts.
