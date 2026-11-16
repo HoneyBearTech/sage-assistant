@@ -53,8 +53,12 @@ later, and what Sage will not do.
       `file://`, so check it still loads its script and styles) and `EnableCookieEncryption` on.
 - [ ] **Owner:** add the release workflow from [Releasing](releasing.md), then make the first release
       (`v0.1.0`) and check its installer against the checksum.
-- [ ] **A Sage icon** for the installer, the shortcuts and the window (the installer uses Electron's
-      default icon for now).
+- [x] **A Sage icon** (sage-icon): a white sage leaf on a green tile, in Sage's colours, for the
+      installer, `Sage.exe`, the shortcuts, the taskbar and the window. The drawing and the picture made
+      from it are in `build/`. The original item: for the installer, the shortcuts and the window (the
+      installer uses Electron's default icon for now).
+- [ ] **Owner:** build the installer on Windows and check the icon on the installer, the shortcuts, the
+      taskbar and the window ("Installed app" in [the Windows checklist](windows-checklist.md)).
 - [ ] **Public-repo checker:** also catch e-mail addresses written with JSON escapes (such as `@`
       for `@`) in JSON files. This gap is older than the installer job.
 - [ ] **Track the minimatch advisory** (GHSA-g3hv-75wg-m249) in electron-builder's build tools, and
