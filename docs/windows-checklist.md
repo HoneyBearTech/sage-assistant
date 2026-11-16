@@ -207,6 +207,33 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
 - [ ] In Task Manager, while Sage works out a recording, a separate Sage process ("Sage speech") runs;
       Sage's window stays responsive.
 
+## New look
+
+- [ ] The window opens dark: a green-black ground with a faint grid, `SAGE` and a small leaf at the top
+      left, monospace capital labels, and the orb above the message box saying *READY* and breathing
+      slowly. All text is easy to read.
+- [ ] Settings → Look → Theme → *Light*: the window turns light at once, and the status line says the
+      change isn't saved yet. Choose **Save settings**, close Sage and start it again: it opens light.
+      Set *Match system*, save, and switch Windows between light and dark (Settings → Personalization →
+      Colors): Sage follows. Set *Dark* again and save.
+- [ ] Send a message: your row is labelled `YOU` in amber, Sage's `SAGE` in green; while the reply is on
+      its way the orb's rings turn (*THINKING*), and the reply types itself out in about a second. Send
+      a long question and click anywhere while the reply types: all of it shows at once.
+- [ ] Hold Ctrl+Space (with the voice model downloaded): the orb pulses amber (*LISTENING*) until you
+      let go. With Read replies aloud on *Always*, the orb pulses (*SPEAKING*) while the reply is read,
+      and rests when it ends or you choose **Stop speaking**.
+- [ ] Ask "Open Notepad" (Notepad on the app list): the system box asks as before, and behind it the
+      chat shows an amber card, *Sage is asking: Open the app "Notepad" (…)*, with exactly the box's
+      sentence. Choose **Allow**: the card says *ALLOWED*. Ask again and choose **Don't allow**: *NOT
+      ALLOWED*. The card has nothing to click.
+- [ ] **Sound** in the top bar is off (hollow dot) on a first start. Click it: a short blip, the dot
+      lights, and sending plays a blip; the asking card plays a low tone and **Allow** two rising notes.
+      Restart Sage: Sound is still on. Click it off: no sounds at all.
+- [ ] Windows Settings → Accessibility → Visual effects → **Animation effects** off, then restart Sage:
+      the orb stands still (its word still changes), and replies appear at once without typing. Turn
+      Animation effects back on.
+- [ ] Minimise Sage for a minute while the orb breathes: Task Manager shows Sage's CPU near zero.
+
 ## The window
 
 - [ ] Drag a file from Explorer onto the chat: the window does not navigate to the file.

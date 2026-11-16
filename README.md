@@ -60,7 +60,17 @@ commands, and text from web pages or notes can't start a skill on its own. Every
 decline is written to a local log. How this works, and what it protects against, is in the
 [assurance case](docs/assurance-case.md).
 
+While the box is open, Sage's chat shows the same question in an amber card, and afterwards whether you
+allowed it. The card is only a reminder: you answer in the box.
+
 Sage sends no telemetry, analytics or crash reports, and has no account.
+
+## The look
+
+Sage's window is dark by default, a calm heads-up display in green, with an orb above the message box
+that shows when Sage is listening, thinking or speaking. **Settings → Look → Theme** switches to
+*Light* or *Match system*. **Sound** in the top bar turns on short sound effects (off until you do).
+With your system's "reduce motion" setting on, nothing in the window moves.
 
 ## Voice
 
