@@ -82,8 +82,12 @@ test("the numbered step labels in the window match the shared list", async () =>
   for (const [step, label] of Object.entries(SETUP_STEP_LABELS)) {
     const heading = html.match(new RegExp(`<h2 id="step-${step}-heading" tabindex="-1">(.*?)</h2>`));
     assert.ok(heading, step);
-    assert.equal(heading[1]!.replace(/<[^>]+>/g, ""), label);
-    assert.match(heading[1]!, /^<span class="step-number">\d{2}<\/span> /);
+    // The whole heading in one pattern: the number in its span, then plain text with no other tag.
+    const parts = heading[1]!.match(/^<span class="step-number">(\d{2})<\/span> (.+)$/);
+    assert.ok(parts, `${step}: a numbered heading`);
+    const [, number, rest] = parts;
+    assert.ok(!rest!.includes("<"), `${step}: no other tag in the heading`);
+    assert.equal(`${number} ${rest}`, label);
   }
 });
 
