@@ -145,7 +145,7 @@ function show(view: "chat" | "settings" | "welcome"): void {
 /** Every way into Chat goes through here, so held notices are confirmed once they can be seen. */
 function openChat(): void {
   show("chat");
-  void confirmShown();
+  void collectNotices();
 }
 tabs.chat.addEventListener("click", () => openChat());
 tabs.settings.addEventListener("click", () => show("settings"));
@@ -191,7 +191,7 @@ async function confirmShown(): Promise<void> {
   }
 }
 
-async function collectNotices(): Promise<void> {
+async function collectOnce(): Promise<void> {
   try {
     const notices = await sage.takeNotices();
     const current = new Set(notices.map((notice) => notice.id));
@@ -210,10 +210,38 @@ async function collectNotices(): Promise<void> {
   } catch {
     // The next poll tries again.
   }
-  await confirmShown();
 }
 
-document.addEventListener("visibilitychange", () => void confirmShown());
+let collecting: Promise<void> | undefined;
+let collectAgain = false;
+
+/**
+ * Collects, then confirms what is still held. Opening Chat and the window coming back into view
+ * collect first too: a notice whose reminder was deleted meanwhile is taken out before it can be
+ * confirmed. Only one collection runs at a time. A request that arrives while one is running makes
+ * exactly one more follow it (further requests join that one), and nothing is confirmed until the
+ * last has finished, so an older answer can never bring back or confirm a notice a newer one removed.
+ */
+function collectNotices(): Promise<void> {
+  if (collecting) {
+    collectAgain = true;
+    return collecting;
+  }
+  collecting = (async () => {
+    do {
+      collectAgain = false;
+      await collectOnce();
+    } while (collectAgain);
+    await confirmShown();
+  })().finally(() => {
+    collecting = undefined;
+  });
+  return collecting;
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void collectNotices();
+});
 
 /** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
 function startNotices(): void {

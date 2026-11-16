@@ -346,6 +346,132 @@ test("a reminder deleted while its notice is held behind Settings never appears 
   assert.deepEqual(await sage.reminders.list(), []);
 });
 
+test("a reminder deleted while held behind Settings is gone when Chat opens, before the next collection", async (t) => {
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const sage = createSage({
+    dataDir: await tempDir(t),
+    keyStore: new MemoryKeyStore(),
+    presenter: { ask: async () => true },
+    notify: () => false, // no desktop notifications: reminders go to the window
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+    localPort: REFUSED_PORT,
+    clock,
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  let taking: Promise<unknown> = Promise.resolve();
+  const acked: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => {
+      const result = handlers[CHANNELS.takeNotices](undefined) as Promise<Notice[]>;
+      taking = result;
+      return result;
+    },
+    ackNotices: async (ids) => {
+      acked.push(ids);
+      await handlers[CHANNELS.ackNotices]({ ids });
+    },
+  });
+
+  // The reminder comes due and is collected while Settings is open: held.
+  el("tab-settings").click();
+  const reminder = await sage.reminders.add("Water the plants", new Date("2026-11-15T09:01:00Z"));
+  clock.advance(120_000);
+  await sage.scheduler.tick();
+  t.mock.timers.tick(5_000);
+  await taking;
+  await settled();
+  assert.deepEqual(texts(), ["Sage reminder: Water the plants"]);
+
+  // Deleted; no collection runs before Chat opens (the timers aren't ticked).
+  assert.equal((await sage.registry.execute(toolCall("delete_reminder", { id: reminder.id }))).ran, true);
+  el("tab-chat").click();
+  await taking;
+  await settled();
+  assert.deepEqual(texts(), [], "removed when Chat opened");
+  assert.deepEqual(acked, [], "and never confirmed");
+});
+
+test("a collection still running when Chat opens is followed by a fresh one; a stale answer can't bring a notice back", async (t) => {
+  const stale = deferred<Notice[]>();
+  const answers: Promise<Notice[]>[] = [];
+  let calls = 0;
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => {
+      calls++;
+      return answers.shift() ?? Promise.resolve([]);
+    },
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  const held = { id: "n1", text: "Held" };
+
+  // Held behind Settings.
+  el("tab-settings").click();
+  answers.push(Promise.resolve([held]));
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Held"]);
+
+  // A collection starts before the delete (its answer still has the notice) and is slow.
+  answers.push(stale.promise);
+  t.mock.timers.tick(5_000);
+  await settled();
+  const before = calls;
+  // Chat opens, then a poll arrives too: both coalesce into exactly one more collection.
+  // That fresh collection no longer has the notice.
+  el("tab-chat").click();
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.equal(calls, before, "the fresh collection waits for the one in flight");
+  assert.deepEqual(acks, [], "nothing is confirmed meanwhile");
+  stale.resolve([held]);
+  await settled();
+  assert.equal(calls, before + 1, "exactly one fresh collection follows");
+  assert.deepEqual(texts(), [], "the stale answer didn't bring it back");
+  assert.deepEqual(acks, [], "and it was never confirmed");
+});
+
+test("the window becoming visible again collects before confirming", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  let shownWhenAcked: (string | null)[] = [];
+  let screen = (): (string | null)[] => [];
+  const { texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      shownWhenAcked = screen();
+      acks.push(ids);
+    },
+  });
+  screen = texts;
+
+  // Minimised: a notice is collected but held; then it is withdrawn while the window is hidden.
+  setWindowVisibility("hidden");
+  waiting.push({ id: "n1", text: "Held" });
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Held"]);
+  waiting.length = 0;
+  setWindowVisibility("visible");
+  await settled();
+  assert.deepEqual(texts(), [], "collected again first");
+  assert.deepEqual(acks, [], "so the withdrawn notice is never confirmed");
+
+  // One that is still there is shown, then confirmed.
+  setWindowVisibility("hidden");
+  waiting.push({ id: "n2", text: "Still here" });
+  t.mock.timers.tick(5_000);
+  await settled();
+  setWindowVisibility("visible");
+  await settled();
+  assert.deepEqual(acks, [["n2"]]);
+  assert.deepEqual(shownWhenAcked, ["Still here"]);
+});
+
 test("only held notices are taken out of the chat; confirmed ones, or ones being confirmed, stay", async (t) => {
   const waiting: Notice[] = [];
   let ackGate: ReturnType<typeof deferred<void>> | undefined;
