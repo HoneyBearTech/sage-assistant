@@ -3,7 +3,7 @@
 ## What the owner asked for
 
 "Start the next one": the roadmap item "Public-repo checker: also catch e-mail addresses written with
-JSON escapes (such as `@` for `@`) in JSON files."
+JSON escapes (such as `\u0040` for `@`) in JSON files."
 
 ## What we found
 
@@ -11,7 +11,7 @@ JSON escapes (such as `@` for `@`) in JSON files."
   scans every file line by line for private network addresses, LAN host names, home folders with a
   real user name, and personal e-mail addresses (`scripts/lib/public-scan.ts`).
 - It reads each line exactly as written. JSON files (and JavaScript strings) can write any character as
-  `\u` and four hex digits, so an address written as `name@example.org` hides from the e-mail rule.
+  `\u` and four hex digits, so an address written as `name\u0040example.org` hides from the e-mail rule.
   The same trick can hide the dots in a private address or a host name.
 - The gap was found during the installer job and deferred to the roadmap. Nothing in the repository
   uses it today.

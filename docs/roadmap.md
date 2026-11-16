@@ -64,7 +64,7 @@ later, and what Sage will not do.
 - [ ] **Owner:** build the installer on Windows and check the icon on the installer, the shortcuts, the
       taskbar and the window ("Installed app" in [the Windows checklist](windows-checklist.md)), if not
       done before merging PR #14.
-- [x] **Public-repo checker:** also catch e-mail addresses written with JSON escapes (such as `@`
+- [x] **Public-repo checker:** also catch e-mail addresses written with JSON escapes (such as `\u0040`
       for `@`) in JSON files. This gap is older than the installer job.
       Done: a line with `\u` and four hex digits or `\/` is also scanned decoded (an escaped backslash
       becomes one backslash), in every text file; a problem found only there is reported once, marked
