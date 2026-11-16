@@ -9,6 +9,8 @@ import { startWindow } from "./window.js";
 
 function fakeContext(state = "running") {
   const started: { wave: string; from: number }[] = [];
+  /** Each note: when it was told to stop (undefined: at once), and whether its volume was cut off. */
+  const notes: { stops: (number | undefined)[]; cut: boolean; end(): void }[] = [];
   let resumed = 0;
   const param = () => {
     const values: number[] = [];
@@ -27,20 +29,40 @@ function fakeContext(state = "running") {
       resumed++;
     },
     createOscillator() {
+      const note = {
+        stops: [] as (number | undefined)[],
+        cut: false,
+        end: () => oscillator.onended?.({} as never),
+      };
+      notes.push(note);
       const oscillator = {
         type: "",
         frequency: param(),
+        onended: null as ((event: never) => unknown) | null,
         connect() {},
+        disconnect() {},
         start() {
           started.push({ wave: oscillator.type, from: oscillator.frequency.values[0]! });
         },
-        stop() {},
+        stop(when?: number) {
+          note.stops.push(when);
+        },
       };
       return oscillator;
     },
-    createGain: () => ({ gain: param(), connect() {} }),
+    // Each note's volume control is made right after its oscillator.
+    createGain: () => {
+      const note = notes.at(-1);
+      return {
+        gain: param(),
+        connect() {},
+        disconnect() {
+          if (note) note.cut = true;
+        },
+      };
+    },
   };
-  return { context, started, resumed: () => resumed };
+  return { context, started, notes, resumed: () => resumed };
 }
 
 test("the sounds are short, quiet notes: a blip, two rising notes, and a low tone", () => {
@@ -226,4 +248,26 @@ test("a settings read that started before the Sound switch was used doesn't undo
   reads[2]!.resolve();
   await settled();
   assert.equal(el("sound-toggle").getAttribute("aria-pressed"), "true", "the saved value, read afresh");
+});
+
+test("switching sound off silences notes already playing or waiting to start", () => {
+  const fake = fakeContext();
+  const sounds = createSounds(() => fake.context);
+  sounds.setOn(true);
+  sounds.play("send");
+  // The blip finished by itself: nothing more to do for it.
+  fake.notes[0]!.end();
+  sounds.play("allowed");
+  assert.equal(fake.notes.length, 3);
+  for (const note of fake.notes) assert.equal(note.stops.length, 1, "each scheduled to stop at its end");
+
+  sounds.setOn(false);
+  assert.deepEqual(fake.notes[0]!.stops.length, 1, "a finished note isn't touched");
+  for (const note of fake.notes.slice(1)) {
+    assert.deepEqual(note.stops.at(-1), undefined, "stopped at once, the second before it starts");
+    assert.equal(note.cut, true, "and cut off from the speakers");
+  }
+  // Switching off again has nothing left to stop.
+  sounds.setOn(false);
+  assert.equal(fake.notes[1]!.stops.length, 2);
 });

@@ -169,7 +169,9 @@ export function installFakeMedia(): FakeMedia {
       return {
         type: "sine",
         frequency,
+        onended: null,
         connect() {},
+        disconnect() {},
         start() {
           media.tones.push(frequency.values[0] ?? 0);
         },
@@ -177,7 +179,7 @@ export function installFakeMedia(): FakeMedia {
       };
     }
     createGain() {
-      return { gain: param(), connect() {} };
+      return { gain: param(), connect() {}, disconnect() {} };
     }
     async decodeAudioData(data: ArrayBuffer) {
       if (data.byteLength === 0) throw new DOMException("empty", "EncodingError");

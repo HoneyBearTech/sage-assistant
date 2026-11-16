@@ -39,6 +39,7 @@ interface Param {
 
 interface ToneNode {
   connect(destination: never): unknown;
+  disconnect(): void;
 }
 
 /** The parts of the window's AudioContext the sounds use. */
@@ -51,7 +52,8 @@ export interface ToneContext {
     type: string;
     frequency: Param;
     start(when: number): void;
-    stop(when: number): void;
+    stop(when?: number): void;
+    onended: ((event: never) => unknown) | null;
   };
   createGain(): ToneNode & { gain: Param };
 }
@@ -66,6 +68,8 @@ export interface Sounds {
 export function createSounds(makeContext: () => ToneContext | undefined): Sounds {
   let on = false;
   let context: ToneContext | undefined;
+  /** Notes started or waiting to start, so switching sound off can silence them at once. */
+  const playing = new Set<{ stop(): void }>();
 
   function playTone(audio: ToneContext, tone: Tone): void {
     const at = audio.currentTime + tone.start;
@@ -83,6 +87,21 @@ export function createSounds(makeContext: () => ToneContext | undefined): Sounds
     gain.connect(audio.destination as never);
     oscillator.start(at);
     oscillator.stop(end + 0.02);
+    const note = {
+      stop() {
+        playing.delete(note);
+        // Cut off from the speakers first: that alone makes it quiet, even if stopping fails.
+        for (const end of [() => gain.disconnect(), () => oscillator.stop()]) {
+          try {
+            end();
+          } catch {
+            // Already over.
+          }
+        }
+      },
+    };
+    playing.add(note);
+    oscillator.onended = () => playing.delete(note);
   }
 
   return {
@@ -91,6 +110,8 @@ export function createSounds(makeContext: () => ToneContext | undefined): Sounds
     },
     setOn(value) {
       on = value;
+      // Off means quiet now: a note still sounding, or the second of two not yet started, stops.
+      if (!on) for (const note of [...playing]) note.stop();
     },
     play(name) {
       if (!on) return;
