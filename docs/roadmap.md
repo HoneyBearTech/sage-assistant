@@ -58,7 +58,8 @@ later, and what Sage will not do.
       from it are in `build/`. The original item: for the installer, the shortcuts and the window (the
       installer uses Electron's default icon for now).
 - [ ] **Owner:** build the installer on Windows and check the icon on the installer, the shortcuts, the
-      taskbar and the window ("Installed app" in [the Windows checklist](windows-checklist.md)).
+      taskbar and the window ("Installed app" in [the Windows checklist](windows-checklist.md)), if not
+      done before merging PR #14.
 - [ ] **Public-repo checker:** also catch e-mail addresses written with JSON escapes (such as `@`
       for `@`) in JSON files. This gap is older than the installer job.
 - [ ] **Track the minimatch advisory** (GHSA-g3hv-75wg-m249) in electron-builder's build tools, and
