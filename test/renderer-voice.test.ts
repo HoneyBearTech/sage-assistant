@@ -250,6 +250,25 @@ test("New chat keeps the box's words, and with them the mark that they came from
   assert.equal(media.speech.spoken.length, 1);
 });
 
+test('after New chat drops a job, its "still working" line goes when that job ends', async (t) => {
+  const answer = deferred<TranscribeResult>();
+  const { el, hold, status, media } = await voiceWindow(t, { transcribe: () => answer.promise });
+  await hold(2_000);
+  el("new-chat").click();
+  pressKey("keydown", ctrlSpace);
+  await settled();
+  assert.equal(status(), VOICE_TEXT.stillWorking);
+  pressKey("keyup", { key: "Control" });
+  answer.resolve({ ok: true, text: "old words" });
+  await settled();
+  await settled();
+  assert.equal(status(), "", "not left on screen");
+  assert.equal(el("input").value, "");
+  // And talking works again.
+  await hold(1_000);
+  assert.equal(media.streams.length, 2);
+});
+
 test("the message box's limit is the one the main process accepts", async () => {
   const html = await readFile(new URL("../src/renderer/index.html", import.meta.url), "utf8");
   assert.match(html, new RegExp(`<textarea id="input"[^>]*maxlength="${MAX_MESSAGE_CHARS}"`));

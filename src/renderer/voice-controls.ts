@@ -204,6 +204,9 @@ export function createVoiceControls(
       if (mine === generation) show(VOICE_TEXT.badRecording);
     } finally {
       working = false;
+      // A job dropped by New chat: if the talk key was pressed while it ran, its "still working"
+      // line would otherwise stay. Nothing else is running now (one job at a time).
+      if (mine !== generation && el.voiceStatus.textContent === VOICE_TEXT.stillWorking) show("");
     }
   }
 
