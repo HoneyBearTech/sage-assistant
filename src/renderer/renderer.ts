@@ -186,6 +186,11 @@ export function startChatWindow(): void {
   // --- Sound switch ---
 
   const soundSwitch = byId<HTMLButtonElement>("sound-toggle");
+  /**
+   * Goes up whenever the switch changes here. A settings read that started before is older than
+   * what the switch shows, so it doesn't change the switch (it would undo a mute).
+   */
+  let soundChanges = 0;
 
   function showSound(on: boolean): void {
     sounds.setOn(on);
@@ -196,10 +201,13 @@ export function startChatWindow(): void {
   // Saved straight away, on its own: it never saves (or loses) unsaved changes in Settings.
   soundSwitch.addEventListener("click", () => {
     const on = !sounds.on;
+    soundChanges++;
     showSound(on);
     if (on) sounds.play("send");
     const undo = () => {
-      if (sounds.on === on) showSound(!on);
+      if (sounds.on !== on) return;
+      soundChanges++;
+      showSound(!on);
     };
     void sage.setSound(on).then((result) => {
       if (!result.ok) undo();
@@ -426,7 +434,11 @@ export function startChatWindow(): void {
 
   async function loadSettings(): Promise<void> {
     settingsGeneration++;
-    settings = await sage.getSettings();
+    const soundAsked = soundChanges;
+    const loaded = await sage.getSettings();
+    // The Sound switch was used while this read was on its way: the switch is newer.
+    if (soundChanges !== soundAsked) loaded.sound = sounds.on;
+    settings = loaded;
     render();
   }
 

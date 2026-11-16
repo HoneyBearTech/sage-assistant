@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createSounds, TONES, type ToneContext } from "../src/renderer/sounds.js";
-import { settled } from "./helpers.js";
+import { deferred, settled } from "./helpers.js";
 import { startWindow } from "./window.js";
 
 // The window's sound effects (src/renderer/sounds.ts): made with oscillators, off by default, and no
@@ -182,4 +182,48 @@ test("with sound on but no audio in the window, nothing breaks", async (t) => {
   el("composer").dispatch("submit");
   await settled();
   assert.deepEqual(texts(), ["hello", "ok"]);
+});
+
+test("a settings read that started before the Sound switch was used doesn't undo it", async (t) => {
+  // The first read answers at once (sound on); the reload after Save settings is held.
+  const reads: ReturnType<typeof deferred<void>>[] = [];
+  const { el, media } = await startWindow(t, async () => "ok", {
+    getSettings: async () => {
+      const held = deferred<void>();
+      reads.push(held);
+      if (reads.length > 1) await held.promise;
+      return {
+        brain: "local",
+        local: { model: "small-model" },
+        online: { baseUrl: "", model: "", hasKey: false },
+        apps: [],
+        folders: [],
+        speakReplies: "voice",
+        setupDone: true,
+        theme: "dark",
+        sound: true,
+      };
+    },
+  });
+  assert.equal(el("sound-toggle").getAttribute("aria-pressed"), "true");
+  el("settings-form").dispatch("submit");
+  await settled();
+  assert.equal(reads.length, 2, "the reload after saving is on its way");
+
+  el("sound-toggle").click();
+  assert.equal(el("sound-toggle").getAttribute("aria-pressed"), "false", "muted");
+  reads[1]!.resolve();
+  await settled();
+  assert.equal(el("sound-toggle").getAttribute("aria-pressed"), "false", "still muted");
+  el("input").value = "hello";
+  el("composer").dispatch("submit");
+  await settled();
+  assert.deepEqual(media.tones, [], "and quiet");
+
+  // A read that starts after the switch was used shows what was saved.
+  el("settings-form").dispatch("submit");
+  await settled();
+  reads[2]!.resolve();
+  await settled();
+  assert.equal(el("sound-toggle").getAttribute("aria-pressed"), "true", "the saved value, read afresh");
 });
