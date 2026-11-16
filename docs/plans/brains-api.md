@@ -2,10 +2,10 @@
 
 ## What the owner asked for
 
-"I'm also wanting Sage to be able to utilize Claude, Codex, CoPilot, and/or Antigravity and not just the
-local open-source models." After the research, the owner chose: **API keys for Claude, OpenAI and Gemini,
-and the subscription only for GitHub Copilot** ("Yes that is ok"). This job is the API-key part; Copilot
-is the next job.
+Sage should be able to use the big online model services (Anthropic's, OpenAI's, GitHub's and Google's),
+not just local open-source models. After the research, the owner chose: **API keys for Claude, OpenAI and
+Gemini, and the subscription only for GitHub Copilot** ("Yes that is ok"). This job is the API-key part;
+Copilot is the next job.
 
 ## What we found
 
@@ -13,10 +13,10 @@ The full research is in [docs/reports/2026-11-16-online-brains.md](../reports/20
 
 - **Claude:** Anthropic's terms don't allow other apps to sign in with a Claude Pro/Max subscription or
   route requests through it. An Anthropic API key (pay per use) is the supported way.
-- **Codex / OpenAI:** an OpenAI API key is the supported way. Sage's online brain already speaks OpenAI's
+- **OpenAI:** an OpenAI API key is the supported way. Sage's online brain already speaks OpenAI's
   format; it just needs OpenAI as a ready-made choice.
-- **Antigravity:** Google's terms forbid other apps from wrapping it. The models behind it (Gemini) are
-  available with a Google AI Studio key, which has a free tier for some models.
+- **Google:** Google's terms forbid other apps from driving its own agent tools with a consumer sign-in.
+  Its models (Gemini) are available with a Google AI Studio key, which has a free tier for some models.
 - **Copilot:** GitHub's official kit for apps uses the user's Copilot subscription. It runs an agent, so a
   short trial must first prove it can be limited to answering; that is the next job.
 - Today Sage has two brains: "On this computer" (the local model runner) and one "online service" with an
@@ -87,5 +87,6 @@ Welcome screens.
 ## Out of scope
 
 - GitHub Copilot (the next job, starting with a short trial).
-- Signing in with Claude, ChatGPT or Google subscriptions (not allowed by those companies, or unclear).
+- Signing in with Anthropic, OpenAI or Google consumer subscriptions (not allowed by those companies, or
+  unclear).
 - Spending limits inside Sage.

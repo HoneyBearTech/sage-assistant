@@ -112,11 +112,24 @@ later, and what Sage will not do.
       reloads.
 - [ ] **A new look, part 3: the Welcome screen as a start-up sequence.** The same steps as numbered
       sections with typed check lines, plus a support code and Copy diagnostics when something fails.
-- [ ] **More online brains** (brains-api, plan approved in #25): three more
-      online services with the user's own API key, one key per company, a Test button and plain error
-      messages. Starts after the new look's part 1 is merged.
-- [ ] **Sign-in with an existing subscription** for one more online service, after a trial that checks
-      it can answer without using its own tools. Its own plan.
+- [x] **More online brains** (brains-api): Claude, OpenAI and Gemini with the user's own API key, next
+      to On this computer and Another online service. One key per company, kept in the system's protected
+      storage and only ever sent to that company's own address; Load models, Test and Get a key (opened
+      after Sage's asking box); plain messages for a wrong key, used-up credit, a retired model or a busy
+      service; settings and the key from 0.1.1 carry over. Claude uses its Messages format, OpenAI its
+      Responses format and Gemini its own format, each with Sage's skills.
+- [ ] **Owner:** run the "Online brains" section of [the Windows checklist](windows-checklist.md) with a
+      real key for each service you want, after setting a low spending limit on the company's website.
+- [ ] **Move the Messages-format brain to the newer API version** (`anthropic-version` 2026-10-21; Sage
+      sends 2023-06-01, which still works). Check what the newer version changes first.
+- [ ] **Check against the real services** what the team could only take from the docs: OpenAI's encrypted
+      reasoning with `store: false`, the shape of Google's daily-quota error, and Anthropic's "credit
+      balance too low" error.
+- [ ] **Minor:** in Settings, a Test or Load models still running when that company's key is saved or
+      removed can show its old answer ("The key works" next to "No key saved"). Sage itself never reuses
+      the old answer; only the window's display is stale. Clear pending results when the key changes.
+- [ ] **GitHub Copilot sign-in** with the user's subscription, after a trial that checks it can answer
+      without using its own tools. Its own plan.
 
 ## Later
 
