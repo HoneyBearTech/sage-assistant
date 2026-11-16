@@ -639,3 +639,47 @@ test("leaving Home doesn't stop a reply being read aloud", async (t) => {
   el("tab-chat").click();
   assert.equal(media.speech.speaking, true, "a reply goes on");
 });
+
+test("Home's own Stop speaking shows only while the brief is read, inside Home, and stops it", async (t) => {
+  // In the page, the button is inside Home's view (Chat's Stop speaking is hidden with Chat).
+  const homeView = html.slice(
+    html.indexOf('<main id="view-home"'),
+    html.indexOf("</main>", html.indexOf('<main id="view-home"')),
+  );
+  assert.match(
+    homeView,
+    /<section id="home-brief-panel"[\s\S]*<button type="button" id="home-stop-speaking" class="brief-stop" hidden>Stop speaking<\/button>[\s\S]*<\/section>/,
+  );
+  const { el, media } = await homeWindow(t, { summary: SAMPLE, settings: { speakReplies: "voice" } });
+  assert.equal(el("home-stop-speaking").hidden, true);
+  el("home-brief").click();
+  await settled();
+  assert.equal(el("view-home").hidden, false);
+  assert.equal(el("home-brief-panel").hidden, false);
+  assert.equal(el("home-stop-speaking").hidden, false, "shown while the brief is read");
+  el("home-stop-speaking").click();
+  assert.equal(media.speech.speaking, false);
+  assert.equal(el("home-stop-speaking").hidden, true);
+  assert.equal(el("home-orb").getAttribute("data-state"), "idle");
+
+  // It goes when the brief ends by itself, and a reply being read never shows it.
+  el("home-brief").click();
+  await settled();
+  media.speech.finish();
+  assert.equal(el("home-stop-speaking").hidden, true);
+});
+
+test("a reply read aloud doesn't show Home's Stop speaking, and it can't stop a reply", async (t) => {
+  const { el, media } = await homeWindow(t, { settings: { speakReplies: "always" } });
+  el("home-brief").click();
+  await settled();
+  assert.equal(el("home-stop-speaking").hidden, false);
+  el("tab-chat").click();
+  el("input").value = "Hello";
+  el("composer").dispatch("submit");
+  await settled();
+  assert.equal(media.speech.speaking, true);
+  assert.equal(el("home-stop-speaking").hidden, true, "it is a reply being read now");
+  el("home-stop-speaking").click();
+  assert.equal(media.speech.speaking, true);
+});

@@ -23,6 +23,8 @@ export interface VoiceElements {
   voiceDownload: HTMLButtonElement;
   voiceCancel: HTMLButtonElement;
   stopSpeaking: HTMLButtonElement;
+  /** Home's own Stop speaking, in the Brief panel: shown only while the brief is being read. */
+  briefStop: HTMLButtonElement;
   voiceNote: HTMLElement;
 }
 
@@ -82,10 +84,16 @@ export function createVoiceControls(
 
   const speaker = new Speaker(synth, (current) => {
     if (!current.speaking) speakingBrief = false;
-    el.stopSpeaking.hidden = !current.speaking;
+    showStopButtons(current.speaking);
     onActivity({ speaking: current.speaking });
     el.voiceNote.textContent = current.availability === "none" ? VOICE_TEXT.noVoice : "";
   });
+
+  /** Chat's Stop speaking while anything is read aloud; Home's only while it is the brief. */
+  function showStopButtons(speaking: boolean): void {
+    el.stopSpeaking.hidden = !speaking;
+    el.briefStop.hidden = !(speaking && speakingBrief);
+  }
 
   function show(text: string, buttons: { download?: string; cancel?: boolean } = {}): void {
     el.voiceStatus.textContent = text;
@@ -310,6 +318,9 @@ export function createVoiceControls(
     if (!el.input.value.trim()) fromVoice = false;
   });
   el.stopSpeaking.addEventListener("click", () => speaker.stop());
+  el.briefStop.addEventListener("click", () => {
+    if (speakingBrief) speaker.stop();
+  });
 
   // The download: the main process asks first in its own box, then fetches and checks the file.
   async function download(): Promise<void> {
@@ -368,6 +379,7 @@ export function createVoiceControls(
       if (talk) return;
       // Set once speaking has started: starting cancels what was being read, which clears it.
       speakingBrief = speaker.speak(text);
+      showStopButtons(speaker.speaking);
     },
     stopBrief() {
       if (speakingBrief) speaker.stop();

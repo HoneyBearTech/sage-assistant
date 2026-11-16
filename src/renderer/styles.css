@@ -1133,6 +1133,11 @@ legend::before {
   color: var(--text);
 }
 
+/* Shown only while the brief is being read aloud. */
+.brief-stop {
+  margin-top: 12px;
+}
+
 .brief-text.typing {
   color: transparent;
 }

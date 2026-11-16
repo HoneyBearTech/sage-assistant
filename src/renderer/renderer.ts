@@ -160,6 +160,7 @@ export function startChatWindow(): void {
       voiceDownload: byId<HTMLButtonElement>("voice-download"),
       voiceCancel: byId<HTMLButtonElement>("voice-cancel"),
       stopSpeaking: byId<HTMLButtonElement>("stop-speaking"),
+      briefStop: byId<HTMLButtonElement>("home-stop-speaking"),
       voiceNote: byId<HTMLParagraphElement>("voice-note"),
     },
     typeof speechSynthesis === "undefined" ? undefined : speechSynthesis,
