@@ -16,6 +16,13 @@ export interface FakeEvent {
   preventDefault(): void;
 }
 
+let focused: FakeElement | undefined;
+
+/** The element focused last, as `document.activeElement` would say. */
+export function focusedElement(): FakeElement | undefined {
+  return focused;
+}
+
 class FakeClassList {
   private readonly names = new Set<string>();
   constructor(private readonly element: FakeElement) {}
@@ -79,7 +86,9 @@ export class FakeElement {
     this.attributes.set(name, value);
   }
   scrollIntoView() {}
-  focus() {}
+  focus() {
+    focused = this;
+  }
   /** Pointer ids captured by the Talk button. */
   readonly captured: number[] = [];
   setPointerCapture(id: number) {
@@ -157,6 +166,7 @@ export function setWindowVisibility(state: "visible" | "hidden"): void {
 }
 
 export function removeFakeDom(): void {
+  focused = undefined;
   const globals = globalThis as Record<string, unknown>;
   delete globals.document;
   delete globals.window;

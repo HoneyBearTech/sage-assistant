@@ -15,6 +15,12 @@ export const CHANNELS = {
   downloadVoice: "sage:voice-download",
   cancelVoiceDownload: "sage:voice-download-cancel",
   transcribe: "sage:voice-transcribe",
+  runnerStatus: "sage:setup-runner-status",
+  pullModel: "sage:setup-pull",
+  pullStatus: "sage:setup-pull-status",
+  cancelPull: "sage:setup-pull-cancel",
+  openInstallGuide: "sage:setup-open-guide",
+  finishSetup: "sage:setup-finish",
 } as const;
 
 /** The longest message the window may send; the message box has the same limit. */
@@ -50,9 +56,11 @@ export interface PublicSettings {
   folders: string[];
   /** Read replies aloud: after voice messages, always, or never. */
   speakReplies: "voice" | "always" | "never";
+  /** The Welcome screen was finished or skipped. Changed only by `finishSetup`. */
+  setupDone: boolean;
 }
 
-export type SettingsInput = Omit<PublicSettings, "online"> & {
+export type SettingsInput = Omit<PublicSettings, "online" | "setupDone"> & {
   online: { baseUrl: string; model: string };
 };
 
@@ -78,6 +86,57 @@ export type TranscribeResult =
   | { ok: true; text: string }
   | { ok: false; message: string; needsDownload?: true };
 
+/** Sage's two local models, as the window names them; the main process maps them to model names. */
+export const MODEL_CHOICES = ["standard", "smaller"] as const;
+export type ModelChoice = (typeof MODEL_CHOICES)[number];
+
+/** Sage's two local models. Only these can be downloaded from the Welcome screen. */
+export const SAGE_MODELS: Record<ModelChoice, { name: string; label: string; size: string }> = {
+  standard: { name: "qwen3:4b", label: "Standard", size: "about 2.5 GB" },
+  smaller: { name: "qwen3:1.7b", label: "Smaller", size: "about 1.4 GB" },
+};
+
+/**
+ * The local model runner, for the local model saved in Settings: not reachable (not installed or
+ * not started), an answer Sage couldn't read, running without that model, or ready. `downloaded`
+ * says which of Sage's two models the runner already has.
+ */
+export interface RunnerStatus {
+  state: "unreachable" | "unreadable" | "no-model" | "ready";
+  /** The local model saved in Settings. */
+  model: string;
+  downloaded: Record<ModelChoice, boolean>;
+}
+
+/**
+ * "declined": the user chose Not now in the main process's box. `skills` after a download: whether
+ * the runner says the model can use tools ("unknown" when it doesn't say).
+ */
+export type PullResult =
+  | { status: "done"; skills: "yes" | "no" | "unknown" }
+  | { status: "declined" }
+  | { status: "cancelled" }
+  | { status: "failed"; message: string };
+
+/** How far the model download has got, in bytes, as the runner reports it. */
+export interface PullStatus {
+  downloading: boolean;
+  completed: number;
+  total: number;
+}
+
+/**
+ * Cancel: "cancelled" before the commit point; "too-late" once the downloaded model is being saved
+ * as the local model (it stays chosen); "idle" when nothing was running.
+ */
+export type CancelPullResult = "cancelled" | "too-late" | "idle";
+
+/** Opening the install guide. `address` is shown to copy when no browser opened. */
+export type GuideResult =
+  | { status: "opened" }
+  | { status: "declined" }
+  | { status: "failed"; message: string; address: string };
+
 export interface SageApi {
   send(text: string): Promise<string>;
   resetChat(): Promise<void>;
@@ -101,4 +160,17 @@ export interface SageApi {
   cancelVoiceDownload(): Promise<void>;
   /** 16 kHz mono sound, at most MAX_VOICE_SAMPLES samples; the words go into the message box. */
   transcribe(pcm: Int16Array): Promise<TranscribeResult>;
+  /** The Welcome screen: the local model runner and which of Sage's models it has. */
+  runnerStatus(): Promise<RunnerStatus>;
+  /**
+   * The main process asks first, in its own box, then has the local model runner download the
+   * model; on success it is saved as the local model. Only Sage's two models can be chosen.
+   */
+  pullModel(choice: ModelChoice): Promise<PullResult>;
+  pullStatus(): Promise<PullStatus>;
+  cancelPull(): Promise<CancelPullResult>;
+  /** The main process asks first, then opens Sage's install guide (one fixed address). */
+  openInstallGuide(): Promise<GuideResult>;
+  /** Saves that setup was finished or skipped, so the Welcome screen isn't shown at start-up. */
+  finishSetup(): Promise<Result>;
 }

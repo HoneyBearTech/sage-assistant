@@ -69,8 +69,16 @@ later, and what Sage will not do.
 - [ ] **Test coverage counting:** each window test loads the window script again, and each load counts
       as a separate, partly covered file, so the total drifts toward the 80% floor as window tests are
       added (82.5% after the voice job). Count the window script once.
-- [ ] **First-run setup.** Checks that the local model runner is installed, downloads a model, and lets the
-      user add an online-service key.
+- [x] **First-run setup** (first-run-setup): a Welcome screen the first time Sage opens. It asks where
+      Sage should think, checks the local model runner, opens Sage's install guide after asking,
+      downloads Standard (`qwen3:4b`) or Smaller (`qwen3:1.7b`) through the runner after asking, and sends
+      online users to Settings for the key. Skip setup, and **Set up Sage** in Settings to come back. The
+      chat's runner messages now point there. The original item: Checks that the local model runner is
+      installed, downloads a model, and lets the user add an online-service key.
+- [ ] **Owner:** run the "First-run setup" section of [the Windows checklist](windows-checklist.md),
+      including once with the runner stopped and once with a model not yet downloaded.
+- [ ] **Later idea:** tell "not installed" from "installed but not started" without running anything
+      (for example by looking for the runner's program files), if the single message proves confusing.
 
 ## Later
 

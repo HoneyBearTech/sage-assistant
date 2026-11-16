@@ -12,7 +12,6 @@ import {
   MAX_FORWARDS,
   removeLeftovers,
   STALL_TIMEOUT_MS,
-  type Timers,
 } from "../src/core/voice/download.js";
 import {
   DOWNLOAD_DETAIL,
@@ -24,7 +23,7 @@ import {
   type SpeechModel,
   totalSize,
 } from "../src/core/voice/model.js";
-import { deferred, fakeServer, REFUSED_PORT, type Recorded, tempDir } from "./helpers.js";
+import { deferred, fakeServer, ManualTimers, REFUSED_PORT, type Recorded, tempDir } from "./helpers.js";
 
 // The speech file download, against a fake server on 127.0.0.1. The download code only accepts
 // https addresses, so the tests give it https addresses for the fake server and a fetch that
@@ -354,28 +353,6 @@ test("a model folder with a missing or wrong-sized file doesn't count as ready",
     "a folder isn't a file",
   );
 });
-
-/** The stall check's timer, fired by the test instead of by time passing. */
-class ManualTimers implements Timers {
-  private next = 1;
-  readonly pending = new Map<number, { callback: () => void; ms: number }>();
-  readonly started: number[] = [];
-  setTimeout(callback: () => void, ms: number) {
-    const id = this.next++;
-    this.pending.set(id, { callback, ms });
-    this.started.push(ms);
-    return id;
-  }
-  clearTimeout(handle: unknown) {
-    this.pending.delete(handle as number);
-  }
-  /** As if the wait ran out now. */
-  fire() {
-    const due = [...this.pending.values()];
-    this.pending.clear();
-    for (const timer of due) timer.callback();
-  }
-}
 
 test("a server that never answers is given up on after 30 seconds, and nothing is left behind", async (t) => {
   const dataDir = await tempDir(t);

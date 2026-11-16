@@ -9,7 +9,9 @@ import {
   MAX_ACK_IDS,
   MAX_MESSAGE_CHARS,
   MAX_VOICE_SAMPLES,
+  MODEL_CHOICES,
   type PublicSettings,
+  type PullResult,
   type Result,
   type TranscribeResult,
 } from "../shared/api.js";
@@ -48,6 +50,9 @@ const transcribePayload = z.strictObject({
     ),
 });
 
+// The window picks one of Sage's two models; it never sends a model name.
+const pullPayload = z.strictObject({ choice: z.enum(MODEL_CHOICES) });
+
 export const BAD_RECORDING = "Sage couldn't read that recording. Try again.";
 
 export const SAVE_SETTINGS_FIRST = "Save settings first, then save the key.";
@@ -60,6 +65,7 @@ export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSet
     apps: settings.apps.map((app) => ({ name: app.name, path: app.path, args: [...app.args] })),
     folders: [...settings.folders],
     speakReplies: settings.speakReplies,
+    setupDone: settings.setupDone,
   };
 }
 
@@ -86,9 +92,15 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.getSettings]: async () =>
       toPublicSettings(await sage.settings.load(), await sage.keyStore.has()),
     [CHANNELS.saveSettings]: async (payload): Promise<Result> => {
-      const previous = await sage.settings.load();
-      const result = await sage.settings.save({ ...(payload as object), version: 1 });
+      // The Settings screen saves everything it shows; "set up" isn't one of them, so the saved
+      // value is kept (read and written under the settings lock).
+      const result = await sage.settings.update((current) => ({
+        ...(payload as object),
+        version: 1,
+        setupDone: current.setupDone,
+      }));
       if (!result.ok) return fail(result.message);
+      const previous = result.previous;
       const after = serviceOrigin(result.settings.online.baseUrl);
       // A turn in progress was started against the old brain or service; it stops rather than
       // carry on against settings the user has moved away from.
@@ -151,5 +163,17 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
         return { ok: false, message: "Sage couldn't work out what you said. Try again." };
       }
     },
+    [CHANNELS.runnerStatus]: () => sage.setup.status(),
+    // The main process asks the user first, in its own box; the window can only ask for it.
+    [CHANNELS.pullModel]: async (payload): Promise<PullResult> => {
+      const parsed = pullPayload.safeParse(payload);
+      if (!parsed.success) return { status: "failed", message: "Sage couldn't read that choice." };
+      return sage.setup.pullModel(parsed.data.choice);
+    },
+    [CHANNELS.pullStatus]: async () => sage.setup.pullStatus(),
+    [CHANNELS.cancelPull]: async () => sage.setup.cancelPull(),
+    // Asks first, then opens the one fixed address; nothing from the window is used.
+    [CHANNELS.openInstallGuide]: () => sage.setup.openInstallGuide(),
+    [CHANNELS.finishSetup]: () => sage.setup.finish(),
   };
 }

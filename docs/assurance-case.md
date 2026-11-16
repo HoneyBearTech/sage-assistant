@@ -4,8 +4,9 @@
 unless the user chose **Allow** for that exact action in a confirmation box that said what would happen;
 text from the web or from files can't make it act; the online key stays encrypted and never appears in
 plain text in any file, log or the window; the window can't be turned into a way to run code or reach
-the network; and the microphone is used only while the user holds the talk key or button, with the
-sound kept in memory and turned into text on the PC.
+the network; the microphone is used only while the user holds the talk key or button, with the
+sound kept in memory and turned into text on the PC; and the only web page Sage can open is its own
+install guide, at one fixed address, after the user chose **Open**.
 
 This document gives the threats, the trust boundaries, the evidence for each part of the claim, and the
 risk that remains. The tests named here run with `npm run verify`.
@@ -28,6 +29,7 @@ risk that remains. The tests named here run with `npm run verify`.
 | Note and file contents | **Not trusted** as instructions; they may contain pasted text from anywhere. |
 | The online service | Trusted with the conversation (the user chose it), not with anything else. |
 | Hugging Face and its download servers | **Not trusted** with what they send: each file is used only if its exact size and SHA-256 fingerprint match the ones in Sage's code. They get only ordinary download requests (so they see the PC's address), never the user's speech or text. |
+| The local model runner | Trusted code the user installed, like the operating system. Sage asks it only on `127.0.0.1`, checks and size-caps its replies, and never shows or logs its text. It downloads models from its own registry and checks their files itself; Sage doesn't fingerprint them. |
 | The speech engine (`sherpa-onnx-node`) | Trusted code at a pinned version, like Electron itself; run in its own process and fed only checked sound. |
 | Other programs running as the same user | Out of scope: they can already do anything the user can (see section 5). |
 
@@ -37,11 +39,16 @@ risk that remains. The tests named here run with `npm run verify`.
    against a strict schema, and every "confirm" skill passes through the gate.
 2. **Outside text → model.** Web results, notes and reminders go back to the model inside a labelled
    untrusted block, and are never read as commands by Sage itself.
-3. **Window → main process.** The window is treated as untrusted input: it gets fourteen typed methods,
+3. **Window → main process.** The window is treated as untrusted input: it gets twenty typed methods,
    and each handler checks the sender and validates the payload.
-4. **Sage → network.** The main process talks to `127.0.0.1:11434` (local brain), the online service the
-   user configured, DuckDuckGo's HTML page, and, once and only after the user agrees, Hugging Face for
-   the speech file. The window can reach nothing at all, and the speech helper opens no connection.
+4. **Sage → network.** The main process talks to `127.0.0.1:11434` (local brain, and the runner's model
+   list, model download and model details), the online service the user configured, DuckDuckGo's HTML
+   page, and, once and only after the user agrees, Hugging Face for the speech file. The window can
+   reach nothing at all, and the speech helper opens no connection. A model download is done by the
+   runner, not by Sage, and only after the user chose **Download** in Sage's box.
+8. **Sage → web browser.** After the user chooses **Open** in the main process's box, Sage hands one
+   fixed address to the system's web browser: the "local model runner" section of its own
+   `docs/installing.md` on GitHub. The window can only ask for it; it sends no address.
 5. **Sage → disk.** Sage writes only in its own `userData` folder. It opens files only from approved
    folders and starts only programs on the list.
 6. **Source → installed app.** Code reaches users from this repository, either as source or as the
@@ -299,6 +306,57 @@ crash; or a misheard word could be sent to the brain.
   reply text never goes to an online voice. Only Sage's final reply is spoken, never notices.
   *Evidence:* `test/renderer-voice.test.ts` ("never an online voice").
 
+### T7. First-run setup: the model download and the install guide
+
+The Welcome screen could be used to download something other than Sage's models, to start a large
+download the user didn't agree to, to open a web page chosen by someone else, or to show text from the
+runner as if it were Sage's; a setup request could overwrite the user's settings.
+
+- **Only Sage's two models, only after asking.** The window sends `{"choice": "standard"}` or
+  `{"choice": "smaller"}` (a strict object; anything else is refused), and the main process maps the
+  choice to `qwen3:4b` or `qwen3:1.7b`. It asks in its own box ("Download the Standard model (about
+  2.5 GB)?", with a note that it needs an internet connection and free disk space and that the runner
+  downloads and checks the files), **Not now** by default, and asks the runner only on **Download**. One
+  download at a time. Cancel, Skip and Sage quitting cancel the request at any step before its commit
+  point, the save starting (including while the box is open), so nothing starts or is saved afterwards.
+  Once the save has started it is never undone: Cancel answers "too late", the model stays chosen, and
+  Skip waits for the save before marking setup done, so the two writes never interleave. 2 minutes
+  without real progress stop it: only more bytes downloaded in all than ever before, a layer never
+  seen before, or a status never seen before in this download count; repeated or alternating lines,
+  and bytes with no end of line, don't. *Evidence:* `test/setup.test.ts` (no request without
+  **Download**, a model name from the window refused, one at a time, cancel before and after the commit
+  point, quit), `test/runner.test.ts` (the stall limit, a trickle of bytes, repeated and alternating
+  lines, each kind of real progress, cancel).
+- **Moving to the local brain stops the online turn.** A finished download sets the brain to local (the
+  box says so); a turn still running against the online service stops, as it does when Settings changes
+  the brain, so its late reply runs no skill and nothing more is sent there. *Evidence:*
+  `test/setup-turn.test.ts`.
+- **The download is the runner's, not Sage's.** Unlike the speech file, Sage doesn't fingerprint the
+  model: the runner downloads it from its own registry and checks its files, and the box and the docs
+  say so. The speech file stays the only thing Sage itself downloads.
+- **The runner's replies are data.** Every reply is size-capped (1 MB for a list or details, 64 KB per
+  progress line, at most 1,000 layers and 1,020 different statuses) and checked against a schema; a
+  malformed, oversized or unexpected reply stops with a plain message. Errors are mapped to Sage's own fixed messages (offline, not enough disk space, model
+  not found, other) by keyword; the runner's text is never shown or logged, and unexpected errors are
+  logged as fixed lines with the error's type only. The client uses the same
+  fixed `127.0.0.1` address as chat and refuses redirects. *Evidence:* `test/runner.test.ts` (an error
+  line with marker text that never reaches the result, oversized and malformed lines, a redirect not
+  followed).
+- **One fixed web address, after asking.** `openInstallGuide` takes no payload. The main process asks
+  ("Open Sage's install guide in your web browser?", **Not now** by default) and then calls
+  `shell.openExternal` with the constant `INSTALL_GUIDE_URL` only; if that fails, the window shows the
+  address as text to copy. The window's own rules (no navigation, no pop-ups, no permissions) don't
+  change. *Evidence:* `test/setup.test.ts` (nothing opened without **Open**, only the fixed address,
+  the address given when no browser opens), `test/security.test.ts` (`openExternal` is called in one
+  place, with the constant, after the box; the address is on the list of addresses in `src/`).
+- **Setup changes only its own settings.** Finishing or skipping sets only `setupDone`; a finished
+  download sets only the local model and the brain. Each loads and saves under the settings lock, and a
+  Settings save keeps the stored `setupDone` whatever the window sends. A settings file from before
+  this setting loads unchanged, with the Welcome screen shown once. *Evidence:* `test/settings.test.ts`,
+  `test/setup.test.ts`.
+- **Notices and the talk key.** While the Welcome screen is open, notices wait (they are confirmed only
+  while Chat is visible) and Ctrl+Space does nothing. *Evidence:* `test/renderer-welcome.test.ts`.
+
 ### The window itself
 
 A bug in the window, or a hostile string displayed in it, must not become code execution.
@@ -314,6 +372,8 @@ A bug in the window, or a hostile string displayed in it, must not become code e
 - Permission requests are refused except the microphone (audio only, used by voice while the talk key
   or button is held), and only for the app's own page.
 - Every IPC handler checks that the call came from Sage's window and its own page.
+- The window opens nothing itself: the install guide is opened by the main process, at its one fixed
+  address, after its own box (T7).
 - *Evidence:* `test/security.test.ts` (window options, the CSP matching the page, no inline scripts or
   handlers, no `innerHTML`, the preload's exposed methods, request, sender and permission rules, the
   fuses) and `test/ipc.test.ts`. The window loads its own files from the app archive with `file://`
@@ -325,7 +385,9 @@ A bug in the window, or a hostile string displayed in it, must not become code e
 No telemetry, analytics or crash reporting exists in the code (`test/security.test.ts` checks the
 sources for them and lists every network address). With the local brain, only web searches leave the
 computer, plus the one-time download of the speech file, an ordinary request that carries none of your
-speech or text. Speech is turned into text
+speech or text. A model download from the Welcome screen is started by the user and made by the local
+model runner from its own registry; opening the install guide shows GitHub the PC's address like any
+web page. Speech is turned into text
 on the PC, and replies are read aloud with the PC's own voices. With an online brain, the conversation,
 including tool results and words that came from talking, goes to the service the user chose.
 
@@ -336,7 +398,8 @@ including tool results and words that came from talking, goes to the service the
 - The tests never use the real network (fake servers on `127.0.0.1`), real settings or real data
   (temporary folders), a real key store or the real clock.
 - What the tests can't cover (Electron starting, the native box, notifications, `safeStorage` on a real
-  system, the microphone, the voices, the utility process and the engine in the installed app) is in the
+  system, the microphone, the voices, the utility process and the engine in the installed app, the real
+  local model runner and its download, and the web browser opening the install guide) is in the
   [Windows checklist](windows-checklist.md), which the maintainer runs on Windows.
 - The speech engine and the real model are checked outside the tests during review: one real download
   through Sage's own download code, and a real transcription through the built helper.
@@ -394,5 +457,10 @@ including tool results and words that came from talking, goes to the service the
   a plain message; a changed file is refused by its fingerprint. The addresses are in one place.
 - **Speech can be misheard**, especially names. The words go into the message box first so they can be
   checked before sending.
+- **A model download is checked by the runner, not by Sage.** Sage asks only for its own two model
+  names; what the runner fetches for them, and how it checks the files, is up to the runner and its
+  registry. Whether a cancelled download keeps its part on disk is also up to the runner.
+- **The runner's interface can change.** A later version could answer differently; anything Sage can't
+  read becomes a plain message, and the Welcome screen can be skipped.
 - **The talk key works only while Sage's window is focused.** Detecting a key held anywhere would need a
   system-wide keyboard hook, which Sage doesn't use.

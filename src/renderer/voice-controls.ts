@@ -9,12 +9,14 @@ import {
   VOICE_TEXT,
 } from "./voice-text.js";
 
-// Hold Ctrl+Space (while Sage's window is focused) or hold the Talk button to record. On release
+// Hold Ctrl+Space (while Sage's window is focused and Chat is open) or hold the Talk button to record. On release
 // the recording is turned into plain 16 kHz sound, sent once to the main process, and the words
 // are put in the message box: never sent by themselves. The microphone is open only while held,
 // and closes on release, when the window loses focus or is hidden, and on New chat.
 
 export interface VoiceElements {
+  /** The Chat view: the talk key works only while it is shown. */
+  chatView: HTMLElement;
   input: HTMLTextAreaElement;
   talkButton: HTMLButtonElement;
   voiceStatus: HTMLElement;
@@ -228,7 +230,8 @@ export function createVoiceControls(
   }
 
   document.addEventListener("keydown", (event) => {
-    if (!isTalkKey(event)) return;
+    // Only on the Chat screen: not behind Settings or the Welcome screen.
+    if (!isTalkKey(event) || el.chatView.hidden) return;
     event.preventDefault();
     if (event.repeat) return;
     heldKey = "ctrl-space";

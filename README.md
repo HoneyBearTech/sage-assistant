@@ -13,8 +13,9 @@ Its "brain" (the model that understands you and writes the replies) is your choi
   your own key. The key is encrypted with your operating system's protection.
 
 > [!NOTE]
-> Sage has a text chat and voice (hold a key to talk), with a one-click Windows installer; it also runs
-> from source on Windows and Linux. A first-run setup comes next; see the [roadmap](docs/roadmap.md).
+> Sage has a text chat, voice (hold a key to talk) and a Welcome screen that sets it up on first start,
+> with a one-click Windows installer; it also runs from source on Windows and Linux. What comes next is
+> in the [roadmap](docs/roadmap.md).
 
 ## Install it on Windows
 
@@ -23,8 +24,20 @@ Download `Sage-Setup-<version>.exe` and `SHA256SUMS.txt` from the
 the installer. It installs for your account only, without admin rights, and adds Sage to the Start menu
 and the desktop. It isn't code-signed yet, so SmartScreen may warn: choose **More info**, then **Run
 anyway**, only for a file from the Releases page whose checksum matched. For the local brain you also
-need the local model runner and a model (see below). Step by step, with updating and uninstalling:
+need the local model runner; Sage's Welcome screen checks it and downloads a model for you (see
+[First start](#first-start)). Step by step, with updating and uninstalling:
 [docs/installing.md](docs/installing.md#installing-on-windows).
+
+## First start
+
+The first time Sage starts, a **Welcome screen** sets it up step by step: where Sage thinks (on this
+computer, or an online service), whether the local model runner is running (with short install steps
+and, after asking, a button that opens Sage's [install guide](docs/installing.md#local-model-runner) in
+your web browser), and a model: **Standard** (`qwen3:4b`, about 2.5 GB) or **Smaller** (`qwen3:1.7b`,
+about 1.4 GB, for PCs with less memory). Sage asks in its own box before the download; the local model
+runner downloads the model and checks its files, with progress and **Cancel**, and Sage then thinks on
+this computer with it (Sage switches to **On this computer**, even if you were using an online service). **Skip
+setup** is always there, and **Settings → Set up Sage** brings the screen back.
 
 ## What Sage can do
 
@@ -58,7 +71,7 @@ model, and puts the words **in the message box**. Nothing is sent until you chec
   from Hugging Face. Download it now?"* Only if you choose **Download** does it fetch the model's three
   files, from fixed addresses pinned to one exact version, and it uses them only if each file's size and
   SHA-256 fingerprint match. After that, voice works offline. **This is the only thing Sage downloads by
-  itself.** None of your speech or text is sent: it is an ordinary file download, so Hugging Face sees a
+  itself** (a model from the Welcome screen is downloaded by the local model runner, after you agree). None of your speech or text is sent: it is an ordinary file download, so Hugging Face sees a
   request from your PC, as with any website.
 - **The microphone is on only while you hold** the key or the button. It also turns off if Sage's window
   loses focus or you start a **New chat**. The sound stays in memory and is never saved or logged, and
@@ -77,7 +90,8 @@ You need:
 - **Node.js 24** and npm ([nodejs.org](https://nodejs.org), or a version manager such as `fnm`).
 - **git**.
 - **Ollama**, for the local brain ([ollama.com/download](https://ollama.com/download)), and a model
-  that can use tools. Sage's default is `qwen3:4b` (about 2.5 GB):
+  that can use tools. Sage's Welcome screen downloads one for you on first start; to do it yourself,
+  Sage's default is `qwen3:4b` (about 2.5 GB):
 
   ```sh
   ollama pull qwen3:4b
@@ -103,7 +117,8 @@ Open **Settings** in Sage's window:
   switch takes effect with your next message.
 - **Local model** is the Ollama model name (default `qwen3:4b`). Sage only ever talks to Ollama at
   `127.0.0.1:11434`, on the same computer; that address can't be changed. If Ollama isn't running,
-  Sage says so in plain words ("Sage can't reach the local model runner. Is Ollama running?").
+  Sage says so in plain words ("Sage can't reach the local model runner. Start it, or open Settings →
+  Set up Sage for help, then try again.").
 - **Online service address**, **Online model name** and **Online service key** set up the online
   brain. Sage sends `POST <address>/v1/chat/completions` with the key as a bearer token. The address
   must start with `https://` (plain `http://` is accepted only for `127.0.0.1` or `localhost`, for a

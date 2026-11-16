@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
+import { UNREACHABLE_MESSAGE } from "../src/core/brain/local.js";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { VOICE_MESSAGES } from "../src/core/voice/voice.js";
@@ -45,7 +46,7 @@ test("chat messages are validated, and a missing local runner gives the plain me
   assert.equal(await handlers[CHANNELS.send]({ text: "" }), "Sage couldn't read that message.");
   assert.equal(await handlers[CHANNELS.send]({ text: "x".repeat(9000) }), "Sage couldn't read that message.");
   assert.equal(await handlers[CHANNELS.send]({ text: "hi", extra: 1 }), "Sage couldn't read that message.");
-  assert.match(String(await handlers[CHANNELS.send]({ text: "hello" })), /Is Ollama running\?/);
+  assert.equal(await handlers[CHANNELS.send]({ text: "hello" }), UNREACHABLE_MESSAGE);
   await handlers[CHANNELS.reset](undefined);
 });
 
@@ -300,8 +301,17 @@ test("toPublicSettings copies only the public fields", () => {
   const settings = { ...defaultSettings(), apps: [{ name: "A", path: "/a", args: ["x"] }] };
   const out = toPublicSettings(settings, true);
   assert.deepEqual(Object.keys(out.online).sort(), ["baseUrl", "hasKey", "model"]);
-  assert.deepEqual(Object.keys(out).sort(), ["apps", "brain", "folders", "local", "online", "speakReplies"]);
+  assert.deepEqual(Object.keys(out).sort(), [
+    "apps",
+    "brain",
+    "folders",
+    "local",
+    "online",
+    "setupDone",
+    "speakReplies",
+  ]);
   assert.equal(out.speakReplies, "voice");
+  assert.equal(out.setupDone, false);
   out.apps[0]!.args.push("y");
   assert.deepEqual(settings.apps[0]!.args, ["x"], "a copy, not the stored object");
 });

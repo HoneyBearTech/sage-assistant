@@ -1,5 +1,6 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
 import { createVoiceControls } from "./voice-controls.js";
+import { createWelcome } from "./welcome.js";
 
 // The chat window. It runs sandboxed with no Node access; `window.sage` (from the preload) is its
 // only way to reach the rest of Sage. Text is always inserted with textContent, never as HTML.
@@ -101,10 +102,13 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
 
 // --- Voice ---
 
+const chatView = byId<HTMLElement>("view-chat");
+
 // The logic is in voice-controls.ts; this only finds the elements.
 const voice = createVoiceControls(
   sage,
   {
+    chatView,
     input,
     talkButton: byId<HTMLButtonElement>("talk"),
     voiceStatus: byId<HTMLSpanElement>("voice-status"),
@@ -118,22 +122,32 @@ const voice = createVoiceControls(
 
 // --- Tabs ---
 
+const tabBar = byId<HTMLElement>("tabs");
 const tabs = { chat: byId<HTMLButtonElement>("tab-chat"), settings: byId<HTMLButtonElement>("tab-settings") };
-const views = { chat: byId<HTMLElement>("view-chat"), settings: byId<HTMLElement>("view-settings") };
+const views = {
+  chat: chatView,
+  settings: byId<HTMLElement>("view-settings"),
+  welcome: byId<HTMLElement>("view-welcome"),
+};
 
-function show(view: "chat" | "settings"): void {
+// All three views start hidden; the first one is chosen once the settings have loaded.
+function show(view: "chat" | "settings" | "welcome"): void {
+  for (const name of ["chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
+  // The Welcome screen has no tab: it is left with Skip setup, Start chatting or the online choice.
+  tabBar.hidden = view === "welcome";
   for (const name of ["chat", "settings"] as const) {
-    views[name].hidden = name !== view;
     tabs[name].classList.toggle("active", name === view);
     tabs[name].setAttribute("aria-pressed", String(name === view));
   }
   // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
   // startup and again after each successful save.
 }
-tabs.chat.addEventListener("click", () => {
+/** Every way into Chat goes through here, so held notices are confirmed once they can be seen. */
+function openChat(): void {
   show("chat");
   void confirmShown();
-});
+}
+tabs.chat.addEventListener("click", () => openChat());
 tabs.settings.addEventListener("click", () => show("settings"));
 
 // --- Notices ---
@@ -200,8 +214,12 @@ async function collectNotices(): Promise<void> {
 }
 
 document.addEventListener("visibilitychange", () => void confirmShown());
-void collectNotices();
-setInterval(() => void collectNotices(), NOTICE_POLL_MS);
+
+/** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
+function startNotices(): void {
+  void collectNotices();
+  setInterval(() => void collectNotices(), NOTICE_POLL_MS);
+}
 
 // --- Settings ---
 
@@ -275,7 +293,14 @@ function renderKeyStatus(): void {
     : "No key saved.";
 }
 
+/**
+ * Goes up on every Settings save and every settings reload. A refresh after the Welcome screen
+ * that was overtaken by one of them is dropped, so it never overwrites newer settings.
+ */
+let settingsGeneration = 0;
+
 async function loadSettings(): Promise<void> {
+  settingsGeneration++;
   settings = await sage.getSettings();
   render();
 }
@@ -296,6 +321,7 @@ function readSpeakReplies(): PublicSettings["speakReplies"] {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!settings) return;
+  settingsGeneration++;
   const brain =
     form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value === "online"
       ? "online"
@@ -368,5 +394,124 @@ byId<HTMLButtonElement>("add-folder").addEventListener("click", () => {
   renderLists();
 });
 
-void loadSettings();
+// --- Welcome ---
+
+// The logic is in welcome.ts; this only finds the elements.
+const welcome = createWelcome(
+  sage,
+  {
+    skip: byId<HTMLButtonElement>("welcome-skip"),
+    status: byId<HTMLParagraphElement>("welcome-status"),
+    steps: {
+      place: byId<HTMLElement>("step-place"),
+      runner: byId<HTMLElement>("step-runner"),
+      model: byId<HTMLElement>("step-model"),
+      done: byId<HTMLElement>("step-done"),
+    },
+    headings: {
+      place: byId<HTMLElement>("step-place-heading"),
+      runner: byId<HTMLElement>("step-runner-heading"),
+      model: byId<HTMLElement>("step-model-heading"),
+      done: byId<HTMLElement>("step-done-heading"),
+    },
+    placeLocal: byId<HTMLButtonElement>("place-local"),
+    placeOnline: byId<HTMLButtonElement>("place-online"),
+    runnerStatus: byId<HTMLParagraphElement>("runner-status"),
+    runnerInstall: byId<HTMLDivElement>("runner-install"),
+    runnerCheck: byId<HTMLButtonElement>("runner-check"),
+    runnerNext: byId<HTMLButtonElement>("runner-next"),
+    openGuide: byId<HTMLButtonElement>("open-guide"),
+    guideStatus: byId<HTMLParagraphElement>("guide-status"),
+    guideAddress: byId<HTMLParagraphElement>("guide-address"),
+    modelStandard: byId<HTMLInputElement>("model-standard"),
+    modelSmaller: byId<HTMLInputElement>("model-smaller"),
+    standardMark: byId<HTMLSpanElement>("model-standard-mark"),
+    smallerMark: byId<HTMLSpanElement>("model-smaller-mark"),
+    modelDownload: byId<HTMLButtonElement>("model-download"),
+    modelCancel: byId<HTMLButtonElement>("model-cancel"),
+    modelProgress: byId<HTMLProgressElement>("model-progress"),
+    modelStatus: byId<HTMLParagraphElement>("model-status"),
+    modelSkills: byId<HTMLParagraphElement>("model-skills"),
+    modelNext: byId<HTMLButtonElement>("model-next"),
+    doneSummary: byId<HTMLParagraphElement>("done-summary"),
+    doneVoice: byId<HTMLParagraphElement>("done-voice"),
+    startChatting: byId<HTMLButtonElement>("start-chatting"),
+  },
+  {
+    leave: (to) => {
+      // What the form shows now; the refresh below changes a field only if it still shows this.
+      const shown = { brain: checkedBrain(), model: localModel.value };
+      if (to === "chat") {
+        openChat();
+        input.focus();
+      } else {
+        show("settings");
+        // Picked in the form, unsaved, for the user to fill in and save.
+        setBrainRadios("online");
+        settingsStatus.textContent = ONLINE_HINT;
+      }
+      void refreshAfterSetup(shown);
+    },
+  },
+);
+
+function openWelcome(): void {
+  show("welcome");
+  welcome.open();
+}
+byId<HTMLButtonElement>("setup-again").addEventListener("click", () => openWelcome());
+
+const ONLINE_HINT =
+  "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
+
+function checkedBrain(): string | undefined {
+  return form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value;
+}
+
+function setBrainRadios(brain: string): void {
+  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+    radio.checked = radio.value === brain;
+  }
+}
+
+/**
+ * After the Welcome screen: only what it actually saved (the local model, and the brain when a
+ * download switched it to local) is updated. A form field is changed only if it still shows what
+ * it showed when the Welcome screen closed, so edits made since (or other unsaved changes) stay.
+ */
+async function refreshAfterSetup(shown: { brain: string | undefined; model: string }): Promise<void> {
+  const generation = settingsGeneration;
+  let latest: PublicSettings;
+  try {
+    latest = await sage.getSettings();
+  } catch {
+    return;
+  }
+  // A Settings save or reload happened meanwhile: what it shows is newer than this answer.
+  if (generation !== settingsGeneration) return;
+  if (!settings) {
+    settings = latest;
+    render();
+    return;
+  }
+  settings.setupDone = latest.setupDone;
+  if (latest.local.model !== settings.local.model) {
+    settings.local.model = latest.local.model;
+    if (localModel.value === shown.model) localModel.value = latest.local.model;
+  }
+  if (latest.brain !== settings.brain) {
+    settings.brain = latest.brain;
+    if (checkedBrain() === shown.brain) setBrainRadios(latest.brain);
+  }
+  brainStatus.textContent = describeBrain(settings);
+}
+
+// The first view: the Welcome screen until setup is finished or skipped, otherwise Chat. If the
+// settings can't be read, Chat opens.
+void loadSettings()
+  .then(
+    () => (settings?.setupDone === false ? openWelcome() : openChat()),
+    () => openChat(),
+  )
+  .then(startNotices);
 input.focus();

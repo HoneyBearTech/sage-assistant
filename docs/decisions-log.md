@@ -2,6 +2,54 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - first-run-setup
+
+**Context:** the owner asked to "start the first-run setup job", the roadmap item "Checks that the local
+model runner is installed, downloads a model, and lets the user add an online-service key", after voice
+shipped.
+
+**Decisions:**
+- **A Welcome screen as a third view** in the existing window, shown until the user skips or finishes
+  (a `setupDone` setting, added without changing the settings version; Settings saves keep it). Existing
+  copies of Sage see it once. **Set up Sage** in Settings brings it back.
+- **The runner is checked over its own interface** on `127.0.0.1` (the same fixed address and rules as
+  chat). Sage can't run programs, so it doesn't install the runner and can't tell "not installed" from
+  "not started"; both get one message.
+  - *Rejected for now:* looking for the runner's program files (brittle; a later idea on the roadmap).
+- **One link out of Sage:** after asking in its own box, Sage opens one fixed address in the browser,
+  the runner section of its own install guide on GitHub, which holds the runner's download link. Nothing
+  else can be opened, and the address can't come from the window, a reply or a web page.
+  - *Rejected:* a link straight to the runner's site (the guide keeps the link and steps in one place);
+    showing the address only as text (more work for the user; it is still shown if the browser fails).
+- **Two models only, Standard (`qwen3:4b`) and Smaller (`qwen3:1.7b`)**, both Apache-2.0 and able to use
+  Sage's skills. The window sends only the choice, never a model name. The download is asked about
+  first with its size, performed and checked by the runner (Sage doesn't fingerprint it, and the box
+  says so), read line by line with caps, stopped after 2 minutes without real progress, and makes Sage
+  use the local brain (the box says so). Once the download has finished and the save has started, the
+  save is the commit point: Cancel or Skip before it saves nothing, after it the model stays chosen.
+- **The online key stays in Settings:** choosing an online service opens Settings; no second key form.
+- **Voice is left to first use**, with a line on the last step.
+
+**Review:** a plan check before Gate A, then QA (pass), the Security Officer (clear), a second security
+review and the Auditor, with two fix rounds and a re-check after each. The runner and the native boxes
+can't run on the review machine, so the owner runs the checklist's First-run setup section on Windows.
+
+**Fixed after review:** Skip didn't cancel a model request still checking or asking; switching to local
+through setup didn't stop a running online reply; the stall limit could be kept alive by repeated or
+alternating lines or a trickle of bytes; the number of download layers wasn't capped; Skip could undo
+unsaved Settings edits, and a late refresh could overwrite a newer Settings save; Next stayed on the
+previous model; a failed "set up" save was ignored; the box didn't say the brain switches to local; one
+log line could have carried an error object.
+
+**Rejected or deferred findings:**
+- *A save already under way should be undone by Cancel* (Auditor, re-check). Not done: the write is
+  atomic and can't be safely undone. Instead the save is the commit point, and Cancel says it was too
+  late (see the decisions above).
+- *The install-guide link follows `main`* (QA and the Security Officer, informational). Kept: the page is
+  this repo's own guide, and its anchor already exists on `main`.
+- *Ctrl+Space no longer works on the Settings screen* (QA, informational). Kept: talking only makes sense
+  on Chat, where the words go.
+
 ## 2026-11-16 - voice
 
 **Context:** the owner asked to "start the voice job", the roadmap item "Hold a key to talk, offline
