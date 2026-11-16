@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { homeSummary } from "../src/core/home.js";
+import { systemTimeFormat } from "../src/renderer/home-text.js";
 import type { HomeSummary } from "../src/shared/api.js";
 import {
   type FakeElement,
@@ -151,6 +152,44 @@ test("the clock's timer stops while the window is hidden and restarts, redrawn, 
     clear.mock.calls.some((call) => call.arguments[0] === current),
     true,
   );
+});
+
+/** Runs the test in the PC time zone `zone`, putting the old one back afterwards. */
+function inZone(t: { after(fn: () => void): void }, zone: string): void {
+  const before = process.env.TZ;
+  process.env.TZ = zone;
+  t.after(() => {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  });
+}
+
+/** The time as a formatter made now writes it, in the PC's current time zone. */
+const freshClockText = (date: Date) =>
+  new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+
+test("a change of the PC's time zone shows on the clock at the next minute", async (t) => {
+  inZone(t, "UTC");
+  const start = Date.UTC(2026, 10, 16, 10, 0, 0);
+  const { el } = await homeWindow(t, { now: start });
+  assert.equal(el("home-clock").textContent, freshClockText(new Date(start)));
+  const inUtc = el("home-clock").textContent;
+  process.env.TZ = "Asia/Tokyo";
+  t.mock.timers.tick(60_000);
+  const shown = el("home-clock").textContent;
+  assert.equal(shown, freshClockText(new Date(start + 60_000)), "in the new zone");
+  assert.notEqual(shown, inUtc);
+  assert.equal(el("home-greeting").textContent, "Good evening", "19:01 in Tokyo");
+});
+
+test("the time format follows the time zone each time it is used", (t) => {
+  inZone(t, "UTC");
+  const format = systemTimeFormat();
+  const noon = new Date(Date.UTC(2026, 10, 16, 12, 0));
+  const inUtc = format(noon);
+  process.env.TZ = "Asia/Tokyo";
+  assert.equal(format(noon), freshClockText(noon));
+  assert.notEqual(format(noon), inUtc);
 });
 
 test("the panels show today's reminders with times, missed ones marked, notes and the status", async (t) => {

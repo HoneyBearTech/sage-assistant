@@ -82,6 +82,15 @@ function words(text: string): string {
 /** Shows a time in the PC's own format, such as 09:00 or 9:00 AM. */
 export type TimeFormat = (date: Date) => string;
 
+/**
+ * The PC's own time format: hours and minutes, as the system's language writes them, in the PC's
+ * time zone. A fresh formatter each time, so a change of time zone (travel, or a change in the PC's
+ * settings) shows at the next redraw; a kept one would stay in the zone it was made in.
+ */
+export function systemTimeFormat(): TimeFormat {
+  return (date) => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
 /** When a reminder is due: its time today, or its day and time on another day. */
 export function whenDue(reminder: Pick<HomeReminder, "due">, now: Date, time: TimeFormat): string {
   const due = new Date(reminder.due);

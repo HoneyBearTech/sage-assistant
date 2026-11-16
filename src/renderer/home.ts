@@ -9,6 +9,7 @@ import {
   HOME_TEXT,
   msToNextMinute,
   sameDay,
+  systemTimeFormat,
   type TimeFormat,
   whenDue,
 } from "./home-text.js";
@@ -62,12 +63,6 @@ export interface Home {
   reminderArrived(): void;
   /** Loads the panels again if Home is on screen (after the sound switch, say). */
   refresh(): void;
-}
-
-/** The PC's own time format: hours and minutes, as the system's language writes them. */
-export function systemTimeFormat(): TimeFormat {
-  const format = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-  return (date) => format.format(date);
 }
 
 export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): Home {
