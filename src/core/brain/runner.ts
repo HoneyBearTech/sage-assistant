@@ -11,10 +11,12 @@ import { LOCAL_HOST, LOCAL_PORT } from "./local.js";
 
 /** How long a quick question (the model list, a model's details) may take. */
 export const STATUS_TIMEOUT_MS = 5_000;
-/** A download that sends no new line for this long is stopped. */
+/** A download with no line that moves it on (a new status, layer or bytes) for this long is stopped. */
 export const PULL_STALL_MS = 120_000;
 /** The longest single progress line Sage reads; the runner's lines are a few hundred bytes. */
 export const MAX_PULL_LINE_BYTES = 64 * 1024;
+/** The most layers (digests) one download may report; a model has a handful. */
+export const MAX_PULL_LAYERS = 1_000;
 /** The largest model list or model details Sage reads. */
 export const MAX_STATUS_BYTES = 1024 * 1024;
 
@@ -123,13 +125,15 @@ export class RunnerClient {
   }
 
   /** The models the runner has downloaded, or why Sage couldn't find out. */
-  async models(): Promise<ModelList> {
+  /** `signal` cancels the request (on top of the short time limit). */
+  async models(signal?: AbortSignal): Promise<ModelList> {
     let response: Response;
     try {
+      const timeout = AbortSignal.timeout(this.statusTimeoutMs);
       response = await this.fetch(`${this.base}/api/tags`, {
         method: "GET",
         redirect: "error",
-        signal: AbortSignal.timeout(this.statusTimeoutMs),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch {
       return { ok: false, reason: "unreachable" };
@@ -218,30 +222,44 @@ export class RunnerClient {
         return stopped() ?? { status: "failed", message: pullErrorMessage(text, response.status) };
       }
       if (!response.body) return { status: "failed", message: PULL_MESSAGES.unreadable };
-      return await this.readProgress(response.body, alive, stopped, options.onProgress);
+      return await this.readProgress(response.body, signal, alive, stopped, options.onProgress);
     } finally {
       timers.clearTimeout(timer);
     }
   }
 
+  /**
+   * Reads the progress lines. The stall limit restarts only on a complete, valid line that moves
+   * the download on (a new status, a new layer, or more bytes of a layer): repeated lines, blank
+   * lines and bytes with no end of line don't count as progress.
+   */
   private async readProgress(
     body: ReadableStream<Uint8Array>,
+    signal: AbortSignal,
     alive: () => void,
     stopped: () => PullOutcome | undefined,
     onProgress: ((progress: PullProgress) => void) | undefined,
   ): Promise<PullOutcome> {
     const reader = body.getReader();
+    // Ends a read that is waiting, whatever the fetch underneath does with the signal.
+    const onAbort = () => void reader.cancel().catch(() => undefined);
+    signal.addEventListener("abort", onAbort, { once: true });
     const layers = new Map<string, PullProgress>();
+    let completed = 0;
+    let total = 0;
+    let lastStatus: string | undefined;
+    const unreadable: PullOutcome = { status: "failed", message: PULL_MESSAGES.unreadable };
+
     const handle = (text: string): PullOutcome | undefined => {
       if (!text.trim()) return undefined;
       let json: unknown;
       try {
         json = JSON.parse(text);
       } catch {
-        return { status: "failed", message: PULL_MESSAGES.unreadable };
+        return unreadable;
       }
       const parsed = pullLine.safeParse(json);
-      if (!parsed.success) return { status: "failed", message: PULL_MESSAGES.unreadable };
+      if (!parsed.success) return unreadable;
       const line = parsed.data;
       if (line.error !== undefined) {
         return {
@@ -250,16 +268,25 @@ export class RunnerClient {
         };
       }
       if (line.status === "success") return { status: "done" };
-      if (line.digest !== undefined && line.total !== undefined) {
-        layers.set(line.digest, { total: line.total, completed: Math.min(line.completed ?? 0, line.total) });
-        let completed = 0;
-        let total = 0;
-        for (const layer of layers.values()) {
-          completed += layer.completed;
-          total += layer.total;
-        }
-        onProgress?.({ completed, total });
+      let moved = false;
+      if (line.status !== undefined && line.status !== lastStatus) {
+        lastStatus = line.status;
+        moved = true;
       }
+      if (line.digest !== undefined && line.total !== undefined) {
+        const layer = { total: line.total, completed: Math.min(line.completed ?? 0, line.total) };
+        const before = layers.get(line.digest);
+        if (!before && layers.size >= MAX_PULL_LAYERS) return unreadable;
+        if (!before || layer.completed > before.completed || layer.total !== before.total) {
+          // Running totals: only this layer's change is added.
+          completed += layer.completed - (before?.completed ?? 0);
+          total += layer.total - (before?.total ?? 0);
+          layers.set(line.digest, layer);
+          moved = true;
+          onProgress?.({ completed, total });
+        }
+      }
+      if (moved) alive();
       return undefined;
     };
 
@@ -285,11 +312,11 @@ export class RunnerClient {
           return stopped() ?? { status: "failed", message: PULL_MESSAGES.other };
         }
         if (chunk.done) {
+          const cut = stopped();
+          if (cut) return cut;
           // The last line may come without a newline after it.
-          const last = endLine();
-          return last ?? { status: "failed", message: PULL_MESSAGES.other };
+          return endLine() ?? { status: "failed", message: PULL_MESSAGES.other };
         }
-        alive();
         const bytes = chunk.value;
         let start = 0;
         for (let end = bytes.indexOf(10); end !== -1; end = bytes.indexOf(10, start)) {
@@ -301,9 +328,10 @@ export class RunnerClient {
         take(bytes.subarray(start));
       }
     } catch (error) {
-      if (error instanceof LineTooLong) return { status: "failed", message: PULL_MESSAGES.unreadable };
+      if (error instanceof LineTooLong) return unreadable;
       throw error;
     } finally {
+      signal.removeEventListener("abort", onAbort);
       await reader.cancel().catch(() => undefined);
     }
   }

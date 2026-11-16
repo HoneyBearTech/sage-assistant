@@ -3,6 +3,7 @@ import type { ServerResponse } from "node:http";
 import { test } from "node:test";
 import {
   hasModel,
+  MAX_PULL_LAYERS,
   MAX_PULL_LINE_BYTES,
   PULL_MESSAGES,
   PULL_STALL_MS,
@@ -299,4 +300,115 @@ test("whether a model can use tools: from its capabilities, or unknown if the ru
   const { client: odd } = await runner(t, (_req, res) => json(res, 200, { capabilities: "tools" }));
   assert.equal(await odd.toolSupport("m"), "unknown");
   assert.equal(await new RunnerClient({ port: REFUSED_PORT }).toolSupport("m"), "unknown");
+});
+
+/**
+ * A runner whose download reply is fed by the test: each chunk is handed over only when Sage asks
+ * for more, and `drained` resolves once Sage has read every chunk and is waiting for the next one.
+ */
+function scriptedPull(chunks: string[]) {
+  const drained = deferred<void>();
+  const queue = [...chunks];
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        const next = queue.shift();
+        if (next === undefined) {
+          drained.resolve();
+          return;
+        }
+        controller.enqueue(new TextEncoder().encode(next));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const client = new RunnerClient({ fetch: async () => new Response(body, { status: 200 }) });
+  return { client, drained };
+}
+
+const progressLine = (completed: number, digest = "sha256:a") =>
+  `${JSON.stringify({ status: `pulling ${digest}`, digest, total: 1000, completed })}\n`;
+
+test("only a line that moves the download on restarts the 2-minute limit", async () => {
+  const timers = new ManualTimers();
+  const seen: PullProgress[] = [];
+  const { client, drained } = scriptedPull([
+    progressLine(100),
+    // The same line over and over, blank lines and a status that doesn't change: not progress.
+    ...Array.from({ length: 50 }, () => progressLine(100)),
+    "\n\n",
+    progressLine(50),
+  ]);
+  const running = client.pull("m", {
+    signal: new AbortController().signal,
+    timers,
+    onProgress: (p) => seen.push(p),
+  });
+  await drained.promise;
+  // Before the request, after the reply, and after the first line: nothing since.
+  assert.equal(timers.started.length, 3);
+  assert.deepEqual(seen, [{ completed: 100, total: 1000 }]);
+  timers.fire();
+  assert.deepEqual(await running, { status: "failed", message: PULL_MESSAGES.stalled });
+});
+
+test("a trickle of bytes with no end of line doesn't count as progress", async () => {
+  const timers = new ManualTimers();
+  const { client, drained } = scriptedPull([progressLine(100), ...Array.from({ length: 200 }, () => " ")]);
+  const running = client.pull("m", { signal: new AbortController().signal, timers });
+  await drained.promise;
+  assert.equal(timers.started.length, 3);
+  timers.fire();
+  assert.deepEqual(await running, { status: "failed", message: PULL_MESSAGES.stalled });
+});
+
+test("more bytes, a new layer or a new status each restart the limit", async () => {
+  const timers = new ManualTimers();
+  const { client, drained } = scriptedPull([
+    progressLine(100),
+    progressLine(200),
+    progressLine(10, "sha256:b"),
+    '{"status":"verifying sha256 digest"}\n',
+    '{"status":"verifying sha256 digest"}\n',
+  ]);
+  const running = client.pull("m", { signal: new AbortController().signal, timers });
+  await drained.promise;
+  assert.equal(timers.started.length, 2 + 4, "the repeated status line didn't count");
+  timers.fire();
+  assert.deepEqual(await running, { status: "failed", message: PULL_MESSAGES.stalled });
+});
+
+test("a download reporting more than 1,000 layers is stopped as unreadable", async () => {
+  assert.equal(MAX_PULL_LAYERS, 1_000);
+  const many = Array.from({ length: MAX_PULL_LAYERS }, (_, i) => progressLine(1, `sha256:${i}`)).join("");
+  const seen: PullProgress[] = [];
+  const { client } = scriptedPull([many, progressLine(1, "sha256:one-too-many")]);
+  const outcome = await client.pull("m", {
+    signal: new AbortController().signal,
+    timers: new ManualTimers(),
+    onProgress: (p) => seen.push(p),
+  });
+  assert.deepEqual(outcome, { status: "failed", message: PULL_MESSAGES.unreadable });
+  assert.deepEqual(seen.at(-1), { completed: MAX_PULL_LAYERS, total: MAX_PULL_LAYERS * 1000 });
+  // Updating a layer already counted is fine at the cap.
+  const { client: full } = scriptedPull([many, progressLine(5, "sha256:7"), '{"status":"success"}\n']);
+  const last: PullProgress[] = [];
+  assert.deepEqual(
+    await full.pull("m", {
+      signal: new AbortController().signal,
+      timers: new ManualTimers(),
+      onProgress: (p) => last.push(p),
+    }),
+    { status: "done" },
+  );
+  assert.deepEqual(last.at(-1), { completed: MAX_PULL_LAYERS + 4, total: MAX_PULL_LAYERS * 1000 });
+});
+
+test("a cancel ends a read that is waiting, even if the connection doesn't notice", async () => {
+  const controller = new AbortController();
+  const { client, drained } = scriptedPull([progressLine(100)]);
+  const running = client.pull("m", { signal: controller.signal, timers: new ManualTimers() });
+  await drained.promise;
+  controller.abort(new Error("cancelled"));
+  assert.deepEqual(await running, { status: "cancelled" });
 });
