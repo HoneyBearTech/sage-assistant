@@ -2,6 +2,33 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - minimatch-advisory
+
+**Context:** the owner asked for the next roadmap item: track the minimatch advisory
+(GHSA-g3hv-75wg-m249, moderate) in electron-builder's build tools and take the update that fixes it.
+
+**Decisions:**
+- **Override now instead of waiting.** No electron-builder release asks for the fixed minimatch, not even
+  the 27 preview, so the owner approved npm `overrides` instead. Keys are version-qualified
+  (`minimatch@^10.2.5` under `app-builder-lib`, `minimatch@^9.0.3` under `@electron/universal`) so the
+  older 3.x and 5.x copies, which the advisory doesn't cover, stay as they are. A plain
+  `"minimatch"` key under the parent moved those too and left an invalid tree.
+- **Pinned to exactly 11.0.8**, like the repo's other npm versions. Renovate can't read version-qualified
+  override keys, so the entries are maintained by hand; CONTRIBUTING.md says to remove each one when its
+  parent asks for 11.0.1 or later, and to check `npm ls minimatch` and `npm audit` after every
+  electron-builder update. The electron-builder Renovate rule now carries a reminder.
+- **Evidence that the installer is unchanged:** the unpacked Windows app (`npm run dist:dir`) was built from
+  main and from the branch. The `app.asar` listing (37 entries), the unpacked folder (78 files) and the
+  sha256 of every file inside `app.asar` matched, apart from `package.json`, which gains only the
+  `overrides` block. The Auditor also ran 2,805 file-pattern comparisons between minimatch 10 and 11
+  through electron-builder's own filter code, including Windows drive and UNC paths, with no difference.
+  The real Windows installer is built only at release time.
+
+**Review:** QA passed. The two security reviews found no blockers. They noted the new transitive package
+`@isaacs/nonrecursive-glob-match` (same maintainer as minimatch, dev-only, young, no provenance
+attestation): low risk, accepted. Both security reviews and the Auditor asked for an exact pin and clearer
+removal notes (done, one fix round). The Auditor approved.
+
 ## 2026-11-16 - public-scan-escapes
 
 **Context:** the owner asked for the next roadmap item: "Public-repo checker: also catch e-mail

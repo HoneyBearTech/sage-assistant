@@ -60,7 +60,8 @@
       "description": "electron-builder brings electron-winstaller, whose install script package.json turns off under allowScripts.",
       "matchPackageNames": ["electron-builder"],
       "prBodyNotes": [
-        "electron-builder update: check whether the electron-winstaller version changed (npm install-scripts ls, or package-lock.json); if it did, inspect its install script and update the allowScripts entry in package.json (keep it false) in this pull request, in a signed-off commit (git commit -s)."
+        "electron-builder update: check whether the electron-winstaller version changed (npm install-scripts ls, or package-lock.json); if it did, inspect its install script and update the allowScripts entry in package.json (keep it false) in this pull request, in a signed-off commit (git commit -s).",
+        "Also check the minimatch overrides in package.json (see CONTRIBUTING.md, Reviewing a Renovate update)."
       ]
     },
     {

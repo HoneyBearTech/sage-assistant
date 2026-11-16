@@ -47,6 +47,14 @@
     "typescript": "7.0.2",
     "zod": "4.6.7"
   },
+  "overrides": {
+    "app-builder-lib": {
+      "minimatch@^10.2.5": "11.0.8"
+    },
+    "@electron/universal": {
+      "minimatch@^9.0.3": "11.0.8"
+    }
+  },
   "allowScripts": {
     "esbuild@0.28.2": true,
     "electron-winstaller@5.4.0": false
