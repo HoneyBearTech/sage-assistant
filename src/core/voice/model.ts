@@ -1,4 +1,6 @@
-import { stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { MAX_VOICE_SAMPLES, VOICE_SAMPLE_RATE } from "../../shared/api.js";
 
@@ -90,6 +92,35 @@ export async function isModelReady(dataDir: string, model: SpeechModel): Promise
     }
   }
   return true;
+}
+
+/**
+ * Reads every file of the model folder again and checks its exact size and SHA-256 fingerprint, so
+ * a file damaged or replaced on disk since the download is never loaded. Takes a moment (44 MB),
+ * so Voice does it once per run, before the first recording.
+ */
+export async function verifyModel(dataDir: string, model: SpeechModel): Promise<boolean> {
+  const dir = modelDir(dataDir, model);
+  for (const file of model.files) {
+    const hash = createHash("sha256");
+    let size = 0;
+    try {
+      for await (const chunk of createReadStream(join(dir, file.name))) {
+        size += (chunk as Buffer).length;
+        if (size > file.size) return false;
+        hash.update(chunk as Buffer);
+      }
+    } catch {
+      return false;
+    }
+    if (size !== file.size || hash.digest("hex") !== file.sha256) return false;
+  }
+  return true;
+}
+
+/** Deletes the model folder, so the download is offered again. */
+export async function removeModel(dataDir: string, model: SpeechModel): Promise<void> {
+  await rm(modelDir(dataDir, model), { recursive: true, force: true });
 }
 
 /**

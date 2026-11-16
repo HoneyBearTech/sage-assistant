@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -13,7 +13,14 @@ import {
   type SpeechEngine,
   type TranscribeRequest,
 } from "../src/core/voice/helper-protocol.js";
-import { MAX_SAMPLES, modelDir, moonshineConfig, type SpeechModel } from "../src/core/voice/model.js";
+import {
+  isModelReady,
+  MAX_SAMPLES,
+  modelDir,
+  moonshineConfig,
+  type SpeechModel,
+  verifyModel,
+} from "../src/core/voice/model.js";
 import {
   type HelperProcess,
   HelperTranscriber,
@@ -467,4 +474,63 @@ test("nothing about voice writes the sound or the words to a log", async (t) => 
   await voice.downloadModel();
   await voice.transcribe(new Int16Array(16_000).fill(1234));
   assert.ok(!lines.some((line) => line.includes("my secret words") || line.includes("1234")));
+});
+
+test("a speech file already on disk is checked by fingerprint once per run, before its first use", async (t) => {
+  const { deps, dataDir, model, heard, lines } = await voiceSetup(t);
+  // Downloaded in an earlier run.
+  const first = new Voice(deps);
+  await first.downloadModel();
+  const file = join(modelDir(dataDir, model), "tokens.txt");
+  const good = await readFile(file);
+  // A new run, with the file intact: checked, then used; not checked again for the next recording.
+  const intact = new Voice(deps);
+  assert.deepEqual(await intact.transcribe(new Int16Array(16_000)), { ok: true, text: "hello" });
+  await writeFile(file, Buffer.alloc(good.length, 7)); // same size, different content
+  assert.deepEqual(await intact.transcribe(new Int16Array(16_000)), { ok: true, text: "hello" });
+  assert.equal(heard.length, 2);
+  // Another run: the same-size change is caught before the helper loads anything.
+  const changed = new Voice(deps);
+  assert.equal(await isModelReady(dataDir, model), true, "the size alone looks fine");
+  assert.deepEqual(await changed.transcribe(new Int16Array(16_000)), {
+    ok: false,
+    message: VOICE_MESSAGES.damaged,
+    needsDownload: true,
+  });
+  assert.equal(heard.length, 2, "the helper was never asked");
+  assert.deepEqual(await readdir(join(dataDir, "models")), [], "the model folder is deleted");
+  assert.equal((await changed.status()).model, "missing", "so the download is offered again");
+  assert.ok(lines.some((line) => line.includes("didn't match its fingerprint")));
+  // Downloading again makes it usable, without a second check of the fresh files.
+  assert.deepEqual(await changed.downloadModel(), { status: "done" });
+  assert.deepEqual(await changed.transcribe(new Int16Array(16_000)), { ok: true, text: "hello" });
+});
+
+test("the fingerprint check refuses missing, short, long and changed files", async (t) => {
+  const { dataDir } = await voiceSetup(t);
+  const data = randomBytes(3_000);
+  const model: SpeechModel = {
+    id: "check",
+    files: [
+      {
+        name: "a.bin",
+        url: "https://example.invalid/a",
+        size: data.length,
+        sha256: createHash("sha256").update(data).digest("hex"),
+      },
+    ],
+  };
+  const dir = modelDir(dataDir, model);
+  assert.equal(await verifyModel(dataDir, model), false, "missing");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "a.bin"), data);
+  assert.equal(await verifyModel(dataDir, model), true);
+  await writeFile(join(dir, "a.bin"), data.subarray(1));
+  assert.equal(await verifyModel(dataDir, model), false, "short");
+  await writeFile(join(dir, "a.bin"), Buffer.concat([data, Buffer.alloc(1)]));
+  assert.equal(await verifyModel(dataDir, model), false, "long");
+  const flipped = Buffer.from(data);
+  flipped[100] = (flipped[100]! + 1) % 256;
+  await writeFile(join(dir, "a.bin"), flipped);
+  assert.equal(await verifyModel(dataDir, model), false, "changed");
 });

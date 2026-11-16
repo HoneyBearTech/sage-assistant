@@ -266,12 +266,21 @@ crash; or a misheard word could be sent to the brain.
   SHA-256. Only https is used, for the first address and every forward (at most five; relative forwards
   are resolved against the current https address), with no cookies or credentials. A file is stopped as
   soon as it is larger than expected, and the model folder is put in place only when all three files
-  match; anything half-finished is deleted after a failure, a cancel, or at the next start. Nothing is
-  sent: these are plain GET requests. *Evidence:* `test/voice-download.test.ts` (a fake server on
-  `127.0.0.1`: a correct file, forwards, a forward to plain http, too many forwards, a wrong fingerprint,
-  too big and too small, a dropped connection, a cancel, leftovers deleted), `test/voice.test.ts`
-  (nothing is fetched without **Download**), `test/security.test.ts` (the three addresses are the only
-  new ones in `src/`).
+  match; anything half-finished is deleted after a failure, a cancel, a stall (30 seconds without a
+  reply or new bytes), or at the next start. Nothing is sent: these are plain GET requests.
+  *Evidence:* `test/voice-download.test.ts` (a fake server on `127.0.0.1`: a correct file, forwards, a
+  forward to plain http, too many forwards, a wrong fingerprint, too big and too small, a dropped
+  connection, a cancel, a server that never answers and one that stops sending, leftovers deleted),
+  `test/voice.test.ts` (nothing is fetched without **Download**), `test/security.test.ts` (the three
+  addresses are the only new ones in `src/`).
+- **Checked again before it is used.** Between runs, the folder only has to have the right sizes to
+  count as there. Once per run, before the first recording reaches the helper, the main process reads
+  all three files again and checks each SHA-256 (a download in the same run counts, since it just
+  checked them). If one doesn't match, Sage deletes the model folder, says the file was damaged or
+  changed, and offers the download again; the engine never loads it. This catches damage on disk and a
+  file replaced since the last run, not a change made during a run. *Evidence:* `test/voice.test.ts`
+  ("a speech file already on disk is checked by fingerprint once per run…", "the fingerprint check
+  refuses missing, short, long and changed files").
 - **The native code is kept small and apart.** The engine is one well-known package at an exact version
   with no install scripts. It is loaded only in the speech helper, a separate process: a crash there
   can't close or freeze the window, and the next recording starts a fresh helper; a recording that takes

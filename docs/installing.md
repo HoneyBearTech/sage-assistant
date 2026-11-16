@@ -241,5 +241,7 @@ the local model runner (its models are in its own folder).
 | "Sage can't use the microphone because it's blocked." | Allow it in Windows's microphone settings; see [Voice and the microphone](#voice-and-the-microphone). |
 | "Sage couldn't reach Hugging Face to download the speech file." | Check the PC is online, then choose **Try again**. |
 | "The downloaded speech file wasn't the one Sage expected…" | The file didn't match its fingerprint and was deleted. Try again later; if it keeps happening, report it as an issue. |
+| "The speech file on this PC was damaged or changed, so Sage deleted it." | Sage checks the file before first use in each run. Choose **Download** to get it again. |
+| "The download of the speech file stopped making progress…" | Nothing arrived for 30 seconds. Check the PC is online, then choose **Try again**. |
 | The window doesn't open on Linux | See [the sandbox note](#linux-notes). |
 | `npm install` fails | Check `node --version` shows v24, then delete `node_modules` and run `npm install` again. |

@@ -46,7 +46,7 @@ used.
 | Notices | `src/core/notices.ts` | Messages from Sage itself (reminders for the window, data files set aside), collected by the window every 5 seconds and shown in the chat. Each notice has an id; the window confirms the ids it has put in the chat once the Chat view is open and the window isn't hidden or minimised, and only that delivers a notice. One not yet confirmed is handed out again with the same id, so the window skips it if it already shows it. Deleting a reminder withdraws its notice, and a reminder that no longer exists is skipped. At most 50 wait at once (confirmed or not): the oldest are kept, and the window is told how many more are waiting. |
 | Service keys | `src/core/keystore.ts` | The key is saved together with the service (origin) it was entered for, and each turn's online brain asks only for the key of its own service. |
 | Search | `src/core/search/` | The `SearchProvider` interface and the DuckDuckGo HTML provider with its parser. |
-| Voice | `src/core/voice/` | `model.ts`: the speech model's three files (pinned address, exact size, SHA-256). `download.ts`: the download (https only, at most five forwards, size cap, fingerprint check, moved into place only when all match, leftovers deleted). `transcriber.ts`: starts the speech helper, one recording at a time, 60-second limit, a fresh helper after a crash. `helper-protocol.ts`: the validated messages between the two, and the helper's own logic. `voice.ts`: ties them together; the download only after the main process's own box says Download. |
+| Voice | `src/core/voice/` | `model.ts`: the speech model's three files (pinned address, exact size, SHA-256). `download.ts`: the download (https only, at most five forwards, size cap, fingerprint check, 30-second stall limit, moved into place only when all match, leftovers deleted). `transcriber.ts`: starts the speech helper, one recording at a time, 60-second limit, a fresh helper after a crash. `helper-protocol.ts`: the validated messages between the two, and the helper's own logic. `voice.ts`: ties them together; the download only after the main process's own box says Download, and the files' fingerprints checked again once per run before first use. |
 | Speech helper | `src/helper/voice-helper.ts` | Built as `dist/voice-helper.cjs` and run as Electron's utility process. The only code that loads the speech engine (`sherpa-onnx-node`); gets sound, sends back text. |
 | Window voice | `src/renderer/voice-controls.ts`, `voice.ts`, `voice-text.ts` | Hold to talk (Ctrl+Space or the Talk button), recording with the standard recorder, turning it into 16 kHz mono sound, the download offer, and spoken replies with the window's own speech and the PC's installed voices. `renderer.ts` only finds the elements. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
@@ -122,8 +122,10 @@ commit `d1e6c30921780b8508d04b492dfb3ce8a51605d4`. The window can only ask for t
 process asks the user in its own box first. Each file is fetched with `redirect: "manual"`, following at
 most five forwards, every one https; it is written to `models/.partial/` and stopped as soon as it is
 larger than its exact size; its SHA-256 is checked; and the folder is moved into place as
-`models/moonshine-tiny-en-quantized-2026-02-27/` only when all three match. A failure or a cancel deletes
-`.partial`, and so does every start of Sage.
+`models/moonshine-tiny-en-quantized-2026-02-27/` only when all three match. A failure, a cancel or a
+stall (30 seconds with no reply or no new bytes) deletes `.partial`, and so does every start of Sage. In
+each run, before the first recording goes to the helper, `Voice` reads the three files again and checks
+their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the download is offered again.
 
 ## Where data is kept
 

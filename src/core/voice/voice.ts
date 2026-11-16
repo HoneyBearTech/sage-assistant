@@ -7,8 +7,10 @@ import {
   MAX_SAMPLES,
   MOONSHINE_TINY_EN,
   modelDir,
+  removeModel,
   type SpeechModel,
   totalSize,
+  verifyModel,
 } from "./model.js";
 import type { Transcriber } from "./transcriber.js";
 
@@ -16,6 +18,8 @@ export const VOICE_MESSAGES = {
   needsDownload: "Voice needs its speech file first. Choose Download to get it (44 MB, once).",
   busy: "Sage is still working out the last recording. Try again in a moment.",
   alreadyDownloading: "The speech file is already downloading.",
+  damaged:
+    "The speech file on this PC was damaged or changed, so Sage deleted it. Choose Download to get it again (44 MB).",
 } as const;
 
 export interface VoiceDeps {
@@ -39,6 +43,8 @@ export class Voice {
   private readonly fetch: FetchLike;
   private download: { controller: AbortController; received: number } | undefined;
   private working = false;
+  /** The model files' fingerprints were checked in this run (by the download, or before first use). */
+  private verified = false;
 
   constructor(private readonly deps: VoiceDeps) {
     this.model = deps.model ?? MOONSHINE_TINY_EN;
@@ -91,6 +97,7 @@ export class Voice {
         },
       });
       this.deps.logger.info("The speech file was downloaded and checked.");
+      this.verified = true;
       return { status: "done" };
     } catch (error) {
       if (current.controller.signal.aborted) return { status: "cancelled" };
@@ -120,6 +127,15 @@ export class Voice {
     try {
       if (this.download || !(await isModelReady(this.deps.dataDir, this.model))) {
         return { ok: false, message: VOICE_MESSAGES.needsDownload, needsDownload: true };
+      }
+      // Once per run, before the helper first loads the model: every file's fingerprint again.
+      if (!this.verified) {
+        if (!(await verifyModel(this.deps.dataDir, this.model))) {
+          this.deps.logger.warn("The speech file didn't match its fingerprint, so it was deleted.");
+          await removeModel(this.deps.dataDir, this.model);
+          return { ok: false, message: VOICE_MESSAGES.damaged, needsDownload: true };
+        }
+        this.verified = true;
       }
       const floats = new Float32Array(samples.length);
       for (let i = 0; i < samples.length; i++) floats[i] = (samples[i] ?? 0) / 32_768;
