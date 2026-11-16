@@ -88,6 +88,12 @@ export class MessagesBrain implements Brain {
     this.timeoutMs = options.timeoutMs ?? CHAT_TIMEOUT_MS;
   }
 
+  /**
+   * The model's earlier replies whose thinking blocks the service refused: once a request without
+   * them was accepted, they stay left out for the rest of the message (replies after it keep theirs).
+   */
+  private readonly stripped = new WeakSet<Replay>();
+
   async chat(messages: ChatMessage[], tools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
     if (!this.options.model.trim()) {
       return { ok: false, message: "Choose the model for Claude in Settings first." };
@@ -101,7 +107,7 @@ export class MessagesBrain implements Brain {
       if (!key) return { ok: false as const, message: "Add your Claude key in Settings first." };
       const body = messagesRequest(this.options.model, messages, tools, {
         allowTools: options.allowTools !== false,
-        dropThinking: () => dropThinking,
+        dropThinking: (replay) => dropThinking || this.stripped.has(replay),
       });
       const reply = await requestService(
         this.fetch,
@@ -121,9 +127,15 @@ export class MessagesBrain implements Brain {
     let reply = await send(false);
     // The service refused a thinking block it sent earlier in this message (it can bind them to a
     // conversation): send the same request once more with every thinking block left out, which it
-    // allows.
+    // allows. If that is accepted, those blocks stay out for the rest of the message.
     if (!reply.ok && "status" in reply && reply.status === 400 && reply.kinds?.has(THINKING_SIGNATURE)) {
       reply = await send(true);
+      if (reply.ok) {
+        for (const message of messages) {
+          if (message.role === "assistant" && message.replay?.format === "messages")
+            this.stripped.add(message.replay);
+        }
+      }
     }
     if (!reply.ok) return { ok: false, message: reply.message };
     const { key } = reply;

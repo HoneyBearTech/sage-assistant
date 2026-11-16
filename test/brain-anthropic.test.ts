@@ -648,3 +648,30 @@ test("each request reads the key again, the retry included, and none is sent onc
   assert.equal((await stopped.chat([], tools, { signal: controller.signal })).ok, false);
   assert.equal(stopping.calls.length, 1, "an already-stopped turn sends nothing");
 });
+
+test("after a recovery, the refused thinking stays out for the rest of the message; newer thinking goes back", async (t) => {
+  const { sage, calls, bodies } = await sageWithClaude(
+    t,
+    (_call, index) =>
+      [
+        jsonResponse(200, ROUND_1),
+        jsonResponse(400, SIGNATURE_ERROR),
+        jsonResponse(200, ROUND_2),
+        jsonResponse(200, FINAL),
+      ][index]!,
+  );
+  assert.equal(await sage.assistant.send("what do I have?"), "You have no notes and no reminders.");
+  assert.equal(calls.length, 4);
+  assert.ok(calls[1]!.body.includes(SIG_1), "the request that was refused");
+  for (const call of calls.slice(2)) {
+    assert.ok(!call.body.includes(SIG_1), "the refused signature never goes out again");
+    assert.ok(!call.body.includes("redacted_thinking"));
+  }
+  const last = bodies()[3]!;
+  assert.deepEqual(last.messages[1].content, [ROUND_1.content[2], ROUND_1.content[3]]);
+  assert.deepEqual(last.messages[3].content, ROUND_2.content, "the newer reply keeps its thinking");
+  assert.ok(calls[3]!.body.includes(SIG_2));
+  // The request list still only grows after the recovery.
+  const retried = bodies()[2]!;
+  assert.deepEqual(last.messages.slice(0, retried.messages.length), retried.messages);
+});
