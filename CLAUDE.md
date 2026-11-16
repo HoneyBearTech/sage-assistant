@@ -110,7 +110,7 @@ strike them through with a reason.
 - **Logic in `src/core/`** where tests reach it; keep `src/main/main.ts` thin.
 - **Dependencies**: exact versions, few, permissive licences, no vendor SDKs (plain `fetch`).
 - **Public repository**: no private IP addresses, LAN host names, home paths or personal e-mail
-  addresses; `npm run check:public` enforces it. Product docs may name the local model runner.
+  addresses, also when written with `\u` or `\/` escapes; `npm run check:public` enforces it. Product docs may name the local model runner.
 - **Checks run locally** with `npm run verify`. On GitHub every pull request also gets CI (the same
   command on Ubuntu and Windows), the DCO check, a secret scan, CodeQL and dependency review; Scorecard
   runs on `main`. The record is `docs/github-checks.md`; the workflows are in `.github/workflows/`.
