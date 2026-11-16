@@ -31,7 +31,10 @@ source are there in the installed app too.
    **More info**, check the file name is `Sage-Setup-<version>.exe`, then choose **Run anyway**. Do this
    only for a file from the Releases page whose checksum matched.
 4. It installs for your Windows account only, without asking for admin rights, adds **Sage** to the Start
-   menu and the desktop, and starts Sage. Then set it up as in [step 4](#4-set-it-up).
+   menu and the desktop, and starts Sage.
+5. **Install the local model runner and a model**, as in [step 1 below](#local-model-runner), unless
+   you use only an online model service.
+6. **Set it up** as in [step 4](#4-set-it-up).
 
 **Updating:** download the newer installer from the Releases page, check it the same way, and run it.
 It replaces the old version; your data stays.
@@ -61,6 +64,8 @@ The steps below type commands into a command window:
 - **Linux:** open your desktop's **Terminal** app (often Ctrl+Alt+T). To paste, use Ctrl+Shift+V.
 
 Wait for each command to finish (the prompt comes back) before typing the next one.
+
+<a id="local-model-runner"></a>
 
 ## 1. Install Ollama and a small model
 
