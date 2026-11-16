@@ -2,6 +2,29 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - release-0-1-1
+
+**Context:** the owner asked for the next item: a release with everything merged since 0.1.0, so one
+installer can be tested.
+
+**Decisions:**
+- **0.1.1, a patch release.** Since `v0.1.0`: the deleted-reminder fix (#19), the public-repo checker reading
+  escaped text (#20), the minimatch override (#21) and the chat window reorganised for test coverage
+  (#22), plus internal pinning and docs changes (#10, #11, #17). No new features.
+- The changelog's entries moved unchanged under the new heading; the links point to `v0.1.1`.
+- The roadmap's owner item for the first release is ticked: 0.1.0 was released and its installer checked.
+
+**Review:** the Security Officer found nothing: the tag protections are the same as for 0.1.0 (the tag must
+be on `main` and match `package.json`, actions pinned, least-privilege permissions, checksum and
+provenance), and nothing merged since 0.1.0 weakens the release. The Auditor approved after `npm run
+verify` and a Linux `npm run dist:dir` build (packaged version 0.1.1). A second security review wasn't
+available this month.
+
+**Rejected findings:**
+- *List the release workflow's exact Node version (24.22.3, from #10) in the changelog* (Auditor,
+  should-fix). Not taken: the changelog lists changes that matter to people using Sage; internal build
+  pins are recorded in the workflow file and its history, and 0.1.0's changelog follows the same rule.
+
 ## 2026-11-16 - window-coverage
 
 **Context:** the owner asked for the next roadmap item: count the window script once in test coverage.
