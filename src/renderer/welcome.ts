@@ -96,6 +96,8 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
   let diagnosticsId: string | null = null;
   /** Goes up whenever the box is hidden or asked for again; a text for an earlier ask is dropped. */
   let diagnosticsAsk = 0;
+  /** The step whose diagnostics the box shows, for moving the focus back when it hides. */
+  let diagnosticsStep: DiagnosticStep = "runner";
   /** Lines waiting to type, one after another. */
   let queue: { item: HTMLElement; text: string }[] = [];
 
@@ -161,17 +163,22 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
   }
 
   function hideDiagnostics(): void {
+    // A hidden control can't keep the focus: it goes back to the step's heading.
+    const inBox = [el.diagnosticsHeading, el.diagnosticsText, el.diagnosticsCopy] as Element[];
+    const focusInBox = !el.diagnostics.hidden && inBox.includes(document.activeElement as Element);
     diagnosticsAsk++;
     diagnosticsId = null;
     el.diagnostics.hidden = true;
     el.diagnosticsText.textContent = "";
     el.diagnosticsStatus.textContent = "";
+    if (focusInBox) el.headings[diagnosticsStep].focus();
   }
 
   async function showDiagnostics(step: DiagnosticStep): Promise<void> {
     const code = failed[step];
     if (!code) return;
     hideDiagnostics();
+    diagnosticsStep = step;
     const mine = diagnosticsAsk;
     el.diagnostics.hidden = false;
     el.diagnosticsCopy.disabled = true;

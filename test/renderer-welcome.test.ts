@@ -1036,3 +1036,26 @@ test("the same check with the same result is read out again: the status area is 
   assert.equal(area.textContent, said, "then set again, a moment later");
   assert.deepEqual(writes.slice(-2), ["", said]);
 });
+
+test("hiding the diagnostics box while the focus is in it moves the focus back to the step's heading", async (t) => {
+  let answers = 0;
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => (answers++ === 0 ? runner("unreachable") : runner("unreadable")),
+  });
+  await click("place-local");
+  await click("runner-diagnostics");
+  assert.equal(el("welcome-diagnostics").hidden, false);
+  assert.equal(focusedElement(), el("diagnostics-heading"));
+  el("diagnostics-copy").focus();
+  // A new answer for the step hides the box; the focus doesn't stay on a hidden button.
+  await click("runner-check");
+  assert.equal(el("welcome-diagnostics").hidden, true);
+  assert.equal(focusedElement(), el("step-runner-heading"));
+
+  // With the focus elsewhere, hiding the box leaves it where it is.
+  await click("runner-diagnostics");
+  el("runner-check").focus();
+  await click("runner-check");
+  assert.equal(el("welcome-diagnostics").hidden, true);
+  assert.equal(focusedElement(), el("runner-check"));
+});

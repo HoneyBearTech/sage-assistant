@@ -319,7 +319,9 @@ full in a read-only box. **Copy to clipboard** sends only that id (`copyDiagnost
 writes the text it kept under that id to the clipboard (Electron's `clipboard`, main process only), or
 says to build it again if the id isn't the latest, if the text was built more than 2 minutes ago
 (`DIAGNOSTICS_COPY_MS`) or if it was already copied 3 times (`DIAGNOSTICS_MAX_COPIES`): the window
-could ask without the user, so these limits keep it from writing the clipboard again and again. Nothing is sent anywhere, and nothing is logged.
+could ask without the user, so these limits keep it from writing the clipboard again and again. Nothing is sent anywhere, and nothing is logged. When the box hides (a new answer
+for the step, Check again, another step) while the focus is in it, the focus goes back to the step's
+heading.
 
 `setupDone` is changed only by the Welcome screen's own request; a Settings save keeps the stored value.
 Each of the Welcome screen's requests loads the settings, changes only its own fields and saves them

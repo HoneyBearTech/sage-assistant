@@ -134,6 +134,9 @@ function fakeDocument(elements: Map<string, FakeElement>) {
     /** The page's <html> element: the theme is set on it. */
     documentElement: new FakeElement("html"),
     visibilityState: "visible" as "visible" | "hidden",
+    get activeElement() {
+      return focused ?? null;
+    },
     getElementById: (id: string) => elements.get(id) ?? null,
     createElement: (tag: string) => new FakeElement(tag),
     addEventListener: (type: string, listener: Listener) => listeners.addEventListener(type, listener),
