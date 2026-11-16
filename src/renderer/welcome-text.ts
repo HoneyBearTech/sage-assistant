@@ -35,6 +35,7 @@ export const WELCOME_TEXT = {
   summary: (choice: ModelChoice) =>
     `Sage will think on this computer, with the ${SAGE_MODELS[choice].label} model (${SAGE_MODELS[choice].name}).`,
   voice: "To talk to Sage, hold Ctrl+Space. Sage asks before downloading the speech file the first time.",
+  notSaved: "Sage couldn't save that setup is done. Try again.",
   download: "Download",
   useModel: "Use this model",
   tryAgain: "Try again",

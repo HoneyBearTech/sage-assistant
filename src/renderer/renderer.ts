@@ -393,6 +393,7 @@ const welcome = createWelcome(
   sage,
   {
     skip: byId<HTMLButtonElement>("welcome-skip"),
+    status: byId<HTMLParagraphElement>("welcome-status"),
     steps: {
       place: byId<HTMLElement>("step-place"),
       runner: byId<HTMLElement>("step-runner"),
@@ -430,13 +431,18 @@ const welcome = createWelcome(
   },
   {
     leave: (to) => {
+      // What the form shows now; the refresh below changes a field only if it still shows this.
+      const shown = { brain: checkedBrain(), model: localModel.value };
       if (to === "chat") {
         openChat();
         input.focus();
       } else {
         show("settings");
+        // Picked in the form, unsaved, for the user to fill in and save.
+        setBrainRadios("online");
+        settingsStatus.textContent = ONLINE_HINT;
       }
-      void refreshAfterSetup(to === "settings");
+      void refreshAfterSetup(shown);
     },
   },
 );
@@ -447,12 +453,25 @@ function openWelcome(): void {
 }
 byId<HTMLButtonElement>("setup-again").addEventListener("click", () => openWelcome());
 
+const ONLINE_HINT =
+  "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
+
+function checkedBrain(): string | undefined {
+  return form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value;
+}
+
+function setBrainRadios(brain: string): void {
+  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+    radio.checked = radio.value === brain;
+  }
+}
+
 /**
- * After the Welcome screen: only what it may have changed (the brain, the local model, "set up")
- * is updated, so other unsaved changes in the Settings form stay. Choosing an online service
- * picks it in the form, unsaved, for the user to fill in and save.
+ * After the Welcome screen: only what it actually saved (the local model, and the brain when a
+ * download switched it to local) is updated. A form field is changed only if it still shows what
+ * it showed when the Welcome screen closed, so edits made since (or other unsaved changes) stay.
  */
-async function refreshAfterSetup(online: boolean): Promise<void> {
+async function refreshAfterSetup(shown: { brain: string | undefined; model: string }): Promise<void> {
   let latest: PublicSettings;
   try {
     latest = await sage.getSettings();
@@ -462,26 +481,19 @@ async function refreshAfterSetup(online: boolean): Promise<void> {
   if (!settings) {
     settings = latest;
     render();
-  } else {
-    settings.brain = latest.brain;
+    return;
+  }
+  settings.setupDone = latest.setupDone;
+  if (latest.local.model !== settings.local.model) {
     settings.local.model = latest.local.model;
-    settings.setupDone = latest.setupDone;
-    localModel.value = latest.local.model;
-    brainStatus.textContent = describeBrain(settings);
-    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
-      radio.checked = radio.value === latest.brain;
-    }
+    if (localModel.value === shown.model) localModel.value = latest.local.model;
   }
-  if (online) {
-    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
-      radio.checked = radio.value === "online";
-    }
-    settingsStatus.textContent = ONLINE_HINT;
+  if (latest.brain !== settings.brain) {
+    settings.brain = latest.brain;
+    if (checkedBrain() === shown.brain) setBrainRadios(latest.brain);
   }
+  brainStatus.textContent = describeBrain(settings);
 }
-
-const ONLINE_HINT =
-  "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
 
 // The first view: the Welcome screen until setup is finished or skipped, otherwise Chat. If the
 // settings can't be read, Chat opens.

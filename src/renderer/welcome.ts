@@ -1,4 +1,4 @@
-import type { ModelChoice, PullResult, RunnerStatus, SageApi } from "../shared/api.js";
+import type { ModelChoice, PullResult, Result, RunnerStatus, SageApi } from "../shared/api.js";
 import { PULL_POLL_MS, WELCOME_STEPS, WELCOME_TEXT, type WelcomeStep } from "./welcome-text.js";
 
 // The Welcome screen: where Sage thinks, the local model runner, a model, and done. Every question
@@ -8,6 +8,8 @@ import { PULL_POLL_MS, WELCOME_STEPS, WELCOME_TEXT, type WelcomeStep } from "./w
 
 export interface WelcomeElements {
   skip: HTMLButtonElement;
+  /** A problem leaving the screen (setup couldn't be saved as done). */
+  status: HTMLElement;
   steps: Record<WelcomeStep, HTMLElement>;
   headings: Record<WelcomeStep, HTMLElement>;
   placeLocal: HTMLButtonElement;
@@ -191,14 +193,21 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
   async function finish(to: "chat" | "settings"): Promise<void> {
     if (leaving) return;
     leaving = true;
+    el.status.textContent = "";
     // Leaving stops a download in progress: nothing keeps running behind the user's back.
     if (downloading) await sage.cancelPull().catch(() => undefined);
+    let result: Result;
     try {
-      await sage.finishSetup();
+      result = await sage.finishSetup();
     } catch {
-      // Not saved: the Welcome screen comes back next time, which does no harm.
+      result = { ok: false, message: WELCOME_TEXT.notSaved };
     }
     leaving = false;
+    if (!result.ok) {
+      // Stays here, so the choice can be made again; the message says what went wrong.
+      el.status.textContent = result.message;
+      return;
+    }
     visit++;
     hooks.leave(to);
   }
@@ -237,6 +246,13 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
   for (const radio of [el.modelStandard, el.modelSmaller]) {
     radio.addEventListener("change", () => {
       retry = false;
+      // A model that is ready counts only while it is the one chosen.
+      if (readyChoice !== chosen()) {
+        readyChoice = null;
+        el.modelNext.hidden = true;
+        el.modelStatus.textContent = "";
+        el.modelSkills.textContent = "";
+      }
       renderModelButtons();
     });
   }
@@ -250,6 +266,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
       visit++;
       readyChoice = null;
       retry = false;
+      el.status.textContent = "";
       el.runnerStatus.textContent = "";
       el.runnerInstall.hidden = true;
       el.guideStatus.textContent = "";

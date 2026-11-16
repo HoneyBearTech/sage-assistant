@@ -73,14 +73,32 @@ test("Skip setup saves that setup is done and opens Chat, at any step", async (t
   assert.deepEqual(calls.pulls, [], "nothing downloaded");
 });
 
-test("a failed save still leaves the Welcome screen; it simply comes back next time", async (t) => {
-  const { el, click } = await welcomeWindow(t, {
+test("if setup can't be saved as done, the Welcome screen stays and says so; trying again works", async (t) => {
+  const answers: (Error | { ok: false; message: string } | { ok: true })[] = [
+    new Error("no answer"),
+    { ok: false, message: "Sage couldn't save that setup is done. Try again." },
+    { ok: true },
+  ];
+  const { el, click, calls } = await welcomeWindow(t, {
     finishSetup: async () => {
-      throw new Error("no answer");
+      calls.finishSetup++;
+      const next = answers.shift()!;
+      if (next instanceof Error) throw next;
+      return next;
     },
   });
   await click("welcome-skip");
+  assert.equal(el("view-welcome").hidden, false, "still on the Welcome screen");
+  assert.equal(el("view-chat").hidden, true);
+  assert.equal(el("welcome-status").textContent, WELCOME_TEXT.notSaved);
+  await click("place-online");
+  assert.equal(el("view-welcome").hidden, false);
+  assert.equal(el("view-settings").hidden, true);
+  assert.equal(el("welcome-status").textContent, "Sage couldn't save that setup is done. Try again.");
+  await click("welcome-skip");
   assert.equal(el("view-chat").hidden, false);
+  assert.equal(el("welcome-status").textContent, "", "the message goes once it worked");
+  assert.equal(calls.finishSetup, 3);
 });
 
 test("An online service saves that setup is done and opens Settings with the online choice picked", async (t) => {
@@ -441,4 +459,106 @@ test("Ctrl+Space does nothing on the Welcome screen or Settings, only on Chat", 
   assert.equal(media.streams.length, 1, "Chat: it records");
   pressKey("keyup", { key: "Control", code: "ControlLeft" });
   await settled();
+});
+
+test("after Standard is ready, choosing Smaller needs Smaller to be ready before Next", async (t) => {
+  const { el, click, calls, visibleStep } = await atModelStep(t, {
+    runnerStatus: async () => runner("no-model", { standard: true, smaller: false }),
+    pullModel: async (choice) => {
+      calls.pulls.push(choice);
+      return { status: "done", skills: "yes" };
+    },
+  });
+  await click("model-download");
+  assert.equal(el("model-next").hidden, false);
+  const choose = (id: "model-standard" | "model-smaller") => {
+    el("model-standard").checked = id === "model-standard";
+    el("model-smaller").checked = id === "model-smaller";
+    el(id).dispatch("change");
+  };
+  choose("model-smaller");
+  assert.equal(el("model-next").hidden, true, "Standard's readiness doesn't count for Smaller");
+  assert.equal(el("model-status").textContent, "");
+  assert.equal(el("model-download").textContent, WELCOME_TEXT.download);
+  // Back to Standard: it is downloaded, but it has to be chosen again.
+  choose("model-standard");
+  assert.equal(el("model-next").hidden, true);
+  assert.equal(el("model-download").textContent, WELCOME_TEXT.useModel);
+  await click("model-download");
+  assert.equal(el("model-next").hidden, false);
+  await click("model-next");
+  assert.deepEqual(visibleStep(), ["step-done"]);
+  assert.match(el("done-summary").textContent, /Standard model \(qwen3:4b\)/);
+  assert.deepEqual(calls.pulls, ["standard", "standard"]);
+});
+
+test("Skip changes nothing in the Settings form, including unsaved edits", async (t) => {
+  const { el, click } = await welcomeWindow(t, {}, true);
+  el("tab-settings").click();
+  el("local-model").value = "typed-but-not-saved";
+  const radios = el("settings-form").radios;
+  for (const radio of radios) radio.checked = radio.value === "online";
+  await click("setup-again");
+  await click("welcome-skip");
+  el("tab-settings").click();
+  assert.equal(el("local-model").value, "typed-but-not-saved");
+  assert.deepEqual(
+    radios.filter((radio) => radio.checked).map((radio) => radio.value),
+    ["online"],
+  );
+  assert.equal(el("brain-status").textContent, "Brain: on this computer (small-model)");
+});
+
+test("a late answer after setup doesn't overwrite edits made since", async (t) => {
+  let model = "small-model";
+  let brain: "local" | "online" = "online";
+  let hold: ReturnType<typeof deferred<void>> | undefined;
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => runner("no-model"),
+    getSettings: async () => {
+      const answer = {
+        brain,
+        local: { model },
+        online: { baseUrl: "https://api.example.com", model: "m", hasKey: false },
+        apps: [],
+        folders: [],
+        speakReplies: "voice" as const,
+        setupDone: model !== "small-model",
+      };
+      await hold?.promise;
+      return answer;
+    },
+    pullModel: async () => {
+      model = "qwen3:1.7b";
+      brain = "local";
+      return { status: "done", skills: "yes" };
+    },
+  });
+  await click("place-local");
+  await click("runner-next");
+  await click("model-download");
+  await click("model-next");
+  hold = deferred<void>();
+  await click("start-chatting");
+  // While the answer is on its way, the user edits the local model in Settings.
+  el("tab-settings").click();
+  const radios = el("settings-form").radios;
+  assert.deepEqual(
+    radios.filter((radio) => radio.checked).map((radio) => radio.value),
+    ["online"],
+  );
+  el("local-model").value = "edited-since";
+  hold.resolve();
+  await settled();
+  assert.equal(el("local-model").value, "edited-since", "the newer edit stays");
+  assert.deepEqual(
+    radios.filter((radio) => radio.checked).map((radio) => radio.value),
+    ["local"],
+    "the brain the download switched to, in a field not edited since",
+  );
+  assert.equal(
+    el("brain-status").textContent,
+    "Brain: on this computer (qwen3:1.7b)",
+    "the saved state is shown",
+  );
 });
