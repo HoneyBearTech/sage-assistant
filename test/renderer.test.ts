@@ -24,7 +24,7 @@ const source = await readFile(new URL("../src/renderer/renderer.ts", import.meta
 function body(start: string): string {
   const from = source.indexOf(start);
   assert.ok(from >= 0, `found ${start}`);
-  const next = source.indexOf("\n}", from);
+  const next = source.indexOf("\n  }", from);
   return source.slice(from, next);
 }
 
@@ -767,6 +767,6 @@ test("only held notices are taken out of the chat; confirmed ones, or ones being
 test("settings are loaded at startup and after a successful save, and save messages are shown", () => {
   const loads = [...source.matchAll(/(?:void|await) loadSettings\(\)/g)].length;
   assert.equal(loads, 2, "once at startup, once after a successful save");
-  assert.match(source, /\nvoid loadSettings\(\)\s*\.then\(/);
+  assert.match(source, /\n\s*void loadSettings\(\)\s*\.then\(/);
   assert.match(source, /result\.message \? `Saved\. \$\{result\.message\}`/);
 });

@@ -5,11 +5,14 @@ import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 import { type FakeMedia, installFakeMedia, removeFakeMedia } from "./fake-media.js";
 import { settled } from "./helpers.js";
 
-const source = await readFile(new URL("../src/renderer/renderer.ts", import.meta.url), "utf8");
+// The window script is loaded once. It does nothing until startChatWindow() is called. (Loaded by a
+// computed path: the window has its own TypeScript config with the DOM, which these tests do not have.)
+const rendererFile = new URL("../src/renderer/renderer.ts", import.meta.url);
+const { startChatWindow } = (await import(rendererFile.href)) as { startChatWindow: () => void };
+const source = await readFile(rendererFile, "utf8");
 
 // The real window script, run against a small fake DOM (test/fake-dom.ts) and a fake window.sage.
 const ids = [...source.matchAll(/byId<\w+>\("([\w-]+)"\)/g)].map((match) => match[1]!);
-let loads = 0;
 
 export interface WindowOptions {
   /** Settings the window loads at start-up, over the defaults. */
@@ -109,8 +112,8 @@ export async function startWindow(
     removeFakeDom();
     removeFakeMedia();
   });
-  // A fresh copy of the script for each test.
-  await import(`../src/renderer/renderer.ts?window=${++loads}`);
+  // The script is loaded once; each test starts a fresh window on its own fake DOM.
+  startChatWindow();
   await settled();
   const el = (id: string) => elements.get(id)!;
   const texts = () => el("messages").children.map((item) => item.textContent);

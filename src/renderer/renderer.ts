@@ -17,567 +17,573 @@ function byId<T extends HTMLElement>(id: string): T {
   return element as T;
 }
 
-const sage = window.sage;
-let settings: PublicSettings | null = null;
+/** Starts the chat window: finds its elements, wires them up and loads the first view. */
+export function startChatWindow(): void {
+  const sage = window.sage;
+  let settings: PublicSettings | null = null;
 
-// --- Chat ---
+  // --- Chat ---
 
-const messages = byId<HTMLOListElement>("messages");
-const composer = byId<HTMLFormElement>("composer");
-const input = byId<HTMLTextAreaElement>("input");
-const sendButton = byId<HTMLButtonElement>("send");
+  const messages = byId<HTMLOListElement>("messages");
+  const composer = byId<HTMLFormElement>("composer");
+  const input = byId<HTMLTextAreaElement>("input");
+  const sendButton = byId<HTMLButtonElement>("send");
 
-function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
-  const item = document.createElement("li");
-  item.className = `message ${role}${pending ? " pending" : ""}`;
-  item.textContent = text;
-  messages.append(item);
-  item.scrollIntoView({ block: "end" });
-  return item;
-}
-
-// Goes up on New chat. A reply that arrives for an older chat is ignored: it must not write into
-// the new chat or change the Send button, which belongs to the new chat now.
-let chatGeneration = 0;
-
-async function submit(): Promise<void> {
-  // Enter also submits, so the busy check can't rely on the disabled button alone.
-  if (sendButton.disabled) return;
-  const text = input.value.trim();
-  if (!text) return;
-  const generation = chatGeneration;
-  // A voice message: some of its words came from talking, even if they were edited afterwards.
-  const fromVoice = voice.takeFromVoice();
-  input.value = "";
-  addMessage("user", text);
-  const pending = addMessage("assistant", "Thinking…", true);
-  sendButton.disabled = true;
-  let reply: string;
-  let answered = false;
-  try {
-    reply = await sage.send(text);
-    answered = true;
-  } catch {
-    reply = "Something went wrong. Try again.";
+  function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
+    const item = document.createElement("li");
+    item.className = `message ${role}${pending ? " pending" : ""}`;
+    item.textContent = text;
+    messages.append(item);
+    item.scrollIntoView({ block: "end" });
+    return item;
   }
-  if (generation !== chatGeneration) return;
-  pending.textContent = reply;
-  pending.classList.remove("pending");
-  sendButton.disabled = false;
-  input.focus();
-  // Only Sage's final reply is read aloud; never notices.
-  if (answered) voice.replied(reply, fromVoice, settings?.speakReplies ?? "voice");
-}
 
-composer.addEventListener("submit", (event) => {
-  event.preventDefault();
-  void submit();
-});
-input.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    // Only a fresh press sends: not a held key repeating, and not while the key that started a
-    // recording is still down (holding Enter on Talk can end with the focus here).
-    if (event.repeat || voice.holdingTalkKey()) return;
-    void submit();
-  }
-});
-byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
-  // The microphone closes, speech stops, and a recording still being worked out is dropped.
-  voice.reset();
-  // The old chat's pending reply is abandoned at once; Send comes back when Sage has reset.
-  chatGeneration++;
-  const generation = chatGeneration;
-  messages.replaceChildren();
-  forgetHeldNotices();
-  sendButton.disabled = true;
-  void sage
-    .resetChat()
-    .catch(() => undefined)
-    .then(() => {
-      if (generation !== chatGeneration) return;
-      sendButton.disabled = false;
-      input.focus();
-    });
-});
+  // Goes up on New chat. A reply that arrives for an older chat is ignored: it must not write into
+  // the new chat or change the Send button, which belongs to the new chat now.
+  let chatGeneration = 0;
 
-// --- Voice ---
-
-const chatView = byId<HTMLElement>("view-chat");
-
-// The logic is in voice-controls.ts; this only finds the elements.
-const voice = createVoiceControls(
-  sage,
-  {
-    chatView,
-    input,
-    talkButton: byId<HTMLButtonElement>("talk"),
-    voiceStatus: byId<HTMLSpanElement>("voice-status"),
-    voiceDownload: byId<HTMLButtonElement>("voice-download"),
-    voiceCancel: byId<HTMLButtonElement>("voice-cancel"),
-    stopSpeaking: byId<HTMLButtonElement>("stop-speaking"),
-    voiceNote: byId<HTMLParagraphElement>("voice-note"),
-  },
-  typeof speechSynthesis === "undefined" ? undefined : speechSynthesis,
-);
-
-// --- Tabs ---
-
-const tabBar = byId<HTMLElement>("tabs");
-const tabs = { chat: byId<HTMLButtonElement>("tab-chat"), settings: byId<HTMLButtonElement>("tab-settings") };
-const views = {
-  chat: chatView,
-  settings: byId<HTMLElement>("view-settings"),
-  welcome: byId<HTMLElement>("view-welcome"),
-};
-
-// All three views start hidden; the first one is chosen once the settings have loaded.
-function show(view: "chat" | "settings" | "welcome"): void {
-  for (const name of ["chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
-  // The Welcome screen has no tab: it is left with Skip setup, Start chatting or the online choice.
-  tabBar.hidden = view === "welcome";
-  for (const name of ["chat", "settings"] as const) {
-    tabs[name].classList.toggle("active", name === view);
-    tabs[name].setAttribute("aria-pressed", String(name === view));
-  }
-  // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
-  // startup and again after each successful save.
-}
-/** Every way into Chat goes through here, so held notices are confirmed once they can be seen. */
-function openChat(): void {
-  show("chat");
-  void collectNotices();
-}
-tabs.chat.addEventListener("click", () => openChat());
-tabs.settings.addEventListener("click", () => show("settings"));
-
-// --- Notices ---
-
-// Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data
-// files that had to be set aside. Collected on load and every few seconds and added to the chat.
-// Sage hands a notice out again until the window confirms it, so ids already in the chat are
-// skipped. A notice is confirmed only once the user can actually see it: the Chat view is open and
-// the window isn't hidden or minimised. Until then the confirmation is held, so a reminder that
-// arrives while Settings is open still comes back if Sage closes before Chat is opened.
-//
-// While a notice is held, each collection is the source of truth: a held notice that Sage no
-// longer hands out (its reminder was deleted, say) is taken out of the chat before anyone sees it.
-// A notice already confirmed is never taken out.
-const NOTICE_POLL_MS = 5_000;
-const shownNotices = new Set<string>();
-/** In the chat but not yet confirmed to Sage, with the chat line that shows each one. */
-const held = new Map<string, HTMLLIElement>();
-/** Held notices whose confirmation is on its way; Sage may already have stopped handing them out. */
-const confirming = new Set<string>();
-
-function chatVisible(): boolean {
-  return !views.chat.hidden && document.visibilityState !== "hidden";
-}
-
-/**
- * New chat removes the lines, so notices still held lose theirs: the next collection adds them
- * again (Sage hands them out until they are confirmed) as fresh hidden lines. Notices whose
- * confirmation is already on its way were revealed before the chat was cleared, so they stay.
- */
-function forgetHeldNotices(): void {
-  for (const id of [...held.keys()]) {
-    if (confirming.has(id)) continue;
-    held.delete(id);
-    shownNotices.delete(id);
-  }
-  // A confirmation may be going through its batches: make it stop and collect again, which adds
-  // the forgotten notices back before anything more is confirmed.
-  if (collecting) collectAgain = true;
-}
-
-async function confirmShown(): Promise<void> {
-  if (!chatVisible()) return;
-  const ids = [...held.keys()].filter((id) => !confirming.has(id));
-  for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
-    // A newer request means this snapshot may be out of date; the collection loop confirms again.
-    if (collectAgain || !chatVisible()) return;
-    const batch = ids.slice(start, start + MAX_ACK_IDS).filter((id) => held.has(id));
-    for (const id of batch) {
-      confirming.add(id);
-      // Held lines stay hidden until now, so a notice that is withdrawn first is never seen.
-      const item = held.get(id);
-      if (item?.hidden) {
-        item.hidden = false;
-        item.scrollIntoView({ block: "end" });
-      }
-    }
+  async function submit(): Promise<void> {
+    // Enter also submits, so the busy check can't rely on the disabled button alone.
+    if (sendButton.disabled) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const generation = chatGeneration;
+    // A voice message: some of its words came from talking, even if they were edited afterwards.
+    const fromVoice = voice.takeFromVoice();
+    input.value = "";
+    addMessage("user", text);
+    const pending = addMessage("assistant", "Thinking…", true);
+    sendButton.disabled = true;
+    let reply: string;
+    let answered = false;
     try {
-      await sage.ackNotices(batch);
-      for (const id of batch) held.delete(id);
+      reply = await sage.send(text);
+      answered = true;
     } catch {
-      // Still held, for the next try; Sage hands the notice out again meanwhile.
-      return;
-    } finally {
-      for (const id of batch) confirming.delete(id);
+      reply = "Something went wrong. Try again.";
     }
+    if (generation !== chatGeneration) return;
+    pending.textContent = reply;
+    pending.classList.remove("pending");
+    sendButton.disabled = false;
+    input.focus();
+    // Only Sage's final reply is read aloud; never notices.
+    if (answered) voice.replied(reply, fromVoice, settings?.speakReplies ?? "voice");
   }
-}
 
-/** Returns false if Sage couldn't be asked, so the held notices can't be trusted to be current. */
-async function collectOnce(): Promise<boolean> {
-  try {
-    const notices = await sage.takeNotices();
-    const current = new Set(notices.map((notice) => notice.id));
-    for (const [id, item] of held) {
-      if (current.has(id) || confirming.has(id)) continue;
-      // Withdrawn by Sage before it was seen.
-      item.remove();
+  composer.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void submit();
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      // Only a fresh press sends: not a held key repeating, and not while the key that started a
+      // recording is still down (holding Enter on Talk can end with the focus here).
+      if (event.repeat || voice.holdingTalkKey()) return;
+      void submit();
+    }
+  });
+  byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
+    // The microphone closes, speech stops, and a recording still being worked out is dropped.
+    voice.reset();
+    // The old chat's pending reply is abandoned at once; Send comes back when Sage has reset.
+    chatGeneration++;
+    const generation = chatGeneration;
+    messages.replaceChildren();
+    forgetHeldNotices();
+    sendButton.disabled = true;
+    void sage
+      .resetChat()
+      .catch(() => undefined)
+      .then(() => {
+        if (generation !== chatGeneration) return;
+        sendButton.disabled = false;
+        input.focus();
+      });
+  });
+
+  // --- Voice ---
+
+  const chatView = byId<HTMLElement>("view-chat");
+
+  // The logic is in voice-controls.ts; this only finds the elements.
+  const voice = createVoiceControls(
+    sage,
+    {
+      chatView,
+      input,
+      talkButton: byId<HTMLButtonElement>("talk"),
+      voiceStatus: byId<HTMLSpanElement>("voice-status"),
+      voiceDownload: byId<HTMLButtonElement>("voice-download"),
+      voiceCancel: byId<HTMLButtonElement>("voice-cancel"),
+      stopSpeaking: byId<HTMLButtonElement>("stop-speaking"),
+      voiceNote: byId<HTMLParagraphElement>("voice-note"),
+    },
+    typeof speechSynthesis === "undefined" ? undefined : speechSynthesis,
+  );
+
+  // --- Tabs ---
+
+  const tabBar = byId<HTMLElement>("tabs");
+  const tabs = {
+    chat: byId<HTMLButtonElement>("tab-chat"),
+    settings: byId<HTMLButtonElement>("tab-settings"),
+  };
+  const views = {
+    chat: chatView,
+    settings: byId<HTMLElement>("view-settings"),
+    welcome: byId<HTMLElement>("view-welcome"),
+  };
+
+  // All three views start hidden; the first one is chosen once the settings have loaded.
+  function show(view: "chat" | "settings" | "welcome"): void {
+    for (const name of ["chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
+    // The Welcome screen has no tab: it is left with Skip setup, Start chatting or the online choice.
+    tabBar.hidden = view === "welcome";
+    for (const name of ["chat", "settings"] as const) {
+      tabs[name].classList.toggle("active", name === view);
+      tabs[name].setAttribute("aria-pressed", String(name === view));
+    }
+    // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
+    // startup and again after each successful save.
+  }
+  /** Every way into Chat goes through here, so held notices are confirmed once they can be seen. */
+  function openChat(): void {
+    show("chat");
+    void collectNotices();
+  }
+  tabs.chat.addEventListener("click", () => openChat());
+  tabs.settings.addEventListener("click", () => show("settings"));
+
+  // --- Notices ---
+
+  // Messages from Sage itself: reminders that couldn't be shown as desktop notifications, and data
+  // files that had to be set aside. Collected on load and every few seconds and added to the chat.
+  // Sage hands a notice out again until the window confirms it, so ids already in the chat are
+  // skipped. A notice is confirmed only once the user can actually see it: the Chat view is open and
+  // the window isn't hidden or minimised. Until then the confirmation is held, so a reminder that
+  // arrives while Settings is open still comes back if Sage closes before Chat is opened.
+  //
+  // While a notice is held, each collection is the source of truth: a held notice that Sage no
+  // longer hands out (its reminder was deleted, say) is taken out of the chat before anyone sees it.
+  // A notice already confirmed is never taken out.
+  const NOTICE_POLL_MS = 5_000;
+  const shownNotices = new Set<string>();
+  /** In the chat but not yet confirmed to Sage, with the chat line that shows each one. */
+  const held = new Map<string, HTMLLIElement>();
+  /** Held notices whose confirmation is on its way; Sage may already have stopped handing them out. */
+  const confirming = new Set<string>();
+
+  function chatVisible(): boolean {
+    return !views.chat.hidden && document.visibilityState !== "hidden";
+  }
+
+  /**
+   * New chat removes the lines, so notices still held lose theirs: the next collection adds them
+   * again (Sage hands them out until they are confirmed) as fresh hidden lines. Notices whose
+   * confirmation is already on its way were revealed before the chat was cleared, so they stay.
+   */
+  function forgetHeldNotices(): void {
+    for (const id of [...held.keys()]) {
+      if (confirming.has(id)) continue;
       held.delete(id);
       shownNotices.delete(id);
     }
-    for (const notice of notices) {
-      if (shownNotices.has(notice.id)) continue;
-      const item = addMessage("notice", notice.text);
-      item.hidden = true;
-      held.set(notice.id, item);
-      shownNotices.add(notice.id);
-    }
-    return true;
-  } catch {
-    // The next poll tries again.
-    return false;
+    // A confirmation may be going through its batches: make it stop and collect again, which adds
+    // the forgotten notices back before anything more is confirmed.
+    if (collecting) collectAgain = true;
   }
-}
 
-let collecting: Promise<void> | undefined;
-let collectAgain = false;
+  async function confirmShown(): Promise<void> {
+    if (!chatVisible()) return;
+    const ids = [...held.keys()].filter((id) => !confirming.has(id));
+    for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
+      // A newer request means this snapshot may be out of date; the collection loop confirms again.
+      if (collectAgain || !chatVisible()) return;
+      const batch = ids.slice(start, start + MAX_ACK_IDS).filter((id) => held.has(id));
+      for (const id of batch) {
+        confirming.add(id);
+        // Held lines stay hidden until now, so a notice that is withdrawn first is never seen.
+        const item = held.get(id);
+        if (item?.hidden) {
+          item.hidden = false;
+          item.scrollIntoView({ block: "end" });
+        }
+      }
+      try {
+        await sage.ackNotices(batch);
+        for (const id of batch) held.delete(id);
+      } catch {
+        // Still held, for the next try; Sage hands the notice out again meanwhile.
+        return;
+      } finally {
+        for (const id of batch) confirming.delete(id);
+      }
+    }
+  }
 
-/**
- * Collects, then confirms what is still held. Opening Chat and the window coming back into view
- * collect first too: a notice whose reminder was deleted meanwhile is taken out before it can be
- * confirmed. Only one collection runs at a time. A request that arrives while one is running makes
- * exactly one more follow it (further requests join that one), and nothing is confirmed until the
- * last has finished (including a request that arrives during a confirmation), so an older answer can
- * never bring back or confirm a notice a newer one removed. After a failed collection nothing is
- * confirmed: the held notices stay held, and hidden, until a later one succeeds.
- */
-function collectNotices(): Promise<void> {
-  if (collecting) {
-    collectAgain = true;
+  /** Returns false if Sage couldn't be asked, so the held notices can't be trusted to be current. */
+  async function collectOnce(): Promise<boolean> {
+    try {
+      const notices = await sage.takeNotices();
+      const current = new Set(notices.map((notice) => notice.id));
+      for (const [id, item] of held) {
+        if (current.has(id) || confirming.has(id)) continue;
+        // Withdrawn by Sage before it was seen.
+        item.remove();
+        held.delete(id);
+        shownNotices.delete(id);
+      }
+      for (const notice of notices) {
+        if (shownNotices.has(notice.id)) continue;
+        const item = addMessage("notice", notice.text);
+        item.hidden = true;
+        held.set(notice.id, item);
+        shownNotices.add(notice.id);
+      }
+      return true;
+    } catch {
+      // The next poll tries again.
+      return false;
+    }
+  }
+
+  let collecting: Promise<void> | undefined;
+  let collectAgain = false;
+
+  /**
+   * Collects, then confirms what is still held. Opening Chat and the window coming back into view
+   * collect first too: a notice whose reminder was deleted meanwhile is taken out before it can be
+   * confirmed. Only one collection runs at a time. A request that arrives while one is running makes
+   * exactly one more follow it (further requests join that one), and nothing is confirmed until the
+   * last has finished (including a request that arrives during a confirmation), so an older answer can
+   * never bring back or confirm a notice a newer one removed. After a failed collection nothing is
+   * confirmed: the held notices stay held, and hidden, until a later one succeeds.
+   */
+  function collectNotices(): Promise<void> {
+    if (collecting) {
+      collectAgain = true;
+      return collecting;
+    }
+    collecting = (async () => {
+      do {
+        collectAgain = false;
+        const fresh = await collectOnce();
+        if (fresh && !collectAgain) await confirmShown();
+      } while (collectAgain);
+    })().finally(() => {
+      collecting = undefined;
+    });
     return collecting;
   }
-  collecting = (async () => {
-    do {
-      collectAgain = false;
-      const fresh = await collectOnce();
-      if (fresh && !collectAgain) await confirmShown();
-    } while (collectAgain);
-  })().finally(() => {
-    collecting = undefined;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void collectNotices();
   });
-  return collecting;
-}
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void collectNotices();
-});
-
-/** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
-function startNotices(): void {
-  void collectNotices();
-  // A poll never queues another collection behind a running one: a slow answer would then be
-  // followed by one more every time, and nothing would ever be confirmed.
-  setInterval(() => {
-    if (!collecting) void collectNotices();
-  }, NOTICE_POLL_MS);
-}
-
-// --- Settings ---
-
-const form = byId<HTMLFormElement>("settings-form");
-const localModel = byId<HTMLInputElement>("local-model");
-const onlineUrl = byId<HTMLInputElement>("online-url");
-const onlineModel = byId<HTMLInputElement>("online-model");
-const keyInput = byId<HTMLInputElement>("online-key");
-const keyStatus = byId<HTMLParagraphElement>("key-status");
-const appsList = byId<HTMLUListElement>("apps");
-const foldersList = byId<HTMLUListElement>("folders");
-const settingsStatus = byId<HTMLSpanElement>("settings-status");
-const brainStatus = byId<HTMLSpanElement>("brain-status");
-const speakReplies = byId<HTMLSelectElement>("speak-replies");
-
-function describeBrain(current: PublicSettings): string {
-  return current.brain === "local"
-    ? `Brain: on this computer (${current.local.model})`
-    : `Brain: online (${current.online.model || "no model chosen"})`;
-}
-
-function removable(list: HTMLUListElement, label: string, onRemove: () => void): void {
-  const item = document.createElement("li");
-  const text = document.createElement("span");
-  text.textContent = label;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = "Remove";
-  button.addEventListener("click", onRemove);
-  item.append(text, button);
-  list.append(item);
-}
-
-function renderLists(): void {
-  if (!settings) return;
-  const current = settings;
-  appsList.replaceChildren();
-  current.apps.forEach((app: PublicAppEntry, index) => {
-    removable(appsList, `${app.name}: ${app.path}`, () => {
-      current.apps.splice(index, 1);
-      renderLists();
-    });
-  });
-  foldersList.replaceChildren();
-  current.folders.forEach((folder, index) => {
-    removable(foldersList, folder, () => {
-      current.folders.splice(index, 1);
-      renderLists();
-    });
-  });
-}
-
-function render(): void {
-  if (!settings) return;
-  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
-    radio.checked = radio.value === settings.brain;
+  /** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
+  function startNotices(): void {
+    void collectNotices();
+    // A poll never queues another collection behind a running one: a slow answer would then be
+    // followed by one more every time, and nothing would ever be confirmed.
+    setInterval(() => {
+      if (!collecting) void collectNotices();
+    }, NOTICE_POLL_MS);
   }
-  localModel.value = settings.local.model;
-  onlineUrl.value = settings.online.baseUrl;
-  onlineModel.value = settings.online.model;
-  speakReplies.value = settings.speakReplies;
-  renderKeyStatus();
-  brainStatus.textContent = describeBrain(settings);
-  renderLists();
-}
 
-function renderKeyStatus(): void {
-  if (!settings) return;
-  keyStatus.textContent = settings.online.hasKey
-    ? "A key is saved, encrypted by your system. It is never shown again."
-    : "No key saved.";
-}
+  // --- Settings ---
 
-/**
- * Goes up on every Settings save and every settings reload. A refresh after the Welcome screen
- * that was overtaken by one of them is dropped, so it never overwrites newer settings.
- */
-let settingsGeneration = 0;
+  const form = byId<HTMLFormElement>("settings-form");
+  const localModel = byId<HTMLInputElement>("local-model");
+  const onlineUrl = byId<HTMLInputElement>("online-url");
+  const onlineModel = byId<HTMLInputElement>("online-model");
+  const keyInput = byId<HTMLInputElement>("online-key");
+  const keyStatus = byId<HTMLParagraphElement>("key-status");
+  const appsList = byId<HTMLUListElement>("apps");
+  const foldersList = byId<HTMLUListElement>("folders");
+  const settingsStatus = byId<HTMLSpanElement>("settings-status");
+  const brainStatus = byId<HTMLSpanElement>("brain-status");
+  const speakReplies = byId<HTMLSelectElement>("speak-replies");
 
-async function loadSettings(): Promise<void> {
-  settingsGeneration++;
-  settings = await sage.getSettings();
-  render();
-}
+  function describeBrain(current: PublicSettings): string {
+    return current.brain === "local"
+      ? `Brain: on this computer (${current.local.model})`
+      : `Brain: online (${current.online.model || "no model chosen"})`;
+  }
 
-/** After saving or removing the key: updates only the key line, so unsaved form changes stay. */
-async function refreshKeyStatus(): Promise<void> {
-  const latest = await sage.getSettings();
-  if (!settings) return;
-  settings.online.hasKey = latest.online.hasKey;
-  renderKeyStatus();
-}
+  function removable(list: HTMLUListElement, label: string, onRemove: () => void): void {
+    const item = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = label;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Remove";
+    button.addEventListener("click", onRemove);
+    item.append(text, button);
+    list.append(item);
+  }
 
-function readSpeakReplies(): PublicSettings["speakReplies"] {
-  const value = speakReplies.value;
-  return value === "always" || value === "never" ? value : "voice";
-}
-
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  if (!settings) return;
-  settingsGeneration++;
-  const brain =
-    form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value === "online"
-      ? "online"
-      : "local";
-  void sage
-    .saveSettings({
-      brain,
-      local: { model: localModel.value.trim() },
-      online: { baseUrl: onlineUrl.value.trim(), model: onlineModel.value.trim() },
-      apps: settings.apps,
-      folders: settings.folders,
-      speakReplies: readSpeakReplies(),
-    })
-    .then(async (result) => {
-      if (!result.ok) {
-        settingsStatus.textContent = `Not saved: ${result.message}`;
-        return;
-      }
-      settingsStatus.textContent = result.message ? `Saved. ${result.message}` : "Saved.";
-      await loadSettings();
+  function renderLists(): void {
+    if (!settings) return;
+    const current = settings;
+    appsList.replaceChildren();
+    current.apps.forEach((app: PublicAppEntry, index) => {
+      removable(appsList, `${app.name}: ${app.path}`, () => {
+        current.apps.splice(index, 1);
+        renderLists();
+      });
     });
-});
-
-byId<HTMLButtonElement>("save-key").addEventListener("click", () => {
-  const key = keyInput.value;
-  keyInput.value = "";
-  if (!key.trim()) return;
-  // The address on screen goes with the key; the main process refuses it if that address isn't
-  // saved yet, so a key is never tied to the wrong service.
-  void sage.setKey(key, onlineUrl.value).then(async (result) => {
-    settingsStatus.textContent = result.ok ? "Key saved." : `Key not saved: ${result.message}`;
-    await refreshKeyStatus();
-  });
-});
-
-byId<HTMLButtonElement>("clear-key").addEventListener("click", () => {
-  void sage.clearKey().then(async () => {
-    settingsStatus.textContent = "Key removed.";
-    await refreshKeyStatus();
-  });
-});
-
-const appName = byId<HTMLInputElement>("app-name");
-const appPath = byId<HTMLInputElement>("app-path");
-byId<HTMLButtonElement>("browse-app").addEventListener("click", () => {
-  void sage.chooseApp().then((path) => {
-    if (path) appPath.value = path;
-  });
-});
-byId<HTMLButtonElement>("add-app").addEventListener("click", () => {
-  if (!settings || !appName.value.trim() || !appPath.value.trim()) return;
-  settings.apps.push({ name: appName.value.trim(), path: appPath.value.trim(), args: [] });
-  appName.value = "";
-  appPath.value = "";
-  settingsStatus.textContent = "Not saved yet: choose Save settings.";
-  renderLists();
-});
-
-const folderPath = byId<HTMLInputElement>("folder-path");
-byId<HTMLButtonElement>("browse-folder").addEventListener("click", () => {
-  void sage.chooseFolder().then((path) => {
-    if (path) folderPath.value = path;
-  });
-});
-byId<HTMLButtonElement>("add-folder").addEventListener("click", () => {
-  if (!settings || !folderPath.value.trim()) return;
-  settings.folders.push(folderPath.value.trim());
-  folderPath.value = "";
-  settingsStatus.textContent = "Not saved yet: choose Save settings.";
-  renderLists();
-});
-
-// --- Welcome ---
-
-// The logic is in welcome.ts; this only finds the elements.
-const welcome = createWelcome(
-  sage,
-  {
-    skip: byId<HTMLButtonElement>("welcome-skip"),
-    status: byId<HTMLParagraphElement>("welcome-status"),
-    steps: {
-      place: byId<HTMLElement>("step-place"),
-      runner: byId<HTMLElement>("step-runner"),
-      model: byId<HTMLElement>("step-model"),
-      done: byId<HTMLElement>("step-done"),
-    },
-    headings: {
-      place: byId<HTMLElement>("step-place-heading"),
-      runner: byId<HTMLElement>("step-runner-heading"),
-      model: byId<HTMLElement>("step-model-heading"),
-      done: byId<HTMLElement>("step-done-heading"),
-    },
-    placeLocal: byId<HTMLButtonElement>("place-local"),
-    placeOnline: byId<HTMLButtonElement>("place-online"),
-    runnerStatus: byId<HTMLParagraphElement>("runner-status"),
-    runnerInstall: byId<HTMLDivElement>("runner-install"),
-    runnerCheck: byId<HTMLButtonElement>("runner-check"),
-    runnerNext: byId<HTMLButtonElement>("runner-next"),
-    openGuide: byId<HTMLButtonElement>("open-guide"),
-    guideStatus: byId<HTMLParagraphElement>("guide-status"),
-    guideAddress: byId<HTMLParagraphElement>("guide-address"),
-    modelStandard: byId<HTMLInputElement>("model-standard"),
-    modelSmaller: byId<HTMLInputElement>("model-smaller"),
-    standardMark: byId<HTMLSpanElement>("model-standard-mark"),
-    smallerMark: byId<HTMLSpanElement>("model-smaller-mark"),
-    modelDownload: byId<HTMLButtonElement>("model-download"),
-    modelCancel: byId<HTMLButtonElement>("model-cancel"),
-    modelProgress: byId<HTMLProgressElement>("model-progress"),
-    modelStatus: byId<HTMLParagraphElement>("model-status"),
-    modelSkills: byId<HTMLParagraphElement>("model-skills"),
-    modelNext: byId<HTMLButtonElement>("model-next"),
-    doneSummary: byId<HTMLParagraphElement>("done-summary"),
-    doneVoice: byId<HTMLParagraphElement>("done-voice"),
-    startChatting: byId<HTMLButtonElement>("start-chatting"),
-  },
-  {
-    leave: (to) => {
-      // What the form shows now; the refresh below changes a field only if it still shows this.
-      const shown = { brain: checkedBrain(), model: localModel.value };
-      if (to === "chat") {
-        openChat();
-        input.focus();
-      } else {
-        show("settings");
-        // Picked in the form, unsaved, for the user to fill in and save.
-        setBrainRadios("online");
-        settingsStatus.textContent = ONLINE_HINT;
-      }
-      void refreshAfterSetup(shown);
-    },
-  },
-);
-
-function openWelcome(): void {
-  show("welcome");
-  welcome.open();
-}
-byId<HTMLButtonElement>("setup-again").addEventListener("click", () => openWelcome());
-
-const ONLINE_HINT =
-  "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
-
-function checkedBrain(): string | undefined {
-  return form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value;
-}
-
-function setBrainRadios(brain: string): void {
-  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
-    radio.checked = radio.value === brain;
+    foldersList.replaceChildren();
+    current.folders.forEach((folder, index) => {
+      removable(foldersList, folder, () => {
+        current.folders.splice(index, 1);
+        renderLists();
+      });
+    });
   }
-}
 
-/**
- * After the Welcome screen: only what it actually saved (the local model, and the brain when a
- * download switched it to local) is updated. A form field is changed only if it still shows what
- * it showed when the Welcome screen closed, so edits made since (or other unsaved changes) stay.
- */
-async function refreshAfterSetup(shown: { brain: string | undefined; model: string }): Promise<void> {
-  const generation = settingsGeneration;
-  let latest: PublicSettings;
-  try {
-    latest = await sage.getSettings();
-  } catch {
-    return;
+  function render(): void {
+    if (!settings) return;
+    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+      radio.checked = radio.value === settings.brain;
+    }
+    localModel.value = settings.local.model;
+    onlineUrl.value = settings.online.baseUrl;
+    onlineModel.value = settings.online.model;
+    speakReplies.value = settings.speakReplies;
+    renderKeyStatus();
+    brainStatus.textContent = describeBrain(settings);
+    renderLists();
   }
-  // A Settings save or reload happened meanwhile: what it shows is newer than this answer.
-  if (generation !== settingsGeneration) return;
-  if (!settings) {
-    settings = latest;
+
+  function renderKeyStatus(): void {
+    if (!settings) return;
+    keyStatus.textContent = settings.online.hasKey
+      ? "A key is saved, encrypted by your system. It is never shown again."
+      : "No key saved.";
+  }
+
+  /**
+   * Goes up on every Settings save and every settings reload. A refresh after the Welcome screen
+   * that was overtaken by one of them is dropped, so it never overwrites newer settings.
+   */
+  let settingsGeneration = 0;
+
+  async function loadSettings(): Promise<void> {
+    settingsGeneration++;
+    settings = await sage.getSettings();
     render();
-    return;
   }
-  settings.setupDone = latest.setupDone;
-  if (latest.local.model !== settings.local.model) {
-    settings.local.model = latest.local.model;
-    if (localModel.value === shown.model) localModel.value = latest.local.model;
-  }
-  if (latest.brain !== settings.brain) {
-    settings.brain = latest.brain;
-    if (checkedBrain() === shown.brain) setBrainRadios(latest.brain);
-  }
-  brainStatus.textContent = describeBrain(settings);
-}
 
-// The first view: the Welcome screen until setup is finished or skipped, otherwise Chat. If the
-// settings can't be read, Chat opens.
-void loadSettings()
-  .then(
-    () => (settings?.setupDone === false ? openWelcome() : openChat()),
-    () => openChat(),
-  )
-  .then(startNotices);
-input.focus();
+  /** After saving or removing the key: updates only the key line, so unsaved form changes stay. */
+  async function refreshKeyStatus(): Promise<void> {
+    const latest = await sage.getSettings();
+    if (!settings) return;
+    settings.online.hasKey = latest.online.hasKey;
+    renderKeyStatus();
+  }
+
+  function readSpeakReplies(): PublicSettings["speakReplies"] {
+    const value = speakReplies.value;
+    return value === "always" || value === "never" ? value : "voice";
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!settings) return;
+    settingsGeneration++;
+    const brain =
+      form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value === "online"
+        ? "online"
+        : "local";
+    void sage
+      .saveSettings({
+        brain,
+        local: { model: localModel.value.trim() },
+        online: { baseUrl: onlineUrl.value.trim(), model: onlineModel.value.trim() },
+        apps: settings.apps,
+        folders: settings.folders,
+        speakReplies: readSpeakReplies(),
+      })
+      .then(async (result) => {
+        if (!result.ok) {
+          settingsStatus.textContent = `Not saved: ${result.message}`;
+          return;
+        }
+        settingsStatus.textContent = result.message ? `Saved. ${result.message}` : "Saved.";
+        await loadSettings();
+      });
+  });
+
+  byId<HTMLButtonElement>("save-key").addEventListener("click", () => {
+    const key = keyInput.value;
+    keyInput.value = "";
+    if (!key.trim()) return;
+    // The address on screen goes with the key; the main process refuses it if that address isn't
+    // saved yet, so a key is never tied to the wrong service.
+    void sage.setKey(key, onlineUrl.value).then(async (result) => {
+      settingsStatus.textContent = result.ok ? "Key saved." : `Key not saved: ${result.message}`;
+      await refreshKeyStatus();
+    });
+  });
+
+  byId<HTMLButtonElement>("clear-key").addEventListener("click", () => {
+    void sage.clearKey().then(async () => {
+      settingsStatus.textContent = "Key removed.";
+      await refreshKeyStatus();
+    });
+  });
+
+  const appName = byId<HTMLInputElement>("app-name");
+  const appPath = byId<HTMLInputElement>("app-path");
+  byId<HTMLButtonElement>("browse-app").addEventListener("click", () => {
+    void sage.chooseApp().then((path) => {
+      if (path) appPath.value = path;
+    });
+  });
+  byId<HTMLButtonElement>("add-app").addEventListener("click", () => {
+    if (!settings || !appName.value.trim() || !appPath.value.trim()) return;
+    settings.apps.push({ name: appName.value.trim(), path: appPath.value.trim(), args: [] });
+    appName.value = "";
+    appPath.value = "";
+    settingsStatus.textContent = "Not saved yet: choose Save settings.";
+    renderLists();
+  });
+
+  const folderPath = byId<HTMLInputElement>("folder-path");
+  byId<HTMLButtonElement>("browse-folder").addEventListener("click", () => {
+    void sage.chooseFolder().then((path) => {
+      if (path) folderPath.value = path;
+    });
+  });
+  byId<HTMLButtonElement>("add-folder").addEventListener("click", () => {
+    if (!settings || !folderPath.value.trim()) return;
+    settings.folders.push(folderPath.value.trim());
+    folderPath.value = "";
+    settingsStatus.textContent = "Not saved yet: choose Save settings.";
+    renderLists();
+  });
+
+  // --- Welcome ---
+
+  // The logic is in welcome.ts; this only finds the elements.
+  const welcome = createWelcome(
+    sage,
+    {
+      skip: byId<HTMLButtonElement>("welcome-skip"),
+      status: byId<HTMLParagraphElement>("welcome-status"),
+      steps: {
+        place: byId<HTMLElement>("step-place"),
+        runner: byId<HTMLElement>("step-runner"),
+        model: byId<HTMLElement>("step-model"),
+        done: byId<HTMLElement>("step-done"),
+      },
+      headings: {
+        place: byId<HTMLElement>("step-place-heading"),
+        runner: byId<HTMLElement>("step-runner-heading"),
+        model: byId<HTMLElement>("step-model-heading"),
+        done: byId<HTMLElement>("step-done-heading"),
+      },
+      placeLocal: byId<HTMLButtonElement>("place-local"),
+      placeOnline: byId<HTMLButtonElement>("place-online"),
+      runnerStatus: byId<HTMLParagraphElement>("runner-status"),
+      runnerInstall: byId<HTMLDivElement>("runner-install"),
+      runnerCheck: byId<HTMLButtonElement>("runner-check"),
+      runnerNext: byId<HTMLButtonElement>("runner-next"),
+      openGuide: byId<HTMLButtonElement>("open-guide"),
+      guideStatus: byId<HTMLParagraphElement>("guide-status"),
+      guideAddress: byId<HTMLParagraphElement>("guide-address"),
+      modelStandard: byId<HTMLInputElement>("model-standard"),
+      modelSmaller: byId<HTMLInputElement>("model-smaller"),
+      standardMark: byId<HTMLSpanElement>("model-standard-mark"),
+      smallerMark: byId<HTMLSpanElement>("model-smaller-mark"),
+      modelDownload: byId<HTMLButtonElement>("model-download"),
+      modelCancel: byId<HTMLButtonElement>("model-cancel"),
+      modelProgress: byId<HTMLProgressElement>("model-progress"),
+      modelStatus: byId<HTMLParagraphElement>("model-status"),
+      modelSkills: byId<HTMLParagraphElement>("model-skills"),
+      modelNext: byId<HTMLButtonElement>("model-next"),
+      doneSummary: byId<HTMLParagraphElement>("done-summary"),
+      doneVoice: byId<HTMLParagraphElement>("done-voice"),
+      startChatting: byId<HTMLButtonElement>("start-chatting"),
+    },
+    {
+      leave: (to) => {
+        // What the form shows now; the refresh below changes a field only if it still shows this.
+        const shown = { brain: checkedBrain(), model: localModel.value };
+        if (to === "chat") {
+          openChat();
+          input.focus();
+        } else {
+          show("settings");
+          // Picked in the form, unsaved, for the user to fill in and save.
+          setBrainRadios("online");
+          settingsStatus.textContent = ONLINE_HINT;
+        }
+        void refreshAfterSetup(shown);
+      },
+    },
+  );
+
+  function openWelcome(): void {
+    show("welcome");
+    welcome.open();
+  }
+  byId<HTMLButtonElement>("setup-again").addEventListener("click", () => openWelcome());
+
+  const ONLINE_HINT =
+    "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
+
+  function checkedBrain(): string | undefined {
+    return form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value;
+  }
+
+  function setBrainRadios(brain: string): void {
+    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+      radio.checked = radio.value === brain;
+    }
+  }
+
+  /**
+   * After the Welcome screen: only what it actually saved (the local model, and the brain when a
+   * download switched it to local) is updated. A form field is changed only if it still shows what
+   * it showed when the Welcome screen closed, so edits made since (or other unsaved changes) stay.
+   */
+  async function refreshAfterSetup(shown: { brain: string | undefined; model: string }): Promise<void> {
+    const generation = settingsGeneration;
+    let latest: PublicSettings;
+    try {
+      latest = await sage.getSettings();
+    } catch {
+      return;
+    }
+    // A Settings save or reload happened meanwhile: what it shows is newer than this answer.
+    if (generation !== settingsGeneration) return;
+    if (!settings) {
+      settings = latest;
+      render();
+      return;
+    }
+    settings.setupDone = latest.setupDone;
+    if (latest.local.model !== settings.local.model) {
+      settings.local.model = latest.local.model;
+      if (localModel.value === shown.model) localModel.value = latest.local.model;
+    }
+    if (latest.brain !== settings.brain) {
+      settings.brain = latest.brain;
+      if (checkedBrain() === shown.brain) setBrainRadios(latest.brain);
+    }
+    brainStatus.textContent = describeBrain(settings);
+  }
+
+  // The first view: the Welcome screen until setup is finished or skipped, otherwise Chat. If the
+  // settings can't be read, Chat opens.
+  void loadSettings()
+    .then(
+      () => (settings?.setupDone === false ? openWelcome() : openChat()),
+      () => openChat(),
+    )
+    .then(startNotices);
+  input.focus();
+}
