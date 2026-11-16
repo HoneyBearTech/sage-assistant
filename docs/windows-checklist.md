@@ -111,7 +111,7 @@ started at least once and has a note (from "Notes and reminders" above), and clo
 - [ ] Starting Sage again from the Start menu while it is open brings the window forward.
 - [ ] Raise the version in `package.json` (for example to `0.1.1`, without committing it), run
       `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
-      and the note is still there. Put the version back.
+      and the note is still there. Then put `package.json` back with `git checkout package.json`.
 - [ ] Uninstall Sage in Settings → Apps → Installed apps: the shortcuts are gone, and
       `%APPDATA%\sage-assistant` still holds `notes.json` and `settings.json`. `npm start` from the source
       folder still opens Sage with the note.
