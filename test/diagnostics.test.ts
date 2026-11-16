@@ -336,3 +336,38 @@ test("without the main process's parts, nothing can be copied", async (t) => {
   assert.match(built.text, /^Sage version: unknown$/m);
   assert.deepEqual(sage.diagnostics.copy(built.id), { ok: false, message: DIAGNOSTICS_MESSAGES.notCopied });
 });
+
+test("keys are redacted before anything else is scrubbed, so no part of a key survives", async (t) => {
+  // A user name that is part of a key: scrubbing the name first would split the key, leaving parts.
+  const key = "fake-secret-value";
+  const redact = (text: string) => text.replaceAll(key, "[redacted]");
+  assert.equal(
+    scrubValue("0.12.3-fake-secret-value", { home: "/home/alice", user: "secret" }, redact),
+    "0.12.3-[redacted]",
+  );
+  // A key that contains the home path: scrubbing the path first would split the key too.
+  const pathKey = "fake-key-/home/alice/rest-of-key";
+  const redactPath = (text: string) => text.replaceAll(pathKey, "[redacted]");
+  assert.equal(
+    scrubValue(`10.0 ${pathKey}`, { home: "/home/alice", user: "alice" }, redactPath),
+    "10.0 [redacted]",
+  );
+
+  // The same through the real text: the key is saved, the user name is "secret", and the runner
+  // reports a version that carries the key.
+  const server = await runner(t, ["qwen3:4b"], "0.12.3-fake-secret-value");
+  const { sage } = await sageWith(t, {
+    port: server.port,
+    system: { os: "Linux", osVersion: `6.8 ${pathKey}`, arch: "x64", home: "/home/alice", user: "secret" },
+  });
+  await sage.keyStore.setCompanyKey("claude", key);
+  await sage.keyStore.setCompanyKey("openai", pathKey);
+  const built = (await sage.diagnostics.build({
+    step: "runner",
+    code: "SAGE-RUN-02",
+    reducedMotion: false,
+  })) as DiagnosticsResult & { ok: true };
+  assert.match(built.text, /^Runner version: 0\.12\.3-\[redacted\]$/m);
+  assert.match(built.text, /^System: Linux 6\.8 \[redacted\]$/m);
+  for (const part of ["fake", "value", "rest-of-key"]) assert.ok(!built.text.includes(part), part);
+});

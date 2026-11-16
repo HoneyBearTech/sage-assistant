@@ -146,15 +146,17 @@ function isLoopback(url: string): boolean {
 }
 
 /**
- * The second line of defence, for one value: the home folder (with either slash), the user name as
- * a whole word, e-mail addresses, web addresses other than the PC's own, and every known key.
+ * The second line of defence, for one value: every known key first (before anything else changes
+ * the text, so no substitution can split a key and leave parts of it), then the home folder (with
+ * either slash), e-mail addresses, web addresses other than the PC's own, and the user name as a
+ * whole word.
  */
 export function scrubValue(
   value: string,
   system: Pick<SystemFacts, "home" | "user">,
   redact: (text: string) => string,
 ): string {
-  let out = value;
+  let out = redact(value);
   const home = system.home.replace(/[\\/]+$/, "");
   if (home.length > 1) {
     for (const form of new Set([home, home.replaceAll("\\", "/"), home.replaceAll("/", "\\")])) {
@@ -166,7 +168,7 @@ export function scrubValue(
   if (system.user.trim().length > 1) {
     out = out.replace(new RegExp(`(?<![\\w])${escapeRegExp(system.user.trim())}(?![\\w])`, "gi"), "[user]");
   }
-  return redact(out);
+  return out;
 }
 
 /**
@@ -190,7 +192,7 @@ export class Diagnostics {
     this.system = deps.system ?? systemFacts();
   }
 
-  /** A value from the PC itself: scrubbed, then kept to plain words. */
+  /** A value from the PC itself: scrubbed (keys first), then kept to plain words last. */
   private own(value: string): string {
     return plain(scrubValue(value, this.system, this.deps.redact));
   }
