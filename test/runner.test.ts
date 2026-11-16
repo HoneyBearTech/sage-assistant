@@ -5,6 +5,7 @@ import {
   hasModel,
   MAX_PULL_LAYERS,
   MAX_PULL_LINE_BYTES,
+  MAX_PULL_STATUSES,
   PULL_MESSAGES,
   PULL_STALL_MS,
   type PullProgress,
@@ -411,4 +412,57 @@ test("a cancel ends a read that is waiting, even if the connection doesn't notic
   await drained.promise;
   controller.abort(new Error("cancelled"));
   assert.deepEqual(await running, { status: "cancelled" });
+});
+
+test("alternating between statuses and layers already seen, with no new bytes, doesn't restart the limit", async () => {
+  const timers = new ManualTimers();
+  const a = (completed: number) =>
+    `${JSON.stringify({ status: "pulling a", digest: "a", total: 1000, completed })}\n`;
+  const b = (completed: number) =>
+    `${JSON.stringify({ status: "pulling b", digest: "b", total: 1000, completed })}\n`;
+  const { client, drained } = scriptedPull([
+    a(100),
+    b(100),
+    // Back and forth for ever, and bytes going down and back up: none of it is new.
+    ...Array.from({ length: 60 }, (_, i) => (i % 2 === 0 ? a(i % 4 === 0 ? 50 : 100) : b(100))),
+    '{"status":"pulling a"}\n{"status":"pulling b"}\n',
+  ]);
+  const running = client.pull("m", { signal: new AbortController().signal, timers });
+  await drained.promise;
+  // Before the request, after the reply, then the first sight of each of the two layers.
+  assert.equal(timers.started.length, 4);
+  timers.fire();
+  assert.deepEqual(await running, { status: "failed", message: PULL_MESSAGES.stalled });
+});
+
+test("each kind of real progress restarts the limit on its own", async () => {
+  const cases: [string, string, number][] = [
+    ["more bytes in all", progressLine(150), 1],
+    ["a layer never seen before, with no new bytes", progressLine(0, "sha256:new"), 1],
+    ["a status never seen before, with no layer", '{"status":"verifying sha256 digest"}\n', 1],
+    ["the same line again", progressLine(100), 0],
+    ["fewer bytes", progressLine(20), 0],
+  ];
+  for (const [name, line, restarts] of cases) {
+    const timers = new ManualTimers();
+    const { client, drained } = scriptedPull([progressLine(100), line]);
+    const running = client.pull("m", { signal: new AbortController().signal, timers });
+    await drained.promise;
+    assert.equal(timers.started.length, 3 + restarts, name);
+    timers.fire();
+    assert.deepEqual(await running, { status: "failed", message: PULL_MESSAGES.stalled }, name);
+  }
+});
+
+test("a download reporting too many different statuses is stopped as unreadable", async () => {
+  assert.equal(MAX_PULL_STATUSES, MAX_PULL_LAYERS + 20);
+  const lines = Array.from({ length: MAX_PULL_STATUSES + 1 }, (_, i) => `{"status":"step ${i}"}\n`).join("");
+  const { client } = scriptedPull([lines]);
+  assert.deepEqual(
+    await client.pull("m", { signal: new AbortController().signal, timers: new ManualTimers() }),
+    {
+      status: "failed",
+      message: PULL_MESSAGES.unreadable,
+    },
+  );
 });

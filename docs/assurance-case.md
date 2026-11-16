@@ -320,11 +320,13 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   download at a time. Cancel, Skip and Sage quitting cancel the request at any step before its commit
   point, the save starting (including while the box is open), so nothing starts or is saved afterwards.
   Once the save has started it is never undone: Cancel answers "too late", the model stays chosen, and
-  Skip waits for the save before marking setup done, so the two writes never interleave. 2
-  minutes without a line that moves the download on (repeated lines and bytes with no end of line
-  don't count) stop it. *Evidence:* `test/setup.test.ts` (no request without **Download**, a model name
-  from the window refused, one at a time, cancel at each step, quit), `test/runner.test.ts` (the stall
-  limit, a trickle of bytes, repeated lines, cancel).
+  Skip waits for the save before marking setup done, so the two writes never interleave. 2 minutes
+  without real progress stop it: only more bytes downloaded in all than ever before, a layer never
+  seen before, or a status never seen before in this download count; repeated or alternating lines,
+  and bytes with no end of line, don't. *Evidence:* `test/setup.test.ts` (no request without
+  **Download**, a model name from the window refused, one at a time, cancel before and after the commit
+  point, quit), `test/runner.test.ts` (the stall limit, a trickle of bytes, repeated and alternating
+  lines, each kind of real progress, cancel).
 - **Moving to the local brain stops the online turn.** A finished download sets the brain to local (the
   box says so); a turn still running against the online service stops, as it does when Settings changes
   the brain, so its late reply runs no skill and nothing more is sent there. *Evidence:*
@@ -333,8 +335,8 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   model: the runner downloads it from its own registry and checks its files, and the box and the docs
   say so. The speech file stays the only thing Sage itself downloads.
 - **The runner's replies are data.** Every reply is size-capped (1 MB for a list or details, 64 KB per
-  progress line, at most 1,000 layers) and checked against a schema; a malformed, oversized or unexpected reply stops with a
-  plain message. Errors are mapped to Sage's own fixed messages (offline, not enough disk space, model
+  progress line, at most 1,000 layers and 1,020 different statuses) and checked against a schema; a
+  malformed, oversized or unexpected reply stops with a plain message. Errors are mapped to Sage's own fixed messages (offline, not enough disk space, model
   not found, other) by keyword; the runner's text is never shown or logged, and unexpected errors are
   logged as fixed lines with the error's type only. The client uses the same
   fixed `127.0.0.1` address as chat and refuses redirects. *Evidence:* `test/runner.test.ts` (an error

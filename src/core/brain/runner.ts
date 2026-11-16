@@ -11,12 +11,17 @@ import { LOCAL_HOST, LOCAL_PORT } from "./local.js";
 
 /** How long a quick question (the model list, a model's details) may take. */
 export const STATUS_TIMEOUT_MS = 5_000;
-/** A download with no line that moves it on (a new status, layer or bytes) for this long is stopped. */
+/**
+ * A download with no real progress (more bytes in all, a new layer, or a status not seen before)
+ * for this long is stopped.
+ */
 export const PULL_STALL_MS = 120_000;
 /** The longest single progress line Sage reads; the runner's lines are a few hundred bytes. */
 export const MAX_PULL_LINE_BYTES = 64 * 1024;
 /** The most layers (digests) one download may report; a model has a handful. */
 export const MAX_PULL_LAYERS = 1_000;
+/** The most different statuses one download may report: one per layer, and a few more. */
+export const MAX_PULL_STATUSES = MAX_PULL_LAYERS + 20;
 /** The largest model list or model details Sage reads. */
 export const MAX_STATUS_BYTES = 1024 * 1024;
 
@@ -230,8 +235,9 @@ export class RunnerClient {
 
   /**
    * Reads the progress lines. The stall limit restarts only on a complete, valid line that moves
-   * the download on (a new status, a new layer, or more bytes of a layer): repeated lines, blank
-   * lines and bytes with no end of line don't count as progress.
+   * the download on: more bytes downloaded in all than ever before, a layer never seen before, or a
+   * status never seen before in this download. Repeated or alternating lines, blank lines and bytes
+   * with no end of line don't count as progress.
    */
   private async readProgress(
     body: ReadableStream<Uint8Array>,
@@ -247,7 +253,9 @@ export class RunnerClient {
     const layers = new Map<string, PullProgress>();
     let completed = 0;
     let total = 0;
-    let lastStatus: string | undefined;
+    /** Every status seen in this download, and the most bytes downloaded so far. */
+    const statuses = new Set<string>();
+    let best = 0;
     const unreadable: PullOutcome = { status: "failed", message: PULL_MESSAGES.unreadable };
 
     const handle = (text: string): PullOutcome | undefined => {
@@ -268,22 +276,31 @@ export class RunnerClient {
         };
       }
       if (line.status === "success") return { status: "done" };
+      // Real progress only: a status never seen before in this download, a layer never seen
+      // before, or more bytes downloaded in all than ever before. Alternating between statuses
+      // or layers already seen, or bytes going down and up again, doesn't count.
       let moved = false;
-      if (line.status !== undefined && line.status !== lastStatus) {
-        lastStatus = line.status;
+      if (line.status !== undefined && !statuses.has(line.status)) {
+        if (statuses.size >= MAX_PULL_STATUSES) return unreadable;
+        statuses.add(line.status);
         moved = true;
       }
       if (line.digest !== undefined && line.total !== undefined) {
         const layer = { total: line.total, completed: Math.min(line.completed ?? 0, line.total) };
         const before = layers.get(line.digest);
         if (!before && layers.size >= MAX_PULL_LAYERS) return unreadable;
+        if (!before) moved = true;
+        // A layer's count only goes up (a line with fewer bytes is ignored), so the bar never jumps back.
         if (!before || layer.completed > before.completed || layer.total !== before.total) {
           // Running totals: only this layer's change is added.
           completed += layer.completed - (before?.completed ?? 0);
           total += layer.total - (before?.total ?? 0);
           layers.set(line.digest, layer);
-          moved = true;
           onProgress?.({ completed, total });
+        }
+        if (completed > best) {
+          best = completed;
+          moved = true;
         }
       }
       if (moved) alive();
