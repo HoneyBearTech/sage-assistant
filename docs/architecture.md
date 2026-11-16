@@ -109,7 +109,7 @@ saying which file it was and where the old copy was kept. The chat history is ke
 | Validation | zod 4.6.7 | Every model reply, IPC payload, setting and stored file. |
 | Build | esbuild 0.28.2 | Bundles the main process and preload (CommonJS) and the window (one script). |
 | Tests | Node's `node:test` through tsx | No extra test framework; fake servers on `127.0.0.1` for the brains. |
-| Lint and format | Biome 2.5.15 | One fast tool for both. |
+| Lint and format | Biome 2.6.8 | One fast tool for both. |
 | Hardening | @electron/fuses 2.1.3 | Switches off Node entry points in the packaged app. |
 
 There are no vendor SDKs: both brains and the search use `fetch`.

@@ -39,7 +39,7 @@ Keep it that way.
 
 | Check | What it does | Runs locally with | On GitHub |
 | --- | --- | --- | --- |
-| Lint and format | [Biome](https://biomejs.dev/) 2.5.15 with its recommended rules (`biome.jsonc`); warnings fail too | `npm run check` | CI, every pull request |
+| Lint and format | [Biome](https://biomejs.dev/) 2.6.8 with its recommended rules (`biome.jsonc`); warnings fail too | `npm run check` | CI, every pull request |
 | Typecheck | TypeScript in strict mode: `tsconfig.json` (main process, preload, tests, scripts) and `src/renderer/tsconfig.json` (the window) | `npm run typecheck` | CI, every pull request |
 | Tests and coverage | Node's built-in test runner through `tsx`, with an 80% line-coverage floor | `npm run test:coverage` (`npm test` without coverage) | CI, every pull request |
 | Public-repo check | No private IP addresses, LAN host names, home folders or personal e-mail addresses in any file | `npm run check:public` | CI, every pull request |
