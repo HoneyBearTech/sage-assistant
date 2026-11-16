@@ -6,6 +6,12 @@ export interface ToolCall {
   name: string;
   /** The arguments exactly as the model sent them. Validated by the skill's schema before use. */
   args: unknown;
+  /**
+   * An opaque token a service sends with a tool call and needs back with it on the next request of
+   * the same turn (Gemini's thought signature). Only the brain that received it sends it back; it is
+   * never shown, logged or used for anything else. The local and chat-completions brains never set it.
+   */
+  signature?: string;
 }
 
 export type ChatMessage =

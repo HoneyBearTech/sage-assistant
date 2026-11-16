@@ -200,13 +200,23 @@ test("nothing in the app sends telemetry or analytics", async () => {
     "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/d1e6c30921780b8508d04b492dfb3ce8a51605d4/";
   const allowed = new Set([
     ...["encoder_model.ort", "decoder_model_merged.ort", "tokens.txt"].map((name) => `${speechModel}${name}`),
-    // The one page Sage can open in the web browser, after asking: its own install guide.
+    // The pages Sage can open in the web browser, after asking: its own install guide, and each
+    // company's key page.
     "https://github.com/HoneyBearTech/sage-assistant/blob/main/docs/installing.md#local-model-runner",
+    "https://console.anthropic.com/settings/keys",
+    "https://platform.openai.com/api-keys",
+    "https://aistudio.google.com/apikey",
+    // The three ready-made services' fixed origins (their keys go only there).
+    "https://api.anthropic.com",
+    "https://api.openai.com",
+    "https://generativelanguage.googleapis.com",
   ]);
+  const services = /^https:\/\/(api\.anthropic\.com|api\.openai\.com|generativelanguage\.googleapis\.com)\//;
   const urls = [...all.matchAll(/https?:\/\/[^\s"'`)]+/g)].map((m) => m[0]);
   for (const url of urls) {
     assert.ok(
       allowed.has(url) ||
+        services.test(url) ||
         /^https:\/\/html\.duckduckgo\.com\/html\/$|^http:\/\/\$\{LOCAL_HOST\}|^https:\/\/api\.example\.com|^https:\/\/duckduckgo\.com$/.test(
           url,
         ),

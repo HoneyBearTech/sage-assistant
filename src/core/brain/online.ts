@@ -5,18 +5,18 @@ import {
   type BrainReply,
   type ChatMessage,
   type FetchLike,
-  isConnectionRefused,
-  isTimeout,
   parseArgs,
-  readJsonCapped,
   scrubStrings,
   stripThinking,
   type ToolSpec,
 } from "./brain.js";
+import { OTHER_SERVICE, type ServiceName, unreadableMessage } from "./errors.js";
+import { requestService } from "./request.js";
 
 /**
- * An online model service that speaks the widely used chat-completions format:
- * POST <base>/v1/chat/completions with a bearer key.
+ * An online model service that speaks the widely used chat-completions format: POST
+ * <base>/v1/chat/completions with a bearer key (another online service), or a ready-made service's
+ * fixed chat-completions address (OpenAI).
  */
 
 const completionReply = z.object({
@@ -44,10 +44,18 @@ const completionReply = z.object({
 });
 
 export interface OnlineBrainOptions {
-  baseUrl: string;
+  /** Another online service: the address the user typed. Ignored when `endpoint` is given. */
+  baseUrl?: string;
+  /** A ready-made service: its fixed chat-completions address. */
+  endpoint?: string;
+  /** How messages name the service; "The online service" by default. */
+  service?: ServiceName;
   model: string;
-  /** Reads the key from the key store at call time; the brain never keeps it. */
-  getKey: () => Promise<string | null>;
+  /**
+   * Reads the key from the key store at call time, for the exact address the request goes to; the
+   * key store hands it out only if it is bound to that address's origin. The brain never keeps it.
+   */
+  getKey: (url: string) => Promise<string | null>;
   /** Removes known secrets from text (Sage's redactor). The key itself is always removed. */
   redact?: (text: string) => string;
   fetch?: FetchLike;
@@ -82,14 +90,16 @@ export class OnlineBrain implements Brain {
   readonly kind = "online";
   private readonly fetch: FetchLike;
   private readonly timeoutMs: number;
+  private readonly service: ServiceName;
 
   constructor(private readonly options: OnlineBrainOptions) {
     this.fetch = options.fetch ?? ((input, init) => fetch(input, init));
     this.timeoutMs = options.timeoutMs ?? 90_000;
+    this.service = options.service ?? OTHER_SERVICE;
   }
 
   async chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply> {
-    const url = completionsUrl(this.options.baseUrl);
+    const url = this.options.endpoint ?? completionsUrl(this.options.baseUrl ?? "");
     if (!url) {
       return {
         ok: false,
@@ -98,11 +108,17 @@ export class OnlineBrain implements Brain {
       };
     }
     if (!this.options.model.trim()) {
-      return { ok: false, message: "Choose the online model's name in Settings first." };
+      return { ok: false, message: `Choose the model for ${this.service.ref} in Settings first.` };
     }
-    const key = await this.options.getKey();
+    // The key for exactly this address: checked here, at the point of the request.
+    const key = await this.options.getKey(url);
     if (!key) {
-      return { ok: false, message: "Add your online service key in Settings first." };
+      return {
+        ok: false,
+        message: this.service.other
+          ? "Add your online service key in Settings first."
+          : `Add your ${this.service.ref} key in Settings first.`,
+      };
     }
     const body = {
       model: this.options.model,
@@ -114,60 +130,20 @@ export class OnlineBrain implements Brain {
           }
         : {}),
     };
-    let response: Response;
-    try {
-      response = await this.fetch(url, {
+    const reply = await requestService(
+      this.fetch,
+      url,
+      {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
         body: JSON.stringify(body),
-        redirect: "error",
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-    } catch (error) {
-      if (isTimeout(error)) {
-        return { ok: false, message: "The online service took too long to answer. Try again." };
-      }
-      if (isConnectionRefused(error)) {
-        return { ok: false, message: "Sage can't reach the online service. Check the address." };
-      }
-      return {
-        ok: false,
-        message: "Sage can't reach the online service. Check your internet connection.",
-      };
-    }
-    // The body of an error reply is never shown or logged: some services echo the request back.
-    if (response.status === 401 || response.status === 403) {
-      return { ok: false, message: "The online service didn't accept the key. Check it in Settings." };
-    }
-    if (response.status === 404) {
-      return {
-        ok: false,
-        message: "The online service didn't recognise the address or the model name. Check Settings.",
-      };
-    }
-    if (response.status === 429) {
-      return { ok: false, message: "The online service is busy or your quota is used up. Try later." };
-    }
-    if (!response.ok) {
-      return {
-        ok: false,
-        message: `The online service returned an error (HTTP ${response.status}). Try again later.`,
-      };
-    }
-    let replyBody: unknown;
-    try {
-      replyBody = await readJsonCapped(response);
-    } catch (error) {
-      // The reply started but its body stalled past the timeout or the connection dropped.
-      if (isTimeout(error)) {
-        return { ok: false, message: "The online service took too long to answer. Try again." };
-      }
-      replyBody = undefined;
-    }
-    const parsed = completionReply.safeParse(replyBody);
-    if (!parsed.success) {
-      return { ok: false, message: "The online service sent a reply Sage couldn't read." };
-    }
+      },
+      this.service,
+      this.timeoutMs,
+    );
+    if (!reply.ok) return reply;
+    const parsed = completionReply.safeParse(reply.body);
+    if (!parsed.success) return { ok: false, message: unreadableMessage(this.service) };
     // A service can echo the key back even in a successful reply. Remove it (and any other secret
     // the redactor knows) from the text and the tool-call arguments before anything else sees them.
     const redact = this.options.redact ?? ((text: string) => text);

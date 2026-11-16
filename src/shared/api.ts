@@ -24,6 +24,34 @@ export const CHANNELS = {
   setSound: "sage:sound-set",
 } as const;
 
+/** The online services with a ready-made choice, each reached with the user's own key. */
+export const COMPANIES = ["claude", "openai", "gemini"] as const;
+export type Company = (typeof COMPANIES)[number];
+
+/** Every online brain: the three ready-made ones and "other" (an address and a key of the user's choice). */
+export const ONLINE_BRAINS = [...COMPANIES, "other"] as const;
+export type OnlineBrainChoice = (typeof ONLINE_BRAINS)[number];
+
+/** Where Sage thinks: on this computer (the default), or one of the online brains. */
+export const BRAINS = ["local", ...ONLINE_BRAINS] as const;
+export type BrainChoice = (typeof BRAINS)[number];
+
+/** What the window shows for each online brain: no addresses, only names. */
+export const BRAIN_LABELS: Record<OnlineBrainChoice, { name: string; company: string }> = {
+  claude: { name: "Claude", company: "Anthropic" },
+  openai: { name: "OpenAI", company: "OpenAI" },
+  gemini: { name: "Gemini", company: "Google" },
+  other: { name: "Another online service", company: "that service" },
+};
+
+/** The one line shown the first time an online brain is picked or saved: what goes where. */
+export function privacyLine(brain: OnlineBrainChoice): string {
+  const label = BRAIN_LABELS[brain];
+  return brain === "other"
+    ? "With another online service, what you type and the results of Sage's skills (for example a list of files it found) are sent to that service."
+    : `With ${label.name}, what you type and the results of Sage's skills (for example a list of files it found) are sent to ${label.company}.`;
+}
+
 /**
  * What the main process tells the window by itself, one way. The window can't answer these, and no
  * channel above takes anything back about them.

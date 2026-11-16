@@ -223,3 +223,38 @@ export class ManualTimers implements Timers {
     for (const timer of due) timer.callback();
   }
 }
+
+/** One request a brain made through `fakeFetch`. */
+export interface FetchCall {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string;
+  redirect: RequestInit["redirect"];
+}
+
+/**
+ * A stand-in for fetch that never touches the network: records each request and answers with
+ * `handler`'s response (or throws what it throws). For the ready-made services, whose fixed
+ * addresses can't point at a fake server on 127.0.0.1.
+ */
+export function fakeFetch(handler: (call: FetchCall, init: RequestInit) => Response | Promise<Response>) {
+  const calls: FetchCall[] = [];
+  const fetch = async (url: string, init: RequestInit): Promise<Response> => {
+    const call: FetchCall = {
+      url,
+      method: init.method ?? "GET",
+      headers: { ...(init.headers as Record<string, string>) },
+      body: typeof init.body === "string" ? init.body : "",
+      redirect: init.redirect,
+    };
+    calls.push(call);
+    return handler(call, init);
+  };
+  return { fetch, calls };
+}
+
+/** A JSON response, as a service would send it. */
+export function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
