@@ -2,6 +2,8 @@
 
 Sage is one Electron app written in TypeScript. There is no local web server and no background
 service: the chat window talks only to the app's own main process, through a handful of typed calls.
+Speech recognition runs in a small helper process that the main process starts when voice is first
+used.
 
 ## Components
 
@@ -10,23 +12,28 @@ service: the chat window talks only to the app's own main process, through a han
 |                                                                                         |
 |  Chat window (renderer)            Main process                                         |
 |  sandboxed, no Node      IPC       +-----------------------------------------------+    |
-|  chat, settings     <----------->  | ipc.ts: validated handlers, sender checked     |    |
-|  (src/renderer)   window.sage API  | Assistant: one conversation, tool-call loop    |    |
-|                   (src/preload)    | SkillRegistry + ApprovalGate + action log      |    |
+|  chat, settings,    <----------->  | ipc.ts: validated handlers, sender checked     |    |
+|  microphone, voices window.sage    | Assistant: one conversation, tool-call loop    |    |
+|  (src/renderer)     (src/preload)  | SkillRegistry + ApprovalGate + action log      |    |
 |                                    | Notes, reminders, scheduler, settings, keys    |    |
+|                                    | Voice: speech file, its download, recordings   |    |
 |                                    +-----------------------------------------------+    |
-|                                       |            |              |            |         |
-+---------------------------------------|------------|--------------|------------|---------+
-                                        v            v              v            v
-                          Ollama on 127.0.0.1   online model   DuckDuckGo    confirmation box,
-                          (local brain)         service        HTML page     notifications,
-                                                (optional)     (search)      apps and files
+|                                       |         |          |         |         |          |
+|                                       |         |          |         |   Speech helper    |
+|                                       |         |          |         |   (utility process,|
+|                                       |         |          |         |   speech engine)   |
++---------------------------------------|---------|----------|---------|--------------------+
+                                        v         v          v         v
+                          Ollama on 127.0.0.1  online     DuckDuckGo  Hugging Face     confirmation box,
+                          (local brain)        model      HTML page   (the speech      notifications,
+                                               service    (search)    file, once,      apps and files
+                                               (optional)             after asking)
 ```
 
 | Part | Where | What it does |
 | --- | --- | --- |
 | Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat and the settings screen. Runs sandboxed with no Node access; inserts text only with `textContent`. |
-| Preload | `src/preload/preload.ts` | Exposes `window.sage` with nine typed methods through `contextBridge`; nothing else. |
+| Preload | `src/preload/preload.ts` | Exposes `window.sage` with fourteen typed methods through `contextBridge`; nothing else. |
 | IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service, saves a new key only when the address on screen is the saved one, and stops a turn in progress when the brain or the service changes. |
 | Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits up to 5 seconds for the system to confirm it. Reports whether it was confirmed; it never reports a guess. |
 | Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog, notifications, `shell.openPath`, the app launcher and the encrypted key store. Checks the sender of every IPC call. |
@@ -39,6 +46,9 @@ service: the chat window talks only to the app's own main process, through a han
 | Notices | `src/core/notices.ts` | Messages from Sage itself (reminders for the window, data files set aside), collected by the window every 5 seconds and shown in the chat. Each notice has an id; the window confirms the ids it has put in the chat once the Chat view is open and the window isn't hidden or minimised, and only that delivers a notice. One not yet confirmed is handed out again with the same id, so the window skips it if it already shows it. Deleting a reminder withdraws its notice, and a reminder that no longer exists is skipped. At most 50 wait at once (confirmed or not): the oldest are kept, and the window is told how many more are waiting. |
 | Service keys | `src/core/keystore.ts` | The key is saved together with the service (origin) it was entered for, and each turn's online brain asks only for the key of its own service. |
 | Search | `src/core/search/` | The `SearchProvider` interface and the DuckDuckGo HTML provider with its parser. |
+| Voice | `src/core/voice/` | `model.ts`: the speech model's three files (pinned address, exact size, SHA-256). `download.ts`: the download (https only, at most five forwards, size cap, fingerprint check, moved into place only when all match, leftovers deleted). `transcriber.ts`: starts the speech helper, one recording at a time, 60-second limit, a fresh helper after a crash. `helper-protocol.ts`: the validated messages between the two, and the helper's own logic. `voice.ts`: ties them together; the download only after the main process's own box says Download. |
+| Speech helper | `src/helper/voice-helper.ts` | Built as `dist/voice-helper.cjs` and run as Electron's utility process. The only code that loads the speech engine (`sherpa-onnx-node`); gets sound, sends back text. |
+| Window voice | `src/renderer/voice-controls.ts`, `voice.ts`, `voice-text.ts` | Hold to talk (Ctrl+Space or the Talk button), recording with the standard recorder, turning it into 16 kHz mono sound, the download offer, and spoken replies with the window's own speech and the PC's installed voices. `renderer.ts` only finds the elements. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
 
 ## Skills
@@ -82,6 +92,39 @@ service: the chat window talks only to the app's own main process, through a han
 5. The results go back to the brain, which answers or asks for more tools. The final text is shown in
    the window.
 
+## How voice works
+
+1. You hold **Ctrl+Space** (while Sage's window is focused) or the **Hold to talk** button. If the speech
+   file isn't there yet, the window offers the download instead (see below).
+2. The window opens the microphone with `getUserMedia({ audio: true })`, the only permission it can be
+   given, and records with the browser's standard `MediaRecorder`. A timer shows "Listening…". The
+   microphone closes as soon as you let go, after 30 seconds, when the window loses focus or is hidden,
+   or on **New chat** (which drops the recording). A tap under 0.4 seconds is ignored.
+3. The window decodes the recording (`AudioContext.decodeAudioData`) and turns it into one channel of
+   16,000 samples a second (`OfflineAudioContext`), as 16-bit samples, cut to 30 seconds. No worklets,
+   workers or `blob:` addresses, and no change to the window's content rule.
+4. It sends that once (`window.sage.transcribe`). The main process checks it is an `Int16Array` of 1 to
+   480,000 samples, on a buffer no bigger than that, before reading it; one recording is worked out at a
+   time.
+5. The main process starts the speech helper on first use (Electron's utility process, a separate
+   process with no window) and sends it the sound as 32-bit floats. The helper loads the engine and the
+   model once and sends back the text. A helper that takes over 60 seconds is stopped; one that crashes
+   gives a plain message, and the next recording starts a fresh one.
+6. The words go **into the message box**, after anything already there. You check them and press Enter.
+   A message counts as a voice message if any of its words came from talking.
+7. Sage's final reply is read aloud with the window's `speechSynthesis` when **Read replies aloud** says
+   so (after voice messages, always, or never), using only voices installed on the PC. **Stop
+   speaking**, the talk key and **New chat** stop it.
+
+**The speech file.** The model is Moonshine tiny, English, quantized for the engine (MIT licence), in
+three files on Hugging Face (`csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27`), pinned to
+commit `d1e6c30921780b8508d04b492dfb3ce8a51605d4`. The window can only ask for the download; the main
+process asks the user in its own box first. Each file is fetched with `redirect: "manual"`, following at
+most five forwards, every one https; it is written to `models/.partial/` and stopped as soon as it is
+larger than its exact size; its SHA-256 is checked; and the folder is moved into place as
+`models/moonshine-tiny-en-quantized-2026-02-27/` only when all three match. A failure or a cancel deletes
+`.partial`, and so does every start of Sage.
+
 ## Where data is kept
 
 Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Windows and
@@ -94,11 +137,13 @@ Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Win
 | `notes.json` | `NotesStore` | Notes (id, title, text, times). |
 | `reminders.json` | `RemindersStore` | Reminders (id, text, due time, when it fired). |
 | `action-log.jsonl` | `ActionLog` | One JSON line per allowed or declined action: time, call id, skill, the sentence shown, decision, outcome. |
+| `models/moonshine-tiny-en-quantized-2026-02-27/` | `downloadModel` | The speech model's three files (44 MB), each checked against its fingerprint. `models/.partial/` exists only during a download. |
 
 JSON files are written atomically (a temporary file in the same folder, flushed, then renamed over the
 old one). A file that can't be read is renamed to `<name>.invalid-<time>` and Sage starts with an empty
 one (or the default settings), so nothing is lost silently, and the window shows a one-time notice
 saying which file it was and where the old copy was kept. The chat history is kept in memory only and is gone when Sage closes.
+Recordings and their words are never written to disk or logged.
 
 ## Technology
 
@@ -112,16 +157,27 @@ saying which file it was and where the old copy was kept. The chat history is ke
 | Lint and format | Biome 2.6.8 | One fast tool for both. |
 | Packaging | electron-builder 26.18.1 | Packs the app into an archive, sets the fuses and makes the one-click Windows installer (NSIS). A build tool only; nothing of it ships inside Sage. |
 | Hardening | @electron/fuses 2.1.3 | The fuse names for `src/main/fuses-config.ts`; electron-builder sets them in the packaged app. |
+| Speech engine | sherpa-onnx-node 2.0.1 (Apache-2.0) | Offline speech recognition, ready-built for Windows and Linux, with no install scripts. Sage's only run-time dependency, and its only native code. Loaded only in the speech helper. |
+| Speech model | Moonshine tiny, English (MIT) | Small and fast; downloaded once, after asking. |
 
-There are no vendor SDKs: both brains and the search use `fetch`.
+There are no vendor SDKs: both brains, the search and the speech file download use `fetch`. Spoken
+replies use the window's built-in speech, with no package.
 
 ## Packaging
 
-- `npm run build` writes everything the app needs into `dist/`: `main.cjs`, `preload.cjs` and
-  `renderer/` (`index.html`, `styles.css`, `renderer.js`). `package.json`'s `main` points at
-  `dist/main.cjs`. zod is bundled into `main.cjs`, so it is a dev dependency and Sage has no run-time
-  dependencies: the app archive holds only `dist/` (without source maps) and `package.json`, and no
-  `node_modules`.
+- `npm run build` writes everything the app needs into `dist/`: `main.cjs`, `preload.cjs`,
+  `voice-helper.cjs` and `renderer/` (`index.html`, `styles.css`, `renderer.js`). `package.json`'s `main`
+  points at `dist/main.cjs`. zod is bundled into the bundles, so it is a dev dependency.
+- **The one run-time dependency** is the speech engine, `sherpa-onnx-node`, marked external in
+  `scripts/build.ts` so the helper loads it from `node_modules`. npm installs only the ready-built package
+  for the PC it runs on (`sherpa-onnx-win-x64` on 64-bit Windows, `sherpa-onnx-linux-x64` on Linux), so
+  **the Windows installer must be built on Windows**: `npm run dist:dir` on Linux makes a Windows app
+  with the Linux engine, whose voice won't work. The app archive holds `dist/` (without source maps),
+  `package.json` and the engine's JavaScript (`node_modules/sherpa-onnx-node`). The engine's native files
+  (`sherpa-onnx.node` and its libraries: four `.dll` files on Windows, about 23 MB) are kept **unpacked
+  next to the archive**, in `resources/app.asar.unpacked/node_modules/sherpa-onnx-<platform>-<arch>/`
+  (`asarUnpack` in `electron-builder.json`), because the system can't load them from inside it. Unpacked
+  files aren't covered by the archive's integrity check (see the assurance case, T6).
 - `npm run dist` builds, then makes the Windows installer `out/Sage-Setup-<version>.exe` with
   electron-builder; it works only on Windows. `npm run dist:dir` makes the unpacked app in
   `out/win-unpacked/` instead, and also works on Linux, for checks. `out/` is not in git. The settings

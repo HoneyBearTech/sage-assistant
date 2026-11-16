@@ -13,9 +13,8 @@ Its "brain" (the model that understands you and writes the replies) is your choi
   your own key. The key is encrypted with your operating system's protection.
 
 > [!NOTE]
-> This is the foundation: a text chat with a one-click Windows installer, which also runs from source on
-> Windows and Linux. Voice (hold a key to talk) and a first-run setup come next; see the
-> [roadmap](docs/roadmap.md).
+> Sage has a text chat and voice (hold a key to talk), with a one-click Windows installer; it also runs
+> from source on Windows and Linux. A first-run setup comes next; see the [roadmap](docs/roadmap.md).
 
 ## Install it on Windows
 
@@ -47,6 +46,28 @@ decline is written to a local log. How this works, and what it protects against,
 [assurance case](docs/assurance-case.md).
 
 Sage sends no telemetry, analytics or crash reports, and has no account.
+
+## Voice
+
+Hold **Ctrl+Space** while Sage's window is focused, or press and hold the **Hold to talk** button, and
+speak. Let go when you're done (at most 30 seconds). Sage works out what you said **on your PC**, with
+the [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) speech engine and the Moonshine tiny English
+model, and puts the words **in the message box**. Nothing is sent until you check it and press Enter.
+
+- **A one-time download.** The first time you use voice, Sage asks: *"Voice needs a 44 MB speech file
+  from Hugging Face. Download it now?"* Only if you choose **Download** does it fetch the model's three
+  files, from fixed addresses pinned to one exact version, and it uses them only if each file's size and
+  SHA-256 fingerprint match. After that, voice works offline. **This is the only thing Sage downloads by
+  itself**, and nothing is sent: it is a plain file download.
+- **The microphone is on only while you hold** the key or the button. It also turns off if Sage's window
+  loses focus or you start a **New chat**. The sound stays in memory and is never saved or logged, and
+  neither are the words, beyond what happens to typed messages.
+- **Spoken replies.** Sage can read its replies aloud with a voice installed on your PC (Windows comes
+  with some; on Linux you may need the system's speech service). Settings → **Read replies aloud**:
+  *After voice messages* (the default), *Always* or *Never*. **Stop speaking**, the talk key and
+  **New chat** stop it.
+- If Windows blocks the microphone, allow it in **Settings → Privacy & security → Microphone** (see
+  [installing.md](docs/installing.md#voice-and-the-microphone)).
 
 ## Run it from source
 
@@ -100,6 +121,7 @@ Everything lives in Sage's folder in your user profile (Electron's `userData` fo
 | `online-key.bin` | The online key, encrypted with your system's protection. |
 | `notes.json`, `reminders.json` | Your notes and reminders. |
 | `action-log.jsonl` | One line for every action you allowed or declined. |
+| `models/` | The speech file for voice (44 MB), once you've downloaded it. |
 
 ## Developing
 

@@ -40,8 +40,8 @@ source are there in the installed app too.
 It replaces the old version; your data stays.
 
 **Uninstalling:** **Settings → Apps → Installed apps** (on Windows 10, **Settings → Apps → Apps &
-features**), find **Sage**, and choose **Uninstall**. Your notes, reminders, settings, action log and key
-stay in `%APPDATA%\sage-assistant`; delete that folder too to remove them.
+features**), find **Sage**, and choose **Uninstall**. Your notes, reminders, settings, action log, key and
+speech file stay in `%APPDATA%\sage-assistant`; delete that folder too to remove them.
 
 ## What you need (from source)
 
@@ -52,6 +52,7 @@ stay in `%APPDATA%\sage-assistant`; delete that folder too to remove them.
 | Sage's dependencies | a few hundred MB | Downloaded by `npm install`. |
 | Electron's runtime | about 100 MB | Downloaded on the first `npm start`, not by `npm install`. |
 | [Ollama](https://ollama.com) and a model | 1.5 to 3 GB for a small model | The local brain. Not needed if you only use an online model service. |
+| The speech file | 44 MB | Voice. Downloaded once, the first time you use voice, only after Sage asks. |
 
 A PC with 8 GB of memory runs a small local model; 16 GB is more comfortable.
 
@@ -161,6 +162,25 @@ ask again.
 With an online brain, everything you type, and what Sage reads for you during the conversation (search
 results, notes), is sent to that service.
 
+## Voice and the microphone
+
+Hold **Ctrl+Space** while Sage's window is focused, or press and hold **Hold to talk**, speak, and let go.
+The words go into the message box; press Enter to send them.
+
+- **The first time**, Sage asks *"Voice needs a 44 MB speech file from Hugging Face. Download it now?"*.
+  Choose **Download**. A line under the chat shows the progress, with **Cancel**; if it fails or the PC
+  is offline, it says so and offers **Try again**. Once the file is there, voice works without the
+  internet. It is kept in Sage's data folder, in `models/`.
+- **Windows asks for the microphone** the first time, or may have it turned off. If Sage says the
+  microphone is blocked, open **Settings → Privacy & security → Microphone** (Windows 10: **Settings →
+  Privacy → Microphone**) and turn on **Microphone access** and **Let desktop apps access your
+  microphone**. Then try again. If Sage can't find a microphone, plug one in or check
+  **Settings → System → Sound → Input**.
+- **Spoken replies** use the voices that come with Windows (**Settings → Time & language → Speech**
+  lists them). On Linux they come from the system's speech service (for example the `speech-dispatcher`
+  package); without one, Settings says there is no voice and replies stay as text. Change when replies
+  are read aloud in Settings → **Read replies aloud**.
+
 ## Linux notes
 
 - **Keyring.** On Linux, the key is encrypted with your desktop keyring (GNOME Keyring or KWallet). If no
@@ -218,5 +238,8 @@ the local model runner (its models are in its own folder).
 | "The local model "…" isn't downloaded yet." | Run the `ollama pull` command it shows, or change Settings → Local model to one from `ollama list`. |
 | "The online service didn't accept the key." | Save the key again in Settings, and check it with the service. |
 | "Search is unavailable right now." | The search page didn't answer or blocked the request. Try again later. |
+| "Sage can't use the microphone because it's blocked." | Allow it in Windows's microphone settings; see [Voice and the microphone](#voice-and-the-microphone). |
+| "Sage couldn't reach Hugging Face to download the speech file." | Check the PC is online, then choose **Try again**. |
+| "The downloaded speech file wasn't the one Sage expected…" | The file didn't match its fingerprint and was deleted. Try again later; if it keeps happening, report it as an issue. |
 | The window doesn't open on Linux | See [the sandbox note](#linux-notes). |
 | `npm install` fails | Check `node --version` shows v24, then delete `node_modules` and run `npm install` again. |

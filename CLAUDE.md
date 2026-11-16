@@ -3,9 +3,9 @@
 ## Purpose
 
 Sage (S.A.G.E., System for Assistance, Guidance & Execution) is a desktop assistant that runs on the
-owner's own computer: an Electron app with a text chat, a switchable brain (a local model runner on
-`127.0.0.1`, or an online service with the chat-completions format), a few skills, and an ask-first rule
-for anything that opens or deletes something. It installs on Windows (a one-click installer, see
+owner's own computer: an Electron app with a text chat, hold-to-talk voice recognised on the PC, a
+switchable brain (a local model runner on `127.0.0.1`, or an online service with the chat-completions
+format), a few skills, and an ask-first rule for anything that opens or deletes something. It installs on Windows (a one-click installer, see
 `docs/releasing.md`) and runs from source on Windows and Linux. Safety and privacy are the point of the project: no local server, no command skill, no
 bypass mode, no telemetry, and the online key encrypted by the operating system.
 
@@ -26,7 +26,8 @@ strike them through with a reason.
 - `fnm use 24`: the tooling runs on Node 24.
 - `npm install`: install dependencies (exact versions, `package-lock.json` is committed).
 - `npm start`: build into `dist/` and open Sage's window.
-- `npm run build`: build only (esbuild: main and preload as CommonJS, the window as one script).
+- `npm run build`: build only (esbuild: main, preload and the speech helper as CommonJS, the window as
+  one script; `sherpa-onnx-node` stays external).
 - `npm test`: the tests (node:test through tsx); `npm run test:coverage` adds the 80% line floor.
 - `npm run typecheck`: both TypeScript configs (`tsconfig.json` and `src/renderer/tsconfig.json`).
 - `npm run check`: Biome lint and format check; `npm run format` rewrites.
@@ -34,7 +35,8 @@ strike them through with a reason.
 - `npm run verify`: all of the above; it must pass before any pull request.
 - `npm run dist`: build, then make the Windows installer `out/Sage-Setup-<version>.exe` (Windows only).
 - `npm run dist:dir`: build, then make the unpacked Windows app in `out/win-unpacked/` (also on Linux;
-  read the fuses back with `npx @electron/fuses read --app out/win-unpacked/Sage.exe`).
+  read the fuses back with `npx @electron/fuses read --app out/win-unpacked/Sage.exe`). Built on Linux it
+  carries the Linux speech engine, so voice works only in a Windows build made on Windows.
 
 ## Architecture
 
@@ -47,13 +49,15 @@ strike them through with a reason.
 | `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside), delivered only when the window confirms it has shown them (`ackNotices`); the desktop notification, which reports only a confirmed show. |
 | `src/core/search/` | `SearchProvider` and the DuckDuckGo HTML provider with a small dependency-free parser. |
 | `src/core/settings.ts`, `keystore.ts` | Settings JSON (no secrets) and the `KeyStore` (encrypted file via an `Encryptor`). |
+| `src/core/voice/` | Voice in the main process: the pinned speech model (`model.ts`), its download (`download.ts`), the speech helper's manager (`transcriber.ts`) and messages (`helper-protocol.ts`), and `Voice` (`voice.ts`), which asks in the main process's own box before downloading. |
+| `src/helper/voice-helper.ts` | The speech helper, built as `dist/voice-helper.cjs` and run as Electron's utility process; the only code that loads `sherpa-onnx-node`. Keep it small: its logic is in `src/core/voice/helper-protocol.ts`. |
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
 | `src/main/` | The Electron main process: `main.ts` (thin wiring), `security.ts` (window options, CSP, URL and permission rules), `ipc.ts` (validated handlers), `fuses-config.ts`. |
 | `src/preload/preload.ts` | Exposes the typed `window.sage` API through `contextBridge`; nothing else. |
-| `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. |
+| `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. Voice is in `voice-controls.ts` (hold to talk, the download offer, spoken replies), `voice.ts` (recorder, 16 kHz conversion, speech) and `voice-text.ts`; `renderer.ts` only finds the elements. |
 | `scripts/` | Build, public-repo checker, secret scan. |
-| `electron-builder.json` | The installer settings: app id, the name "Sage" (only here; never `productName` in `package.json`, which would move the data folder), the NSIS installer and the fuses, which must match `src/main/fuses-config.ts` (a test checks). |
-| `test/` | Tests and saved search pages (`test/fixtures/`). |
+| `electron-builder.json` | The installer settings: app id, the name "Sage" (only here; never `productName` in `package.json`, which would move the data folder), the NSIS installer, `asarUnpack` for the speech engine's native files, and the fuses, which must match `src/main/fuses-config.ts` (a test checks). |
+| `test/` | Tests and saved search pages (`test/fixtures/`). `test/window.ts` starts the real window script on the fake DOM (`fake-dom.ts`) with stand-ins for the microphone, recorder, audio and speech (`fake-media.ts`). |
 
 ## Rules
 
@@ -79,6 +83,16 @@ strike them through with a reason.
   the strict CSP, local files only, no navigation, no pop-ups, no permissions except the microphone, the
   sender checked on every IPC handler. Change `src/main/security.ts` and its tests together.
 - **No telemetry, analytics or crash reporting**, and no network calls from the window.
+- **Voice.** The microphone is open only while the talk key or button is held (closed on release, after
+  30 seconds, on blur, hidden window or New chat); sound and words are never saved or logged. The words
+  go into the message box, never sent by themselves. The window needs no new permission, worklet, worker,
+  `blob:` address or CSP change. The speech file is downloaded only by the main process, only after its
+  own box returns Download, from the pinned addresses in `src/core/voice/model.ts`, https only, checked
+  by size and SHA-256; it is the only thing Sage downloads by itself. Spoken replies use only voices
+  installed on the PC (`localService`). The speech engine is loaded only in the speech helper.
+- **The speech engine** (`sherpa-onnx-node` and its `sherpa-onnx-<platform>-<arch>` packages) is updated
+  as one Renovate pull request: check install scripts again, keep its native files unpacked, and run the
+  Voice section of `docs/windows-checklist.md` before merging.
 - **Tests never use the real network**, real settings or real user data: fake servers on `127.0.0.1`,
   temporary folders, fake key store, fake clock.
 - **Logic in `src/core/`** where tests reach it; keep `src/main/main.ts` thin.
@@ -93,10 +107,11 @@ strike them through with a reason.
 ## Context
 
 - Owner: HoneyBearTech. Licence: MIT.
-- Node 24 for tooling; Electron 45.3.2; TypeScript strict; Biome 2.6.8; zod 4 for validation.
+- Node 24 for tooling; Electron 45.3.2; TypeScript strict; Biome 2.6.8; zod 4 for validation;
+  sherpa-onnx-node 2.0.1 (the one run-time dependency) with the Moonshine tiny English model.
 - Sage's data lives in Electron's `userData` folder (`%APPDATA%\sage-assistant` on Windows,
   `~/.config/sage-assistant` on Linux).
-- Planned jobs, one pull request each: voice, first-run setup; later wake word,
-  better voices, signing and updates, macOS. See `docs/roadmap.md`.
+- Planned jobs, one pull request each: first-run setup; later wake word, better voices, signing and
+  updates, macOS. See `docs/roadmap.md`.
 - The review machine runs Linux without a display, so Electron itself isn't started in the tests;
   `docs/windows-checklist.md` lists the manual checks to run on Windows.
