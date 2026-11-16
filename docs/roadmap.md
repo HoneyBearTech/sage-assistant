@@ -69,8 +69,11 @@ later, and what Sage will not do.
       Done: a line with `\u` and four hex digits or `\/` is also scanned decoded (an escaped backslash
       becomes one backslash), in every text file; a problem found only there is reported once, marked
       "(written with escapes)".
-- [ ] **Track the minimatch advisory** (GHSA-g3hv-75wg-m249) in electron-builder's build tools, and
+- [x] **Track the minimatch advisory** (GHSA-g3hv-75wg-m249) in electron-builder's build tools, and
       take the electron-builder update that fixes it.
+      Done: no electron-builder release takes the fixed minimatch yet, so npm `overrides` entries move
+      the two affected copies to minimatch 11.0.8; remove each when its parent asks for 11.0.1 or later
+      (see CONTRIBUTING.md).
 - [x] **Voice** (voice): hold Ctrl+Space or the Talk button to talk; offline speech recognition
       (sherpa-onnx with the Moonshine tiny English model, downloaded once after asking and checked by
       fingerprint); the words go into the message box to check before sending; spoken replies with the

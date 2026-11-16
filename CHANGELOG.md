@@ -11,7 +11,6 @@ All notable changes to Sage are documented here. The format follows
 - **The installer build tools use a fixed minimatch** (GHSA-g3hv-75wg-m249, a denial of service in a
   file-pattern matcher). An npm `overrides` entry moves the two affected copies to minimatch 11; the
   packaged app has the same files as before. `npm audit` now reports no findings.
-
 - **The public-repo checker also reads text written with escapes.** An e-mail address, private address,
   LAN host name or home folder written with JSON escapes is now decoded and checked too, and reported once, marked "(written with
   escapes)". The escapes decoded are `\u` with four hex digits, an escaped backslash (two backslashes)
