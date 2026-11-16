@@ -195,6 +195,34 @@ label:not(.choice),
   text-shadow: 0 0 10px var(--glow);
 }
 
+/* The sound switch: a hollow dot when off, a lit one when on. */
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.sound-toggle::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid currentcolor;
+}
+
+.sound-toggle[aria-pressed="true"] {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.sound-toggle[aria-pressed="true"]::before {
+  background: currentcolor;
+  box-shadow: 0 0 8px var(--glow);
+}
+
 /* --- Buttons: hairline by default, the main ones filled with cut corners --- */
 
 button {

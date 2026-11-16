@@ -2,6 +2,7 @@ import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } f
 import { createAskingCards } from "./asking-cards.js";
 import { applyTheme, prefersReducedMotion, toTheme } from "./look.js";
 import { createOrb } from "./orb.js";
+import { createSounds } from "./sounds.js";
 import { createTypist } from "./typing.js";
 import { createVoiceControls } from "./voice-controls.js";
 import { createWelcome } from "./welcome.js";
@@ -36,11 +37,15 @@ export function startChatWindow(): void {
   const orb = createOrb(byId<HTMLDivElement>("orb"), byId<HTMLParagraphElement>("orb-state"));
   // The newest reply types itself out; a click or a key shows it at once.
   const typist = createTypist(prefersReducedMotion);
+  // Sound effects: off unless the top bar's switch is on; no audio is made until the first sound.
+  const sounds = createSounds(() => (typeof AudioContext === "function" ? new AudioContext() : undefined));
   // While Sage's own box asks before an action: an amber card in the chat with the same question,
   // then the answer. Only news; the box is answered in the box.
   const asking = createAskingCards(messages);
   sage.onAsking((event) => {
-    asking.handle(event);
+    const change = asking.handle(event);
+    if (change === "opened") sounds.play("asking");
+    else if (change === "allowed") sounds.play("allowed");
   });
 
   function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
@@ -66,6 +71,7 @@ export function startChatWindow(): void {
     const fromVoice = voice.takeFromVoice();
     input.value = "";
     addMessage("user", text);
+    sounds.play("send");
     const pending = addMessage("assistant", "Thinking…", true);
     sendButton.disabled = true;
     orb.update({ thinking: true });
@@ -176,6 +182,29 @@ export function startChatWindow(): void {
   }
   tabs.chat.addEventListener("click", () => openChat());
   tabs.settings.addEventListener("click", () => show("settings"));
+
+  // --- Sound switch ---
+
+  const soundSwitch = byId<HTMLButtonElement>("sound-toggle");
+
+  function showSound(on: boolean): void {
+    sounds.setOn(on);
+    soundSwitch.setAttribute("aria-pressed", String(on));
+    soundSwitch.title = on ? "Sound effects are on" : "Sound effects are off";
+  }
+
+  // Saved straight away, on its own: it never saves (or loses) unsaved changes in Settings.
+  soundSwitch.addEventListener("click", () => {
+    const on = !sounds.on;
+    showSound(on);
+    if (on) sounds.play("send");
+    const undo = () => {
+      if (sounds.on === on) showSound(!on);
+    };
+    void sage.setSound(on).then((result) => {
+      if (!result.ok) undo();
+    }, undo);
+  });
 
   // --- Notices ---
 
@@ -374,6 +403,7 @@ export function startChatWindow(): void {
     onlineUrl.value = settings.online.baseUrl;
     onlineModel.value = settings.online.model;
     speakReplies.value = settings.speakReplies;
+    showSound(settings.sound);
     themeChoice.value = settings.theme;
     applyTheme(settings.theme);
     renderKeyStatus();

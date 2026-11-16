@@ -19,6 +19,15 @@
         <button type="button" id="tab-chat" class="tab active" aria-pressed="true">Chat</button>
         <button type="button" id="tab-settings" class="tab" aria-pressed="false">Settings</button>
       </nav>
+      <button
+        type="button"
+        id="sound-toggle"
+        class="sound-toggle"
+        aria-pressed="false"
+        title="Sound effects are off"
+      >
+        Sound
+      </button>
     </header>
 
     <main id="view-welcome" class="view welcome" hidden>
@@ -225,6 +234,7 @@
             <option value="light">Light</option>
             <option value="system">Match system</option>
           </select>
+          <p class="hint">Sound effects are switched on and off with Sound in the top bar.</p>
         </fieldset>
 
         <div class="row">
