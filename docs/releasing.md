@@ -38,6 +38,9 @@ How it is kept safe:
   never pasted into the script itself, so a strange tag name can't become a command.
 - **No stored credentials.** Checkout doesn't keep its token (`persist-credentials: false`), and the
   workflow uses no secrets: only the short-lived token GitHub gives each run.
+- **No shared cache.** The build turns off setup-node's npm cache (`package-manager-cache: false`),
+  because a release build shouldn't reuse a cache that other workflow runs can write to; `npm ci`
+  downloads every package fresh and checks it against `package-lock.json`.
 - **Only release versions.** Tags must look like `v1.2.3`, and a tag that doesn't match `package.json`
   stops the build before anything is published.
 
@@ -70,7 +73,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
-          cache: npm
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
