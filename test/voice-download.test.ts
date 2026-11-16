@@ -83,10 +83,12 @@ async function attempt(dataDir: string, model: SpeechModel, signal = new AbortCo
   }
 }
 
-/** Everything left in `<userData>/models`. */
+/** Everything left in `<userData>/models`, with `/` between folders on every system. */
 async function leftovers(dataDir: string): Promise<string[]> {
   try {
-    return (await readdir(join(dataDir, "models"), { recursive: true })).sort();
+    return (await readdir(join(dataDir, "models"), { recursive: true }))
+      .map((path) => path.replaceAll("\\", "/"))
+      .sort();
   } catch {
     return [];
   }
