@@ -30,9 +30,10 @@ workflow; the exact steps follow under [Making a release](#making-a-release-step
 ## Technical details: the release workflow
 
 The workflow below builds those three files on a GitHub Windows runner whenever a version tag such as
-`v0.1.0` is pushed. The workflow is on `main` (added in #16) as `.github/workflows/release.yml`. The file
-on `main` is the one that runs, and Renovate keeps its versions up to date there, so the copy below can
-fall behind until the next docs update. If they differ, the file on `main` wins.
+`v0.1.0` is pushed. The real file is `.github/workflows/release.yml` on `main` (added in [#16](https://github.com/HoneyBearTech/sage-assistant/pull/16)). A
+release runs the version of that file in the tagged commit (for a normal release, the latest `main`).
+Renovate keeps its versions up to date, so the copy below can fall behind until the next docs update.
+If they differ, the real file wins.
 
 What it does, in order:
 
@@ -235,7 +236,7 @@ Notes on the workflow:
 
 ## Making a release, step by step
 
-1. **Add the release workflow, once.** This is already done for this repository (#16). It is kept here
+1. **Add the release workflow, once.** This is already done for this repository ([#16](https://github.com/HoneyBearTech/sage-assistant/pull/16)). It is kept here
    for anyone setting up their own copy of Sage. If `.github/workflows/release.yml` isn't on `main` yet,
    add it first; without it, pushing a tag does nothing. On the repository's page on GitHub:
    1. Choose **Add file → Create new file**.
