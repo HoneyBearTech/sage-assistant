@@ -17,10 +17,11 @@ import type { Launcher } from "../core/apps.js";
 import { EncryptedFileKeyStore, type Encryptor, osEncryptionUsable } from "../core/keystore.js";
 import { consoleSink } from "../core/log.js";
 import { createSage } from "../core/sage.js";
+import { GUIDE_DETAIL, GUIDE_QUESTION, PULL_DETAIL, pullQuestion } from "../core/setup.js";
 import type { ConfirmPresenter } from "../core/skills/gate.js";
 import { DOWNLOAD_DETAIL, DOWNLOAD_QUESTION } from "../core/voice/model.js";
 import type { HelperProcess } from "../core/voice/transcriber.js";
-import { CHANNELS } from "../shared/api.js";
+import { CHANNELS, type ModelChoice } from "../shared/api.js";
 import { createIpcHandlers } from "./ipc.js";
 import { createNotifier } from "./notify.js";
 import {
@@ -100,6 +101,32 @@ async function confirmVoiceDownload(): Promise<boolean> {
   return answer.response === 1;
 }
 
+// The Welcome screen's two questions, asked here in the main process's own box; Not now is the
+// default. The window can only ask for them.
+async function askFirst(message: string, detail: string, yes: string): Promise<boolean> {
+  const options = {
+    type: "question" as const,
+    title: "Sage setup",
+    message,
+    detail,
+    buttons: ["Not now", yes],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  };
+  const answer = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+  return answer.response === 1;
+}
+
+const setupParts = {
+  confirmPull: (choice: ModelChoice) => askFirst(pullQuestion(choice), PULL_DETAIL, "Download"),
+  confirmOpenGuide: () => askFirst(GUIDE_QUESTION, GUIDE_DETAIL, "Open"),
+  // Only ever called with the install guide's fixed address (src/core/setup.ts).
+  openExternal: (url: string) => shell.openExternal(url),
+};
+
 // The speech helper: a separate process, so a slow or crashing recognition can't freeze or close
 // the window. Its output is dropped; it never sees the network.
 function startVoiceHelper(): HelperProcess {
@@ -167,9 +194,13 @@ async function start(): Promise<void> {
     launch,
     logSink: consoleSink,
     voice: { confirmDownload: confirmVoiceDownload, startHelper: startVoiceHelper },
+    setup: setupParts,
   });
   await sage.voice.removeLeftovers();
-  app.on("will-quit", () => sage.voice.dispose());
+  app.on("will-quit", () => {
+    sage.voice.dispose();
+    sage.setup.dispose();
+  });
 
   const handlers = createIpcHandlers(sage, {
     chooseFolder: async () => {

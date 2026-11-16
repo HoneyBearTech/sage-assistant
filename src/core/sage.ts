@@ -3,6 +3,7 @@ import { Assistant } from "./assistant.js";
 import type { Brain, FetchLike } from "./brain/brain.js";
 import { LocalBrain } from "./brain/local.js";
 import { OnlineBrain, serviceOrigin } from "./brain/online.js";
+import { RunnerClient } from "./brain/runner.js";
 import type { Launcher } from "./apps.js";
 import { type KeyStore, ServiceKeys } from "./keystore.js";
 import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
@@ -13,6 +14,7 @@ import { type Clock, type Notifier, ReminderScheduler, systemClock } from "./sch
 import { DuckDuckGoProvider } from "./search/duckduckgo.js";
 import type { SearchProvider } from "./search/search.js";
 import { type Settings, SettingsStore } from "./settings.js";
+import { Setup, type SetupDeps } from "./setup.js";
 import { ActionLog } from "./skills/action-log.js";
 import { builtinSkills, type PathOpener } from "./skills/builtin.js";
 import { ApprovalGate, type ConfirmPresenter } from "./skills/gate.js";
@@ -39,7 +41,23 @@ export interface SageDeps {
   localPort?: number;
   /** Voice's parts from the main process; without them voice says it isn't available. */
   voice?: VoiceParts;
+  /** First-run setup's parts from the main process; without them nothing is asked or opened. */
+  setup?: SetupParts;
 }
+
+/** The main process's two boxes for the Welcome screen, and the web browser. */
+export type SetupParts = Pick<
+  SetupDeps,
+  "confirmPull" | "confirmOpenGuide" | "openExternal" | "timers" | "stallMs"
+>;
+
+const NO_SETUP: SetupParts = {
+  confirmPull: async () => false,
+  confirmOpenGuide: async () => false,
+  openExternal: async () => {
+    throw new Error("No web browser here.");
+  },
+};
 
 export interface VoiceParts {
   /** The main process's own box: "Voice needs a 44 MB speech file … Download it now?" */
@@ -72,6 +90,8 @@ export interface Sage {
   redactor: SecretRedactor;
   /** The speech file, its download, and turning recordings into text. */
   voice: Voice;
+  /** The Welcome screen's requests: the local model runner, a model download, the install guide. */
+  setup: Setup;
 }
 
 export function createSage(deps: SageDeps): Sage {
@@ -136,6 +156,17 @@ export function createSage(deps: SageDeps): Sage {
     ...(voiceParts.model ? { model: voiceParts.model } : {}),
   });
 
+  const setup = new Setup({
+    settings,
+    runner: new RunnerClient({
+      ...(deps.localPort ? { port: deps.localPort } : {}),
+      ...(deps.fetch ? { fetch: deps.fetch } : {}),
+    }),
+    logger,
+    ...NO_SETUP,
+    ...deps.setup,
+  });
+
   return {
     assistant,
     settings,
@@ -149,6 +180,7 @@ export function createSage(deps: SageDeps): Sage {
     logger,
     redactor,
     voice,
+    setup,
   };
 }
 

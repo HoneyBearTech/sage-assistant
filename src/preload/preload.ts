@@ -17,6 +17,12 @@ const api: SageApi = {
   downloadVoice: () => ipcRenderer.invoke(CHANNELS.downloadVoice),
   cancelVoiceDownload: () => ipcRenderer.invoke(CHANNELS.cancelVoiceDownload),
   transcribe: (pcm) => ipcRenderer.invoke(CHANNELS.transcribe, { pcm }),
+  runnerStatus: () => ipcRenderer.invoke(CHANNELS.runnerStatus),
+  pullModel: (choice) => ipcRenderer.invoke(CHANNELS.pullModel, { choice }),
+  pullStatus: () => ipcRenderer.invoke(CHANNELS.pullStatus),
+  cancelPull: () => ipcRenderer.invoke(CHANNELS.cancelPull),
+  openInstallGuide: () => ipcRenderer.invoke(CHANNELS.openInstallGuide),
+  finishSetup: () => ipcRenderer.invoke(CHANNELS.finishSetup),
 };
 
 contextBridge.exposeInMainWorld("sage", api);

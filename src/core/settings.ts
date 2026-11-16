@@ -1,11 +1,12 @@
 import { join } from "node:path";
 import { z } from "zod";
+import { SAGE_MODELS } from "../shared/api.js";
 import { type CorruptFileHandler, readJson, writeJsonAtomic } from "./json-file.js";
 import type { Logger } from "./log.js";
 import { Serial } from "./serial.js";
 
-/** A small model that can use tools and runs on most PCs. */
-export const DEFAULT_LOCAL_MODEL = "qwen3:4b";
+/** A small model that can use tools and runs on most PCs: the Standard one of Sage's two. */
+export const DEFAULT_LOCAL_MODEL = SAGE_MODELS.standard.name;
 
 /** The choices for "Read replies aloud". */
 export const SPEAK_REPLIES = ["voice", "always", "never"] as const;
@@ -49,6 +50,12 @@ export const settingsSchema = z.object({
    * version: a settings file saved before it existed loads unchanged, with the default.
    */
   speakReplies: z.enum(SPEAK_REPLIES).default("voice"),
+  /**
+   * The Welcome screen was finished or skipped, so it isn't shown at start-up. Added without a new
+   * version: a settings file saved before it existed loads unchanged, and shows the Welcome screen
+   * once. Changed only by the Welcome screen's own requests, never by a Settings save.
+   */
+  setupDone: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -69,15 +76,17 @@ export class SettingsStore {
   }
 
   load(): Promise<Settings> {
-    return this.serial.run(async () => {
-      const result = await readJson(this.path, settingsSchema);
-      if (result.status === "ok") return result.value;
-      if (result.status === "invalid") {
-        this.logger.warn(`settings.json couldn't be read; it was kept as ${result.movedTo}`);
-        this.onCorrupt?.(result.movedTo);
-      }
-      return defaultSettings();
-    });
+    return this.serial.run(() => this.read());
+  }
+
+  private async read(): Promise<Settings> {
+    const result = await readJson(this.path, settingsSchema);
+    if (result.status === "ok") return result.value;
+    if (result.status === "invalid") {
+      this.logger.warn(`settings.json couldn't be read; it was kept as ${result.movedTo}`);
+      this.onCorrupt?.(result.movedTo);
+    }
+    return defaultSettings();
   }
 
   /** Validates and saves. Returns the saved settings, or the reason they were refused. */
@@ -87,6 +96,23 @@ export class SettingsStore {
       if (!result.success) return { ok: false, message: z.prettifyError(result.error) };
       await writeJsonAtomic(this.path, result.data);
       return { ok: true, settings: result.data };
+    });
+  }
+
+  /**
+   * Loads, changes and saves in one step, under the same lock as every other load and save, so
+   * two changes never overwrite each other. `change` gets the saved settings and returns the new
+   * ones, which are validated like any save. Returns the settings before and after.
+   */
+  update(
+    change: (current: Settings) => unknown,
+  ): Promise<{ ok: true; settings: Settings; previous: Settings } | { ok: false; message: string }> {
+    return this.serial.run(async () => {
+      const previous = await this.read();
+      const result = settingsSchema.safeParse(change(structuredClone(previous)));
+      if (!result.success) return { ok: false, message: z.prettifyError(result.error) };
+      await writeJsonAtomic(this.path, result.data);
+      return { ok: true, settings: result.data, previous };
     });
   }
 }

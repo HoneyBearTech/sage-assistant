@@ -59,8 +59,14 @@ test("the page's CSP is strict and matches the one in the code", async () => {
 });
 
 test("the renderer never inserts text as HTML", async () => {
-  const source = await readFile(join(root, "src", "renderer", "renderer.ts"), "utf8");
-  assert.doesNotMatch(source, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);
+  for (const file of ["renderer.ts"]) {
+    const source = await readFile(join(root, "src", "renderer", file), "utf8");
+    assert.doesNotMatch(
+      source,
+      /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/,
+      file,
+    );
+  }
 });
 
 test("the preload exposes only the named methods, never ipcRenderer itself", async () => {
@@ -171,12 +177,15 @@ test("nothing in the app sends telemetry or analytics", async () => {
   const all = sources.join("\n");
   assert.doesNotMatch(all, /telemetry|analytics|sentry|crashReporter|mixpanel|posthog|segment\.io/i);
   // The only network addresses in the app: the local runner, the search page, the user's own
-  // service, and the three files of the speech model, pinned to one commit on Hugging Face.
+  // service, the three files of the speech model, pinned to one commit on Hugging Face, and the
+  // install guide's one fixed address.
   const speechModel =
     "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/d1e6c30921780b8508d04b492dfb3ce8a51605d4/";
-  const allowed = new Set(
-    ["encoder_model.ort", "decoder_model_merged.ort", "tokens.txt"].map((name) => `${speechModel}${name}`),
-  );
+  const allowed = new Set([
+    ...["encoder_model.ort", "decoder_model_merged.ort", "tokens.txt"].map((name) => `${speechModel}${name}`),
+    // The one page Sage can open in the web browser, after asking: its own install guide.
+    "https://github.com/HoneyBearTech/sage-assistant/blob/main/docs/installing.md#local-model-runner",
+  ]);
   const urls = [...all.matchAll(/https?:\/\/[^\s"'`)]+/g)].map((m) => m[0]);
   for (const url of urls) {
     assert.ok(
@@ -221,4 +230,24 @@ test("the speech helper never logs, writes files or opens a connection", async (
     const text = await readFile(join(root, file), "utf8");
     assert.doesNotMatch(text, /console\.|node:fs|fetch\(|node:net|node:http|writeFile/, file);
   }
+});
+
+test("Sage opens one web address, its install guide, and only after asking", async () => {
+  const calls: string[] = [];
+  for (const entry of await readdir(join(root, "src"), { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
+    const text = await readFile(join(entry.parentPath, entry.name), "utf8");
+    for (const match of text.matchAll(/openExternal\(([^)]*)\)/g)) calls.push(`${entry.name}: ${match[1]}`);
+  }
+  // main.ts hands Electron's openExternal to Setup, which calls it with the fixed address only.
+  assert.deepEqual(calls.sort(), ["main.ts: url", "setup.ts: INSTALL_GUIDE_URL"]);
+  const setup = await readFile(join(root, "src", "core", "setup.ts"), "utf8");
+  const opening = setup.slice(setup.indexOf("async openInstallGuide("), setup.indexOf("async finish("));
+  assert.ok(
+    opening.indexOf("confirmOpenGuide()") < opening.indexOf("openExternal(INSTALL_GUIDE_URL)"),
+    "asked before opening",
+  );
+  // The window's request carries nothing that could become an address.
+  const preload = await readFile(join(root, "src", "preload", "preload.ts"), "utf8");
+  assert.match(preload, /openInstallGuide: \(\) => ipcRenderer\.invoke\(CHANNELS\.openInstallGuide\),/);
 });

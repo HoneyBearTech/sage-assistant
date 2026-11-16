@@ -53,11 +53,59 @@ test("a settings file saved before voice loads unchanged, with Read replies alou
   await writeFile(join(dir, "settings.json"), text);
   const { logger, lines } = captureLogs();
   const loaded = await new SettingsStore(dir, logger).load();
-  assert.deepEqual(loaded, { ...before, speakReplies: "voice" });
+  assert.deepEqual(loaded, { ...before, speakReplies: "voice", setupDone: false });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
   assert.equal(defaultSettings().speakReplies, "voice");
   assert.equal(defaultSettings().version, 1);
+});
+
+test("a settings file saved before first-run setup loads unchanged, and shows the Welcome screen once", async (t) => {
+  const dir = await tempDir(t);
+  // Exactly what Sage wrote before "set up" existed (with voice's setting).
+  const before = {
+    version: 1,
+    brain: "local",
+    local: { model: "qwen3:1.7b" },
+    online: { baseUrl: "https://api.example.com/v1", model: "m" },
+    apps: [{ name: "Editor", path: "/usr/bin/editor", args: [] }],
+    folders: ["/docs"],
+    speakReplies: "always",
+  };
+  const text = `${JSON.stringify(before, null, 2)}\n`;
+  await writeFile(join(dir, "settings.json"), text);
+  const { logger, lines } = captureLogs();
+  const store = new SettingsStore(dir, logger);
+  assert.deepEqual(await store.load(), { ...before, setupDone: false });
+  assert.deepEqual(lines, [], "not treated as unreadable");
+  assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
+  assert.equal(defaultSettings().setupDone, false);
+  for (const bad of ["yes", 1, null]) {
+    assert.equal((await store.save({ ...before, setupDone: bad })).ok, false, String(bad));
+  }
+});
+
+test("update changes only what it is given, under the settings lock, and validates the result", async (t) => {
+  const store = new SettingsStore(await tempDir(t), captureLogs().logger);
+  assert.ok((await store.save({ ...defaultSettings(), folders: ["/docs"], speakReplies: "never" })).ok);
+  // Two changes at once: neither overwrites the other.
+  const [first, second] = await Promise.all([
+    store.update((current) => ({ ...current, setupDone: true })),
+    store.update((current) => ({ ...current, local: { model: "qwen3:1.7b" } })),
+  ]);
+  assert.ok(first.ok && second.ok);
+  assert.equal(first.previous.setupDone, false);
+  assert.equal(second.previous.setupDone, true, "the second change sees the first");
+  assert.deepEqual(await store.load(), {
+    ...defaultSettings(),
+    folders: ["/docs"],
+    speakReplies: "never",
+    setupDone: true,
+    local: { model: "qwen3:1.7b" },
+  });
+  const refused = await store.update((current) => ({ ...current, brain: "elsewhere" }));
+  assert.equal(refused.ok, false);
+  assert.equal((await store.load()).brain, "local", "a refused change saves nothing");
 });
 
 test("Read replies aloud is saved, and only its three choices are accepted", async (t) => {
