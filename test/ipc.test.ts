@@ -385,6 +385,21 @@ test("toPublicSettings copies only the public fields", () => {
   assert.deepEqual(settings.apps[0]!.args, ["x"], "a copy, not the stored object");
 });
 
+test("a Settings save keeps the stored day of the last morning brief, whatever the window sends", async (t) => {
+  const { sage, handlers } = await setup(t);
+  await sage.settings.update((current) => ({ ...current, lastBrief: "2026-11-15" }));
+  const shown = (await handlers[CHANNELS.getSettings](undefined)) as Record<string, unknown>;
+  for (const sent of [{}, { lastBrief: null }, { lastBrief: "2099-01-01" }, { lastBrief: "not a day" }]) {
+    const result = (await handlers[CHANNELS.saveSettings]({ ...shown, morningBrief: true, ...sent })) as {
+      ok: boolean;
+    };
+    assert.equal(result.ok, true, JSON.stringify(sent));
+    const saved = await sage.settings.load();
+    assert.equal(saved.lastBrief, "2026-11-15", JSON.stringify(sent));
+    assert.equal(saved.morningBrief, true, "the rest of the save went through");
+  }
+});
+
 test("voice status and the download go through the main process, which asks first", async (t) => {
   const asked: number[] = [];
   const sage = createSage({

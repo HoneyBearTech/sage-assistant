@@ -66,12 +66,19 @@ test("Home is the first tab, before Chat and Settings, and the tabs are plain bu
       ["settings", "false", "Settings"],
     ],
   );
-  // Every Home control is a real button with its own words, so it has a name and works by keyboard.
+  // Every Home control is a real button with its own words, so it has a name and works by keyboard:
+  // Enter and Space press a native button in the browser itself. The fake DOM has no such built-in
+  // behaviour, so a key test here would only test the fake; these checks stand in for one, and the
+  // Windows checklist has the keyboard walk-through.
   for (const [id, words] of [
+    ["tab-home", "Home"],
     ["home-talk", "Talk to Sage"],
     ["home-brief", "Brief me"],
+    ["home-stop-speaking", "Stop speaking"],
   ]) {
-    assert.match(html, new RegExp(`<button type="button" id="${id}"[^>]*>${words}</button>`));
+    const button = html.match(new RegExp(`<button type="button" id="${id}"([^>]*)>${words}</button>`));
+    assert.ok(button, id);
+    assert.doesNotMatch(button[1]!, /tabindex|disabled|aria-hidden|role=/, `${id} stays a plain button`);
   }
   // The panels are named by their headings.
   for (const name of ["today", "notes", "status", "brief"]) {
