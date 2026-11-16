@@ -1,5 +1,6 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
 import { createVoiceControls } from "./voice-controls.js";
+import { createWelcome } from "./welcome.js";
 
 // The chat window. It runs sandboxed with no Node access; `window.sage` (from the preload) is its
 // only way to reach the rest of Sage. Text is always inserted with textContent, never as HTML.
@@ -101,10 +102,13 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
 
 // --- Voice ---
 
+const chatView = byId<HTMLElement>("view-chat");
+
 // The logic is in voice-controls.ts; this only finds the elements.
 const voice = createVoiceControls(
   sage,
   {
+    chatView,
     input,
     talkButton: byId<HTMLButtonElement>("talk"),
     voiceStatus: byId<HTMLSpanElement>("voice-status"),
@@ -118,22 +122,32 @@ const voice = createVoiceControls(
 
 // --- Tabs ---
 
+const tabBar = byId<HTMLElement>("tabs");
 const tabs = { chat: byId<HTMLButtonElement>("tab-chat"), settings: byId<HTMLButtonElement>("tab-settings") };
-const views = { chat: byId<HTMLElement>("view-chat"), settings: byId<HTMLElement>("view-settings") };
+const views = {
+  chat: chatView,
+  settings: byId<HTMLElement>("view-settings"),
+  welcome: byId<HTMLElement>("view-welcome"),
+};
 
-function show(view: "chat" | "settings"): void {
+// All three views start hidden; the first one is chosen once the settings have loaded.
+function show(view: "chat" | "settings" | "welcome"): void {
+  for (const name of ["chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
+  // The Welcome screen has no tab: it is left with Skip setup, Start chatting or the online choice.
+  tabBar.hidden = view === "welcome";
   for (const name of ["chat", "settings"] as const) {
-    views[name].hidden = name !== view;
     tabs[name].classList.toggle("active", name === view);
     tabs[name].setAttribute("aria-pressed", String(name === view));
   }
   // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
   // startup and again after each successful save.
 }
-tabs.chat.addEventListener("click", () => {
+/** Every way into Chat goes through here, so held notices are confirmed once they can be seen. */
+function openChat(): void {
   show("chat");
   void confirmShown();
-});
+}
+tabs.chat.addEventListener("click", () => openChat());
 tabs.settings.addEventListener("click", () => show("settings"));
 
 // --- Notices ---
@@ -200,8 +214,12 @@ async function collectNotices(): Promise<void> {
 }
 
 document.addEventListener("visibilitychange", () => void confirmShown());
-void collectNotices();
-setInterval(() => void collectNotices(), NOTICE_POLL_MS);
+
+/** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
+function startNotices(): void {
+  void collectNotices();
+  setInterval(() => void collectNotices(), NOTICE_POLL_MS);
+}
 
 // --- Settings ---
 
@@ -368,5 +386,109 @@ byId<HTMLButtonElement>("add-folder").addEventListener("click", () => {
   renderLists();
 });
 
-void loadSettings();
+// --- Welcome ---
+
+// The logic is in welcome.ts; this only finds the elements.
+const welcome = createWelcome(
+  sage,
+  {
+    skip: byId<HTMLButtonElement>("welcome-skip"),
+    steps: {
+      place: byId<HTMLElement>("step-place"),
+      runner: byId<HTMLElement>("step-runner"),
+      model: byId<HTMLElement>("step-model"),
+      done: byId<HTMLElement>("step-done"),
+    },
+    headings: {
+      place: byId<HTMLElement>("step-place-heading"),
+      runner: byId<HTMLElement>("step-runner-heading"),
+      model: byId<HTMLElement>("step-model-heading"),
+      done: byId<HTMLElement>("step-done-heading"),
+    },
+    placeLocal: byId<HTMLButtonElement>("place-local"),
+    placeOnline: byId<HTMLButtonElement>("place-online"),
+    runnerStatus: byId<HTMLParagraphElement>("runner-status"),
+    runnerInstall: byId<HTMLDivElement>("runner-install"),
+    runnerCheck: byId<HTMLButtonElement>("runner-check"),
+    runnerNext: byId<HTMLButtonElement>("runner-next"),
+    openGuide: byId<HTMLButtonElement>("open-guide"),
+    guideStatus: byId<HTMLParagraphElement>("guide-status"),
+    guideAddress: byId<HTMLParagraphElement>("guide-address"),
+    modelStandard: byId<HTMLInputElement>("model-standard"),
+    modelSmaller: byId<HTMLInputElement>("model-smaller"),
+    standardMark: byId<HTMLSpanElement>("model-standard-mark"),
+    smallerMark: byId<HTMLSpanElement>("model-smaller-mark"),
+    modelDownload: byId<HTMLButtonElement>("model-download"),
+    modelCancel: byId<HTMLButtonElement>("model-cancel"),
+    modelProgress: byId<HTMLProgressElement>("model-progress"),
+    modelStatus: byId<HTMLParagraphElement>("model-status"),
+    modelSkills: byId<HTMLParagraphElement>("model-skills"),
+    modelNext: byId<HTMLButtonElement>("model-next"),
+    doneSummary: byId<HTMLParagraphElement>("done-summary"),
+    doneVoice: byId<HTMLParagraphElement>("done-voice"),
+    startChatting: byId<HTMLButtonElement>("start-chatting"),
+  },
+  {
+    leave: (to) => {
+      if (to === "chat") {
+        openChat();
+        input.focus();
+      } else {
+        show("settings");
+      }
+      void refreshAfterSetup(to === "settings");
+    },
+  },
+);
+
+function openWelcome(): void {
+  show("welcome");
+  welcome.open();
+}
+byId<HTMLButtonElement>("setup-again").addEventListener("click", () => openWelcome());
+
+/**
+ * After the Welcome screen: only what it may have changed (the brain, the local model, "set up")
+ * is updated, so other unsaved changes in the Settings form stay. Choosing an online service
+ * picks it in the form, unsaved, for the user to fill in and save.
+ */
+async function refreshAfterSetup(online: boolean): Promise<void> {
+  let latest: PublicSettings;
+  try {
+    latest = await sage.getSettings();
+  } catch {
+    return;
+  }
+  if (!settings) {
+    settings = latest;
+    render();
+  } else {
+    settings.brain = latest.brain;
+    settings.local.model = latest.local.model;
+    settings.setupDone = latest.setupDone;
+    localModel.value = latest.local.model;
+    brainStatus.textContent = describeBrain(settings);
+    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+      radio.checked = radio.value === latest.brain;
+    }
+  }
+  if (online) {
+    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+      radio.checked = radio.value === "online";
+    }
+    settingsStatus.textContent = ONLINE_HINT;
+  }
+}
+
+const ONLINE_HINT =
+  "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
+
+// The first view: the Welcome screen until setup is finished or skipped, otherwise Chat. If the
+// settings can't be read, Chat opens.
+void loadSettings()
+  .then(
+    () => (settings?.setupDone === false ? openWelcome() : openChat()),
+    () => openChat(),
+  )
+  .then(startNotices);
 input.focus();

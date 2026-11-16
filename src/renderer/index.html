@@ -15,13 +15,81 @@
     <header class="bar">
       <h1 class="brand">Sage</h1>
       <span id="brain-status" class="status"></span>
-      <nav class="tabs">
+      <nav id="tabs" class="tabs">
         <button type="button" id="tab-chat" class="tab active" aria-pressed="true">Chat</button>
         <button type="button" id="tab-settings" class="tab" aria-pressed="false">Settings</button>
       </nav>
     </header>
 
-    <main id="view-chat" class="view">
+    <main id="view-welcome" class="view welcome" hidden>
+      <div class="welcome-top">
+        <p class="hint">Welcome to Sage. A few steps get it ready; you can change everything later in Settings.</p>
+        <button type="button" id="welcome-skip">Skip setup</button>
+      </div>
+
+      <section id="step-place" class="step">
+        <h2 id="step-place-heading" tabindex="-1">Where should Sage think?</h2>
+        <p class="hint">On this computer, nothing you type leaves the PC. An online service is set up in Settings.</p>
+        <div class="row">
+          <button type="button" id="place-local" class="primary">On this computer (recommended, private)</button>
+          <button type="button" id="place-online">An online service</button>
+        </div>
+      </section>
+
+      <section id="step-runner" class="step" hidden>
+        <h2 id="step-runner-heading" tabindex="-1">The local model runner</h2>
+        <p class="hint">Sage thinks on this computer through a separate program, the local model runner.</p>
+        <p id="runner-status" role="status"></p>
+        <div id="runner-install" hidden>
+          <ol class="steps">
+            <li>Open the install guide and follow its steps to install the local model runner.</li>
+            <li>Start the runner.</li>
+            <li>Come back here and choose Check again.</li>
+          </ol>
+          <button type="button" id="open-guide">Open the install guide</button>
+          <p id="guide-status" class="hint" role="status"></p>
+          <p id="guide-address" class="address" hidden></p>
+        </div>
+        <div class="row">
+          <button type="button" id="runner-check">Check again</button>
+          <button type="button" id="runner-next" class="primary" disabled>Next</button>
+        </div>
+      </section>
+
+      <section id="step-model" class="step" hidden>
+        <h2 id="step-model-heading" tabindex="-1">Choose a model</h2>
+        <p class="hint">The model is what Sage thinks with. The local model runner downloads it once.</p>
+        <label class="choice">
+          <input type="radio" id="model-standard" name="welcome-model" value="standard" checked />
+          Standard (qwen3:4b, about 2.5 GB): Sage's default.
+          <span id="model-standard-mark" class="mark"></span>
+        </label>
+        <label class="choice">
+          <input type="radio" id="model-smaller" name="welcome-model" value="smaller" />
+          Smaller, for PCs with less memory (qwen3:1.7b, about 1.4 GB): faster, but makes more mistakes.
+          <span id="model-smaller-mark" class="mark"></span>
+        </label>
+        <div class="row">
+          <button type="button" id="model-download" class="primary">Download</button>
+          <button type="button" id="model-cancel" hidden>Cancel</button>
+        </div>
+        <progress id="model-progress" max="1" value="0" hidden></progress>
+        <p id="model-status" role="status"></p>
+        <p id="model-skills" class="hint"></p>
+        <div class="row">
+          <button type="button" id="model-next" class="primary" hidden>Next</button>
+        </div>
+      </section>
+
+      <section id="step-done" class="step" hidden>
+        <h2 id="step-done-heading" tabindex="-1">Sage is ready</h2>
+        <p id="done-summary"></p>
+        <p id="done-voice" class="hint"></p>
+        <button type="button" id="start-chatting" class="primary">Start chatting</button>
+      </section>
+    </main>
+
+    <main id="view-chat" class="view" hidden>
       <ol id="messages" class="messages" aria-live="polite"></ol>
       <div class="voice-bar">
         <span id="voice-status" class="hint" role="status"></span>
@@ -72,6 +140,10 @@
             <button type="button" id="clear-key">Remove key</button>
           </div>
           <p id="key-status" class="hint"></p>
+          <div class="row">
+            <button type="button" id="setup-again">Set up Sage</button>
+            <span class="hint">Check the local model runner, or download one of Sage's models.</span>
+          </div>
         </fieldset>
 
         <fieldset>

@@ -59,7 +59,7 @@ test("the page's CSP is strict and matches the one in the code", async () => {
 });
 
 test("the renderer never inserts text as HTML", async () => {
-  for (const file of ["renderer.ts"]) {
+  for (const file of ["renderer.ts", "welcome.ts", "welcome-text.ts"]) {
     const source = await readFile(join(root, "src", "renderer", file), "utf8");
     assert.doesNotMatch(
       source,
