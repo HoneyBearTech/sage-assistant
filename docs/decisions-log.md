@@ -2,6 +2,35 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - biome-2-6-8
+
+**Context:** the owner asked to "fix the Biome PR". Renovate's pull request #4 moves Biome from 2.5.15
+to 2.6, and its checks failed. Biome 2.6 started formatting Markdown files, so every doc failed the
+format check (it wanted to pad tables with spaces and change the italics style). The code itself passed.
+The `$schema` line in `biome.jsonc` also needed the new version number. The team can't push to
+Renovate's own branch, so the update was made in this job's pull request instead.
+
+**Decisions:**
+- **Biome 2.6.8, exact version**, the same as Renovate's update. The lockfile changes only Biome's own
+  packages. Two new optional packages for Android are listed by Biome 2.6.8 itself, and are never
+  installed on Windows or Linux. None of the changed packages runs an install script.
+- **Biome's Markdown formatter is off** (`"markdown": { "formatter": { "enabled": false } }` in
+  `biome.jsonc`, with a comment). The docs are hand-written prose, wrapped by hand and reviewed in pull
+  requests. The linter and the formatters for code and JSON are unchanged.
+  - *Rejected:* letting Biome reformat every doc. It is a large change with no gain for readers, and it
+    would make the docs' history harder to follow.
+  - *Rejected:* leaving `.md` files out of Biome's file list. Turning off only the Markdown formatter is
+    narrower, and keeps any future Markdown checks Biome adds.
+- **Docs that name the Biome version** (the repo's guidelines, CONTRIBUTING and the architecture page)
+  now say 2.6.8.
+
+**Review:** the Security Officer, a second security review and the Auditor all found nothing to fix.
+`npm audit` found no vulnerabilities, and the registry signatures were verified. QA and the plan check
+were skipped because the change is small. No fix rounds were needed.
+
+**Follow-up:** Renovate's #4 is replaced by this pull request. Renovate should close it on its next run
+after this one is merged; if it doesn't, the owner can close it by hand.
+
 ## 2026-11-16 - renovate
 
 **Context:** the owner asked: "This will use Renovate instead of Dependabot." By then the owner had added

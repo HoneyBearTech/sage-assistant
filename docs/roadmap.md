@@ -36,6 +36,7 @@ later, and what Sage will not do.
   - [x] turn on private vulnerability reporting (SECURITY.md relies on it);
   - [ ] run the [Windows checklist](windows-checklist.md) on a Windows PC.
 - [x] **Dependency updates with Renovate** (`renovate.json`; see [the GitHub checks](github-checks.md)).
+- [x] **Biome 2.6.8**, with Biome's new Markdown formatter turned off (replaces Renovate's #4).
 - [ ] **Owner:** check the settings listed under "Settings to check" in [the GitHub checks](github-checks.md),
       and compare the "Main" ruleset with the recommended branch rule there.
 - [ ] **Owner, optional:** make the DCO check's bot exemption stricter. Check that the commit really comes
