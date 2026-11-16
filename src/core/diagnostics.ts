@@ -61,10 +61,19 @@ export interface DiagnosticsDeps {
   /** Puts text on the clipboard (Electron's clipboard, in the main process). */
   writeClipboard: (text: string) => void;
   system?: SystemFacts;
+  /** The time now, in ms (the clock's); for the copy limits. */
+  now?: () => number;
 }
+
+/** A built text can be copied only this long after it was built... */
+export const DIAGNOSTICS_COPY_MS = 2 * 60_000;
+/** ...and at most this many times. Then Copy diagnostics builds a fresh one. */
+export const DIAGNOSTICS_MAX_COPIES = 3;
 
 export const DIAGNOSTICS_MESSAGES = {
   stale: "Choose Copy diagnostics again, then Copy.",
+  expired: "This text was put together over 2 minutes ago. Choose Copy diagnostics again, then Copy.",
+  tooMany: "This text was already copied 3 times. Choose Copy diagnostics again to copy it again.",
   notCopied: "Sage couldn't copy to the clipboard. Select the text in the box and copy it yourself.",
 } as const;
 
@@ -193,7 +202,7 @@ function plain(value: string): string {
 }
 
 export class Diagnostics {
-  private last: { id: string; text: string } | undefined;
+  private last: { id: string; text: string; builtAt: number; copies: number } | undefined;
   /** Builds are numbered when they start; only the newest one started is kept. */
   private started = 0;
   private readonly system: SystemFacts;
@@ -247,15 +256,29 @@ export class Diagnostics {
     );
     const text = [...DIAGNOSTICS_HEADER, "", ...lines].join("\n");
     if (number !== this.started) return { ok: false, stale: true, message: DIAGNOSTICS_MESSAGES.stale };
-    this.last = { id: `diag-${number}`, text };
+    this.last = { id: `diag-${number}`, text, builtAt: this.now(), copies: 0 };
     return { ok: true, id: this.last.id, text };
   }
 
-  /** Copies the text built last, if `id` names it; the window never supplies the text. */
+  private now(): number {
+    return this.deps.now ? this.deps.now() : Date.now();
+  }
+
+  /**
+   * Copies the text built last, if `id` names it; the window never supplies the text. Only within
+   * DIAGNOSTICS_COPY_MS of the build and at most DIAGNOSTICS_MAX_COPIES times, so the window can't
+   * keep writing the clipboard without the user asking for a fresh text.
+   */
   copy(id: string): Result {
-    if (!this.last || this.last.id !== id) return { ok: false, message: DIAGNOSTICS_MESSAGES.stale };
+    const last = this.last;
+    if (!last || last.id !== id) return { ok: false, message: DIAGNOSTICS_MESSAGES.stale };
+    if (this.now() - last.builtAt > DIAGNOSTICS_COPY_MS) {
+      return { ok: false, message: DIAGNOSTICS_MESSAGES.expired };
+    }
+    if (last.copies >= DIAGNOSTICS_MAX_COPIES) return { ok: false, message: DIAGNOSTICS_MESSAGES.tooMany };
     try {
-      this.deps.writeClipboard(this.last.text);
+      this.deps.writeClipboard(last.text);
+      last.copies += 1;
       return { ok: true };
     } catch {
       return { ok: false, message: DIAGNOSTICS_MESSAGES.notCopied };

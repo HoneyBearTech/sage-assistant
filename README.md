@@ -81,7 +81,10 @@ brain (local, claude, openai, gemini or other), whether the local model runner a
 the model the failed step tried and the saved local model, each with whether it is
 downloaded (named only if it is one of Sage's two), the voice status, and the
 theme and reduced-motion settings. It never holds a key, a web or e-mail address, your user name, a
-folder path, notes or reminders, and **Sage sends it nowhere**: it is copied only when you choose Copy.
+folder path, notes or reminders, and **Sage sends it nowhere**. When you choose **Copy to clipboard**, the window
+asks Sage's main process to copy the text Sage built; the window can't choose the text. A text can be
+copied up to 3 times, within 2 minutes of being put together; after that, choose **Copy diagnostics…**
+again for a fresh one.
 
 ## What Sage can do
 

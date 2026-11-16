@@ -306,14 +306,17 @@ answered and its version, the model the failed step tried (kept in the main proc
 by `Setup` from the closed choice when a model request starts, marked when it downloaded but couldn't
 be saved, cleared on success) and the saved local model, each named only if it is one of Sage's two,
 with whether it is downloaded, the voice status, the theme and reduced motion. It never reads keys, addresses, apps, folders,
-notes or reminders. As a second line of defence each value is scrubbed of the home folder, the user
-name, e-mail addresses, web addresses other than loopback, and every key the redactor knows. Each build is numbered when it
+notes or reminders. As a second line of defence each value is scrubbed: every key the redactor knows first (so no
+later substitution can split a key), then the home folder, e-mail addresses, web addresses other than
+loopback and the user name. Each build is numbered when it
 starts, and the text is kept under that number (`diag-N`), replacing the one before; a build that
 finishes after a newer one started is not kept and comes back marked stale, so the window drops it.
 The kept text is returned for the window to show in
 full in a read-only box. **Copy to clipboard** sends only that id (`copyDiagnostics`); the main process
 writes the text it kept under that id to the clipboard (Electron's `clipboard`, main process only), or
-says to build it again if the id isn't the latest. Nothing is sent anywhere, and nothing is logged.
+says to build it again if the id isn't the latest, if the text was built more than 2 minutes ago
+(`DIAGNOSTICS_COPY_MS`) or if it was already copied 3 times (`DIAGNOSTICS_MAX_COPIES`): the window
+could ask without the user, so these limits keep it from writing the clipboard again and again. Nothing is sent anywhere, and nothing is logged.
 
 `setupDone` is changed only by the Welcome screen's own request; a Settings save keeps the stored value.
 Each of the Welcome screen's requests loads the settings, changes only its own fields and saves them

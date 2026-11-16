@@ -440,11 +440,14 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   (`sage:setup-diagnostics-copy`) takes only `{ id }` (`diag-` and digits) and writes the text the main
   process kept under that id, the latest one only, to the clipboard with Electron's `clipboard` in the
   main process; the window never supplies the text that is copied. The window shows the whole text in a
-  read-only box first, and it is copied only when the user chooses **Copy to clipboard**; nothing is
-  sent or logged. No new message from the main process, no CSP change. *Evidence:*
+  read-only box first, and asks the main process to copy Sage's own text when the user chooses **Copy
+  to clipboard**; the window can't choose the text. The window could ask without the user, so each
+  text can be copied at most 3 times and only within 2 minutes of being built; after that a fresh
+  build is needed. A build that finishes after a newer one started isn't kept. Nothing is sent or
+  logged. No new message from the main process, no CSP change. *Evidence:*
   `test/diagnostics.test.ts` (each expected line; a planted key, other service's key, home path, user
   name, e-mail address, note text and title, reminder and online address all absent from the text and
-  the clipboard; only the latest id copies; payloads with text or unknown values refused),
+  the clipboard; only the latest id copies, at most 3 times and within 2 minutes; keys redacted before any other scrubbing; payloads with text or unknown values refused),
   `test/key-leak.test.ts` (the sentinel key absent from the diagnostics and the clipboard),
   `test/security.test.ts` (the two requests, the preload's payloads, the clipboard written in one place
   in the main process), `test/renderer-welcome.test.ts` (the window shows the text, and Copy sends only
@@ -521,8 +524,9 @@ sources for them and lists every network address). With the local brain, only we
 computer, plus the one-time download of the speech file, an ordinary request that carries none of your
 speech or text. A model download from the Welcome screen is started by the user and made by the local
 model runner from its own registry; opening the install guide shows GitHub the PC's address like any
-web page. Copy diagnostics puts a short text on the clipboard only when the user chooses Copy; Sage
-sends it nowhere. Speech is turned into text
+web page. When the user chooses Copy, the window asks the main process to
+put Sage's own diagnostics text on the clipboard (the window can't choose the text); Sage sends it
+nowhere. Speech is turned into text
 on the PC, and replies are read aloud with the PC's own voices. With an online brain, the conversation,
 including tool results and words that came from talking, goes to the service the user chose: Anthropic
 for Claude, OpenAI for OpenAI, Google for Gemini, or the address the user entered. What each company

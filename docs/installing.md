@@ -316,8 +316,9 @@ diagnostics…** shows the whole text first, and **Copy to clipboard** copies it
 the system and its version, the processor type, the step and its code, the kind of brain (never a key or
 an online address), whether the runner answered and its version, the model the failed step tried and the saved local model, each with whether it is
 downloaded (by name only if it is one of Sage's two), the voice status, and the theme and reduced-motion settings. It
-never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders. Sage
-sends it nowhere.
+never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders. Sage sends it nowhere: when you choose **Copy to clipboard**, the window asks Sage to
+copy the text Sage built (the window can't choose the text), up to 3 times within 2 minutes of building
+it.
 
 | Code | What it means | What to try |
 | --- | --- | --- |

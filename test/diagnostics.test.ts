@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DIAGNOSTICS_MESSAGES, type SystemFacts, scrubValue, systemFacts } from "../src/core/diagnostics.js";
+import {
+  DIAGNOSTICS_COPY_MS,
+  DIAGNOSTICS_MAX_COPIES,
+  DIAGNOSTICS_MESSAGES,
+  type SystemFacts,
+  scrubValue,
+  systemFacts,
+} from "../src/core/diagnostics.js";
 import { createSage, type DiagnosticsParts, type SageDeps } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS, type DiagnosticsResult, type Result } from "../src/shared/api.js";
 import {
   deferred,
+  FakeClock,
   fakeServer,
   FakePresenter,
   json,
@@ -46,6 +54,7 @@ async function sageWith(
     system?: SystemFacts;
     clipboard?: (text: string) => void;
     setup?: SageDeps["setup"];
+    clock?: FakeClock;
   } = {},
 ) {
   const dataDir = await tempDir(t);
@@ -70,6 +79,7 @@ async function sageWith(
     localPort: options.port ?? REFUSED_PORT,
     diagnostics,
     ...(options.setup ? { setup: options.setup } : {}),
+    ...(options.clock ? { clock: options.clock } : {}),
   });
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
   return { sage, handlers, copied };
@@ -465,4 +475,32 @@ test("a build that finishes after a newer one started isn't kept, and comes back
   assert.equal(shown.id, "diag-2");
   assert.deepEqual(sage.diagnostics.copy(shown.id), { ok: true });
   assert.deepEqual(copied, [shown.text]);
+});
+
+test("a built text can be copied at most 3 times, and only within 2 minutes of being built", async (t) => {
+  const clock = new FakeClock(new Date("2026-11-16T10:00:00Z"));
+  const { handlers, copied } = await sageWith(t, { clock });
+  const request = { step: "runner", code: "SAGE-RUN-01", reducedMotion: false };
+  const first = (await handlers[CHANNELS.diagnostics](request)) as DiagnosticsResult & { ok: true };
+  for (let i = 0; i < 3; i++) {
+    assert.deepEqual(await handlers[CHANNELS.copyDiagnostics]({ id: first.id }), { ok: true });
+  }
+  assert.deepEqual(await handlers[CHANNELS.copyDiagnostics]({ id: first.id }), {
+    ok: false,
+    message: DIAGNOSTICS_MESSAGES.tooMany,
+  });
+  assert.equal(copied.length, 3, "a fourth copy writes nothing");
+
+  // A fresh build, copied once in time and once too late.
+  const second = (await handlers[CHANNELS.diagnostics](request)) as DiagnosticsResult & { ok: true };
+  clock.advance(DIAGNOSTICS_COPY_MS);
+  assert.deepEqual(await handlers[CHANNELS.copyDiagnostics]({ id: second.id }), { ok: true });
+  clock.advance(1);
+  assert.deepEqual(await handlers[CHANNELS.copyDiagnostics]({ id: second.id }), {
+    ok: false,
+    message: DIAGNOSTICS_MESSAGES.expired,
+  });
+  assert.equal(copied.length, 4);
+  assert.equal(DIAGNOSTICS_COPY_MS, 120_000);
+  assert.equal(DIAGNOSTICS_MAX_COPIES, 3);
 });

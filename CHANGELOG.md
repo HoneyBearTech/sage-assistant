@@ -43,7 +43,8 @@ All notable changes to Sage are documented here. The format follows
   your PC (its version, the system, the processor, the step and code, the kind of brain, whether the
   runner answered and its version, the model tried and the saved one and whether each is
   downloaded, the voice status, the theme and
-  reduced motion), shows all of it in a read-only box, and **Copy to clipboard** copies exactly that.
+  reduced motion), shows all of it in a read-only box, and **Copy to clipboard** asks Sage to copy exactly
+  that text (up to 3 times, within 2 minutes; the window can't choose the text).
   It never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders,
   and Sage sends it nowhere.
 - **A Home screen, first in the tab bar (Home, Chat, Settings).** Sage now opens on Home (the Welcome

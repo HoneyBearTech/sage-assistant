@@ -228,6 +228,7 @@ export function createSage(deps: SageDeps): Sage {
     runnerStatus: () => setup.status(),
     voiceStatus: () => voice.status(),
     triedModel: () => setup.triedModel(),
+    now: () => clock.now().getTime(),
     redact: (text) => redactor.redact(text),
     ...(diagnosticsParts.system ? { system: diagnosticsParts.system } : {}),
   });
