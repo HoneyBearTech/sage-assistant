@@ -177,8 +177,18 @@ async function confirmShown(): Promise<void> {
   if (!chatVisible()) return;
   const ids = [...held.keys()].filter((id) => !confirming.has(id));
   for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
+    // A newer request means this snapshot may be out of date; the collection loop confirms again.
+    if (collectAgain || !chatVisible()) return;
     const batch = ids.slice(start, start + MAX_ACK_IDS);
-    for (const id of batch) confirming.add(id);
+    for (const id of batch) {
+      confirming.add(id);
+      // Held lines stay hidden until now, so a notice that is withdrawn first is never seen.
+      const item = held.get(id);
+      if (item?.hidden) {
+        item.hidden = false;
+        item.scrollIntoView({ block: "end" });
+      }
+    }
     try {
       await sage.ackNotices(batch);
       for (const id of batch) held.delete(id);
@@ -191,7 +201,8 @@ async function confirmShown(): Promise<void> {
   }
 }
 
-async function collectOnce(): Promise<void> {
+/** Returns false if Sage couldn't be asked, so the held notices can't be trusted to be current. */
+async function collectOnce(): Promise<boolean> {
   try {
     const notices = await sage.takeNotices();
     const current = new Set(notices.map((notice) => notice.id));
@@ -204,11 +215,15 @@ async function collectOnce(): Promise<void> {
     }
     for (const notice of notices) {
       if (shownNotices.has(notice.id)) continue;
-      held.set(notice.id, addMessage("notice", notice.text));
+      const item = addMessage("notice", notice.text);
+      item.hidden = true;
+      held.set(notice.id, item);
       shownNotices.add(notice.id);
     }
+    return true;
   } catch {
     // The next poll tries again.
+    return false;
   }
 }
 
@@ -220,7 +235,9 @@ let collectAgain = false;
  * collect first too: a notice whose reminder was deleted meanwhile is taken out before it can be
  * confirmed. Only one collection runs at a time. A request that arrives while one is running makes
  * exactly one more follow it (further requests join that one), and nothing is confirmed until the
- * last has finished, so an older answer can never bring back or confirm a notice a newer one removed.
+ * last has finished (including a request that arrives during a confirmation), so an older answer can
+ * never bring back or confirm a notice a newer one removed. After a failed collection nothing is
+ * confirmed: the held notices stay held, and hidden, until a later one succeeds.
  */
 function collectNotices(): Promise<void> {
   if (collecting) {
@@ -230,9 +247,9 @@ function collectNotices(): Promise<void> {
   collecting = (async () => {
     do {
       collectAgain = false;
-      await collectOnce();
+      const fresh = await collectOnce();
+      if (fresh && !collectAgain) await confirmShown();
     } while (collectAgain);
-    await confirmShown();
   })().finally(() => {
     collecting = undefined;
   });
