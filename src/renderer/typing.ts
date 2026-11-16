@@ -7,30 +7,45 @@ import { TYPE_FRAME_MS, typedCount } from "./typing-time.js";
 // typing at all (checked on every step, so switching it on mid-reply shows the rest at once).
 
 export interface Typist {
-  /** Types `text` out over `item`, which already holds it. Ends any typing still running. */
-  type(item: HTMLElement, text: string): void;
+  /**
+   * Types `text` out over `item`, which already holds it. Ends any typing still running. `done` is
+   * called once it is all shown: `skipped` is true when a click, a key, reduced motion or another
+   * typing ended it early, false when it typed to the end (or had nothing to type).
+   */
+  type(item: HTMLElement, text: string, done?: (skipped: boolean) => void): void;
   /** Shows the reply being typed in full, at once. */
   finish(): void;
   readonly typing: boolean;
 }
 
 export function createTypist(reducedMotion: () => boolean): Typist {
-  let current: { item: HTMLElement; overlay: HTMLElement; timer: ReturnType<typeof setInterval> } | null =
-    null;
+  let current: {
+    item: HTMLElement;
+    overlay: HTMLElement;
+    timer: ReturnType<typeof setInterval>;
+    done: ((skipped: boolean) => void) | undefined;
+  } | null = null;
 
-  function finish(): void {
+  function end(skipped: boolean): void {
     if (!current) return;
+    const { done } = current;
     clearInterval(current.timer);
     current.overlay.remove();
     current.item.classList.remove("typing");
     current = null;
+    done?.(skipped);
   }
 
-  function type(item: HTMLElement, text: string): void {
+  const finish = () => end(true);
+
+  function type(item: HTMLElement, text: string, done?: (skipped: boolean) => void): void {
     finish();
     // By characters, not code units, so an emoji is never shown half drawn.
     const characters = Array.from(text);
-    if (reducedMotion() || characters.length < 2) return;
+    if (reducedMotion() || characters.length < 2) {
+      done?.(false);
+      return;
+    }
     const overlay = document.createElement("span");
     overlay.className = "typed";
     // The row's own text is what screen readers read; this copy is only for the eye.
@@ -46,9 +61,9 @@ export function createTypist(reducedMotion: () => boolean): Typist {
       }
       const shown = typedCount(characters.length, Date.now() - started);
       overlay.textContent = characters.slice(0, shown).join("");
-      if (shown >= characters.length) finish();
+      if (shown >= characters.length) end(false);
     };
-    current = { item, overlay, timer: setInterval(step, TYPE_FRAME_MS) };
+    current = { item, overlay, timer: setInterval(step, TYPE_FRAME_MS), done };
     step();
   }
 

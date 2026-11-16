@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { TYPE_FRAME_MS } from "../src/renderer/typing-time.js";
 import { PULL_POLL_MS, WELCOME_TEXT } from "../src/renderer/welcome-text.js";
-import type { Notice, PullResult, PullStatus, RunnerStatus, SageApi } from "../src/shared/api.js";
-import { focusedElement, pressKey } from "./fake-dom.js";
+import type {
+  DiagnosticsResult,
+  Notice,
+  PullResult,
+  PullStatus,
+  Result,
+  RunnerStatus,
+  SageApi,
+  VoiceStatus,
+} from "../src/shared/api.js";
+import { type FakeElement, focusedElement, pressKey, setReducedMotion } from "./fake-dom.js";
 import { deferred, settled } from "./helpers.js";
 import { NO_KEYS, SAMPLE_SERVICES, startWindow } from "./window.js";
 
@@ -686,4 +696,271 @@ test("a late setup refresh never overwrites a Settings save that finished first"
   el("settings-form").dispatch("submit");
   await settled();
   assert.equal((calls.saved.at(-1) as { brain: string }).brain, "other");
+});
+
+// --- The start-up sequence: typed check lines, support codes and Copy diagnostics ---
+
+/** A step's check lines, as text. */
+function lines(el: (id: string) => FakeElement, id: string) {
+  return el(id).children.map((item) => item.textContent);
+}
+
+test("the runner step lists its real checks, with a support code and Copy diagnostics when one fails", async (t) => {
+  let answer: RunnerStatus | Error = runner("unreachable");
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => {
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
+  });
+  await click("place-local");
+  assert.deepEqual(lines(el, "runner-checks"), ["Looking for the local model runner... not found"]);
+  assert.equal(el("runner-checks").children[0]!.className, "check-line fail");
+  assert.equal(el("runner-status").textContent, WELCOME_TEXT.unreachable, "the plain sentence stays");
+  assert.equal(el("runner-code").hidden, false);
+  assert.equal(el("runner-code").textContent, "Support code: SAGE-RUN-01");
+  assert.equal(el("runner-diagnostics").hidden, false);
+  assert.equal(
+    el("welcome-checks-status").textContent,
+    "Looking for the local model runner... not found. Support code: SAGE-RUN-01.",
+    "read out once, in the one status area",
+  );
+
+  answer = runner("unreadable");
+  await click("runner-check");
+  assert.deepEqual(lines(el, "runner-checks"), [
+    "Looking for the local model runner... answered, but Sage couldn't read it",
+  ]);
+  assert.equal(el("runner-code").textContent, "Support code: SAGE-RUN-02");
+
+  answer = new Error("no answer");
+  await click("runner-check");
+  assert.deepEqual(lines(el, "runner-checks"), ["Looking for the local model runner... couldn't check"]);
+  assert.equal(el("runner-code").textContent, "Support code: SAGE-APP-01");
+
+  answer = runner("no-model", { standard: false, smaller: true });
+  await click("runner-check");
+  assert.deepEqual(lines(el, "runner-checks"), [
+    "Looking for the local model runner... found",
+    "Runner version 0.12.3... ok",
+    "Model qwen3:4b... not downloaded yet",
+    "Model qwen3:1.7b... downloaded",
+  ]);
+  assert.deepEqual(
+    el("runner-checks").children.map((item) => item.className),
+    ["check-line ok", "check-line ok", "check-line info", "check-line ok"],
+  );
+  assert.equal(el("runner-code").hidden, true, "no code once the check passes");
+  assert.equal(el("runner-code").textContent, "");
+  assert.equal(el("runner-diagnostics").hidden, true);
+  assert.equal(
+    el("welcome-checks-status").textContent,
+    "Looking for the local model runner... found. Runner version 0.12.3... ok. Model qwen3:4b... not downloaded yet. Model qwen3:1.7b... downloaded.",
+  );
+
+  answer = { ...runner("ready"), version: null };
+  await click("runner-check");
+  assert.equal(lines(el, "runner-checks")[1], "Runner version... not reported");
+});
+
+test("check lines type out one after another; a key shows them all, and reduced motion shows them at once", async (t) => {
+  const { el, click } = await welcomeWindow(t, { runnerStatus: async () => runner("ready") });
+  setReducedMotion(false);
+  await click("place-local");
+  const items = el("runner-checks").children;
+  assert.equal(items.length, 4);
+  assert.equal(items[0]!.hidden, false);
+  assert.equal(items[0]!.classList.contains("typing"), true, "the first line is typing");
+  assert.deepEqual(
+    items.slice(1).map((item) => item.hidden),
+    [true, true, true],
+    "the rest wait their turn",
+  );
+  // Line by line, on the typist's own clock.
+  for (let i = 0; i < 200 && items[1]!.hidden; i++) t.mock.timers.tick(TYPE_FRAME_MS);
+  assert.equal(items[0]!.classList.contains("typing"), false);
+  assert.equal(items[1]!.hidden, false);
+  assert.equal(items[1]!.classList.contains("typing"), true);
+  assert.equal(items[2]!.hidden, true);
+  // Any key: every line, now.
+  pressKey("keydown", { key: "a" });
+  assert.deepEqual(
+    items.map((item) => item.hidden || item.classList.contains("typing")),
+    [false, false, false, false],
+  );
+  // The status area had all of them from the start.
+  assert.match(el("welcome-checks-status").textContent, /^Looking for the local model runner\.\.\. found\. /);
+
+  // Reduced motion: all at once, nothing typed.
+  setReducedMotion(true);
+  await click("runner-check");
+  assert.deepEqual(
+    el("runner-checks").children.map((item) => item.hidden || item.classList.contains("typing")),
+    [false, false, false, false],
+  );
+});
+
+test("the model step's lines and codes come from the download's real result", async (t) => {
+  const results: PullResult[] = [
+    { status: "declined" },
+    { status: "cancelled" },
+    {
+      status: "failed",
+      message: "The download made no progress for 2 minutes, so Sage stopped it.",
+      code: "SAGE-NET-02",
+    },
+    { status: "done", skills: "no" },
+    { status: "done", skills: "unknown" },
+    { status: "done", skills: "yes" },
+  ];
+  const { el, click } = await atModelStep(t, { pullModel: async () => results.shift()! });
+  assert.deepEqual(lines(el, "model-checks"), [], "nothing checked yet");
+  await click("model-download");
+  assert.deepEqual(lines(el, "model-checks"), ["Model qwen3:4b... not downloaded"]);
+  assert.equal(el("model-code").hidden, true, "a choice of yours has no code");
+  await click("model-download");
+  assert.deepEqual(lines(el, "model-checks"), ["Model qwen3:4b... download cancelled"]);
+  assert.equal(el("model-diagnostics").hidden, true);
+  await click("model-download");
+  assert.deepEqual(lines(el, "model-checks"), ["Model qwen3:4b... download failed"]);
+  assert.match(el("model-status").textContent, /no progress for 2 minutes/);
+  assert.equal(el("model-code").textContent, "Support code: SAGE-NET-02");
+  assert.equal(el("model-diagnostics").hidden, false);
+  await click("model-download");
+  assert.deepEqual(lines(el, "model-checks"), [
+    "Model qwen3:4b... ready",
+    "Skills... not supported by this model",
+  ]);
+  assert.equal(el("model-code").hidden, true);
+  assert.equal(el("model-diagnostics").hidden, true);
+  await click("model-download");
+  assert.equal(lines(el, "model-checks")[1], "Skills... the runner didn't say");
+  await click("model-download");
+  assert.equal(lines(el, "model-checks")[1], "Skills... supported");
+  // Choosing the other model starts afresh.
+  el("model-smaller").checked = true;
+  el("model-smaller").dispatch("change");
+  assert.deepEqual(lines(el, "model-checks"), []);
+});
+
+test("a model request that fails outright gets SAGE-APP-01", async (t) => {
+  const { el, click } = await atModelStep(t, {
+    pullModel: async () => {
+      throw new Error("no answer");
+    },
+  });
+  await click("model-download");
+  assert.equal(el("model-code").textContent, "Support code: SAGE-APP-01");
+  assert.equal(el("model-diagnostics").hidden, false);
+});
+
+test("the Ready step lists the model and the voice status", async (t) => {
+  let voice: VoiceStatus | Error = { model: "missing", received: 0, total: 1 };
+  const { el, click } = await atModelStep(t, {
+    voiceStatus: async () => {
+      if (voice instanceof Error) throw voice;
+      return voice;
+    },
+  });
+  await click("model-download");
+  await click("model-next");
+  assert.deepEqual(lines(el, "done-checks"), ["Model qwen3:4b... ready", "Voice... not downloaded"]);
+  for (const [answer, line] of [
+    [{ model: "ready", received: 0, total: 1 }, "Voice... ready"],
+    [{ model: "downloading", received: 0, total: 1 }, "Voice... downloading"],
+    [new Error("no answer"), "Voice... couldn't check"],
+  ] as const) {
+    voice = answer;
+    // Back to the model step and on again: the voice is checked each time Ready is shown.
+    el("model-standard").dispatch("change");
+    await click("model-download");
+    await click("model-next");
+    assert.equal(lines(el, "done-checks")[1], line);
+  }
+});
+
+test("Copy diagnostics shows the main process's text in full, and Copy sends only its id", async (t) => {
+  const { el, click, calls } = await welcomeWindow(t, { runnerStatus: async () => runner("unreachable") });
+  await click("place-local");
+  assert.equal(el("welcome-diagnostics").hidden, true);
+  await click("runner-diagnostics");
+  assert.deepEqual(calls.diagnostics, [{ step: "runner", code: "SAGE-RUN-01", reducedMotion: true }]);
+  assert.equal(el("welcome-diagnostics").hidden, false);
+  assert.equal(el("diagnostics-text").textContent, "Sage diagnostics\nSupport code: test");
+  assert.equal(focusedElement(), el("diagnostics-heading"), "the keyboard goes to the box");
+  assert.equal(el("diagnostics-copy").disabled, false);
+  assert.deepEqual(calls.copied, [], "nothing copied before Copy");
+  await click("diagnostics-copy");
+  assert.deepEqual(calls.copied, ["diag-1"], "only the id; the text stays in the main process");
+  assert.equal(el("diagnostics-status").textContent, WELCOME_TEXT.copied);
+  // Check again clears it all.
+  await click("runner-check");
+  assert.equal(el("welcome-diagnostics").hidden, true);
+  assert.equal(el("diagnostics-text").textContent, "");
+});
+
+test("Copy diagnostics: a failed build or copy says so; a late answer for an old check is dropped", async (t) => {
+  let built: DiagnosticsResult | Error = new Error("no answer");
+  let copied: Result | Error = { ok: false, message: "Choose Copy diagnostics again, then Copy." };
+  let hold: ReturnType<typeof deferred<void>> | undefined;
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => runner("unreachable"),
+    diagnostics: async () => {
+      await hold?.promise;
+      if (built instanceof Error) throw built;
+      return built;
+    },
+    copyDiagnostics: async () => {
+      if (copied instanceof Error) throw copied;
+      return copied;
+    },
+  });
+  await click("place-local");
+  await click("runner-diagnostics");
+  assert.equal(el("diagnostics-status").textContent, WELCOME_TEXT.diagnosticsFailed);
+  assert.equal(el("diagnostics-copy").disabled, true, "nothing to copy");
+  built = { ok: false, message: "Sage couldn't read that choice." };
+  await click("runner-diagnostics");
+  assert.equal(el("diagnostics-status").textContent, "Sage couldn't read that choice.");
+
+  built = { ok: true, id: "diag-7", text: "the text" };
+  await click("runner-diagnostics");
+  await click("diagnostics-copy");
+  assert.equal(el("diagnostics-status").textContent, "Choose Copy diagnostics again, then Copy.");
+  copied = new Error("no answer");
+  await click("diagnostics-copy");
+  assert.equal(el("diagnostics-status").textContent, WELCOME_TEXT.copyFailed);
+
+  // Asked for, then the check runs again before the text arrives: it is never shown.
+  hold = deferred<void>();
+  await click("runner-diagnostics");
+  assert.equal(el("diagnostics-status").textContent, WELCOME_TEXT.diagnosticsBuilding);
+  await click("runner-check");
+  hold.resolve();
+  await settled();
+  assert.equal(el("welcome-diagnostics").hidden, true);
+  assert.equal(el("diagnostics-text").textContent, "");
+});
+
+test("Copy diagnostics on the model step names that step and its code; Skip setup hides it", async (t) => {
+  const { el, click, calls } = await atModelStep(t, {
+    pullModel: async () => ({
+      status: "failed",
+      message: "There isn't enough free disk space for the model. Free up some space, then try again.",
+      code: "SAGE-MOD-02",
+    }),
+  });
+  await click("model-download");
+  await click("model-diagnostics");
+  assert.deepEqual(calls.diagnostics, [{ step: "model", code: "SAGE-MOD-02", reducedMotion: true }]);
+  assert.equal(el("welcome-diagnostics").hidden, false);
+  // Opened again from Settings: nothing left over.
+  await click("welcome-skip");
+  el("tab-settings").click();
+  await click("setup-again");
+  assert.equal(el("welcome-diagnostics").hidden, true);
+  assert.equal(el("model-code").hidden, true);
+  assert.equal(el("model-diagnostics").hidden, true);
+  assert.deepEqual(lines(el, "model-checks"), []);
+  assert.equal(el("welcome-checks-status").textContent, "");
 });

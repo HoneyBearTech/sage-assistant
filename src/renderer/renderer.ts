@@ -841,8 +841,25 @@ export function startChatWindow(): void {
       doneSummary: byId<HTMLParagraphElement>("done-summary"),
       doneVoice: byId<HTMLParagraphElement>("done-voice"),
       startChatting: byId<HTMLButtonElement>("start-chatting"),
+      checks: {
+        runner: byId<HTMLOListElement>("runner-checks"),
+        model: byId<HTMLOListElement>("model-checks"),
+        done: byId<HTMLOListElement>("done-checks"),
+      },
+      announce: byId<HTMLParagraphElement>("welcome-checks-status"),
+      runnerCode: byId<HTMLParagraphElement>("runner-code"),
+      runnerDiagnostics: byId<HTMLButtonElement>("runner-diagnostics"),
+      modelCode: byId<HTMLParagraphElement>("model-code"),
+      modelDiagnostics: byId<HTMLButtonElement>("model-diagnostics"),
+      diagnostics: byId<HTMLElement>("welcome-diagnostics"),
+      diagnosticsHeading: byId<HTMLElement>("diagnostics-heading"),
+      diagnosticsText: byId<HTMLTextAreaElement>("diagnostics-text"),
+      diagnosticsCopy: byId<HTMLButtonElement>("diagnostics-copy"),
+      diagnosticsStatus: byId<HTMLParagraphElement>("diagnostics-status"),
     },
     {
+      typist,
+      reducedMotion: prefersReducedMotion,
       leave: (to) => {
         // What the form shows now; the refresh below changes a field only if it still shows this.
         const shown = { brain: checkedBrain(), model: localModel.value };

@@ -1281,6 +1281,113 @@ progress {
   width: 100%;
 }
 
+/* The step's number before its name, in the label's own monospace capitals. */
+.step-number {
+  color: var(--muted);
+  margin-right: 0.3em;
+}
+
+/* Each step's checks: short monospace lines, typed one after another like a reply. */
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.check-list:empty {
+  display: none;
+}
+
+.check-line {
+  position: relative;
+  padding-left: 1.4em;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.check-line::before {
+  content: ">";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.check-line.info {
+  color: var(--muted);
+}
+
+.check-line.fail {
+  color: var(--danger);
+}
+
+.check-line.fail::before {
+  content: "!";
+  color: var(--danger);
+}
+
+/* While a line types, its own text is held invisible underneath and a copy grows over it. */
+.check-line.typing {
+  color: transparent;
+}
+
+.check-line .typed {
+  position: absolute;
+  inset: 0 0 0 1.4em;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.check-line.info .typed {
+  color: var(--muted);
+}
+
+.check-line.fail .typed {
+  color: var(--danger);
+}
+
+.check-line .typed::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--glow);
+  animation: caret 0.8s steps(1) infinite;
+}
+
+/* A failed check's support code, next to the plain sentence: amber, as it waits on you. */
+.support-code {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-spacing);
+  color: var(--amber);
+}
+
+/* Copy diagnostics: the whole text, as it will be copied, in a dashed read-only box. */
+.diagnostics-text {
+  margin: 0;
+  padding: 10px 12px;
+  width: 100%;
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px dashed var(--line-bright);
+  border-radius: 2px;
+}
+
 /* --- Motion --- */
 
 /* With the system's "reduce motion" on, nothing moves: no animation, no transitions. */
