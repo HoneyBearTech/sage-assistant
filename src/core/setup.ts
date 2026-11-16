@@ -98,7 +98,9 @@ export class Setup {
 
   async status(): Promise<RunnerStatus> {
     const model = (await this.deps.settings.load()).local.model;
-    const list = await this.deps.runner.models();
+    // Both at once, each with the same time limit, so a runner that hangs on one costs one wait;
+    // the version is kept only when the list answered.
+    const [list, version] = await Promise.all([this.deps.runner.models(), this.deps.runner.version()]);
     if (!list.ok) {
       return { state: list.reason, model, downloaded: { standard: false, smaller: false }, version: null };
     }
@@ -109,7 +111,7 @@ export class Setup {
         standard: hasModel(list.names, SAGE_MODELS.standard.name),
         smaller: hasModel(list.names, SAGE_MODELS.smaller.name),
       },
-      version: await this.deps.runner.version(),
+      version,
     };
   }
 

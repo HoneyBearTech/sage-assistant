@@ -251,9 +251,10 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
    Sage's two models it has. **Open the install guide** asks in the main process's box first, then opens
    one fixed address, the "local model runner" section of `docs/installing.md` on GitHub, with
    `shell.openExternal`. Nothing the window sends is used; if no browser opens, the address is shown to
-   copy. When the runner answers for its models, the main process also asks for its version
-   (`/api/version`, same fixed address, capped and checked); only a plain version number is kept
-   (digits and dots, with a short suffix at most), anything else counts as not reported.
+   copy. At the same time as the model list, with the same time limit (so a runner that hangs on
+   one costs one wait), the main process asks for the runner's version (`/api/version`, same fixed
+   address, capped and checked). It is kept only when the list answered, and only as a plain version
+   number (digits and dots, with a short suffix at most); anything else counts as not reported.
 4. **A model.** The window sends only `standard` or `smaller`; the main process maps them to `qwen3:4b`
    and `qwen3:1.7b`. A model the runner already has needs no download. Otherwise the main process asks
    in its own box (the size, and that it needs an internet connection and free disk space and that the

@@ -146,10 +146,11 @@ test("the runner's version is kept only when it is a plain version number", asyn
     assert.equal((await setup.status()).version, expected, JSON.stringify(version));
     assert.ok(requests.some((req) => req.url === "/api/version" && req.method === "GET"));
   }
-  // A runner that doesn't answer for its models isn't asked for its version.
-  const odd = await fakeServer(t, (_req, res) => json(res, 500, {}));
+  // A runner that doesn't answer for its models: its version isn't kept, whatever it says.
+  const odd = await fakeServer(t, (req, res) =>
+    req.url === "/api/version" ? json(res, 200, { version: "0.12.3" }) : json(res, 500, {}),
+  );
   assert.equal((await (await bareSetup(t, odd.port)).status()).version, null);
-  assert.ok(!odd.requests.some((req) => req.url === "/api/version"));
 });
 
 /** A Setup on `port` that is never allowed to ask, download or open anything. */
@@ -654,3 +655,47 @@ test("an unexpected error is logged as a fixed line, never with its text", async
   assert.ok(!lines.join("\n").includes(RUNNER_TEXT));
   assert.ok(lines.some((line) => line.includes("A model download failed unexpectedly (TypeError).")));
 });
+
+test("the model list and the version are asked at once, so a runner that hangs on one costs one wait", async (t) => {
+  const asked: string[] = [];
+  const tags = deferred<Response>();
+  // The version request never answers; only its own time limit ends it.
+  const fetch = async (url: string, init: RequestInit): Promise<Response> => {
+    asked.push(new URL(url).pathname);
+    if (url.endsWith("/api/tags")) return tags.promise;
+    return new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+    });
+  };
+  // A short time limit is fine here: the outcome is the same however slow the machine is.
+  const setup = await bareSetup(t, REFUSED_PORT, {
+    runner: new RunnerClient({ fetch, statusTimeoutMs: 30 }),
+  });
+  const status = setup.status();
+  for (let i = 0; i < 100 && asked.length < 2; i++) await settled();
+  assert.deepEqual(asked, ["/api/tags", "/api/version"], "both in flight before the list answers");
+  tags.resolve(json200({ models: [{ name: "qwen3:4b" }] }));
+  const answer = await status;
+  assert.equal(answer.state, "ready");
+  assert.equal(answer.version, null, "the hanging version request ends at its time limit");
+
+  // A runner that doesn't answer for its models: whatever the version says, it isn't kept.
+  const lone = await bareSetup(t, REFUSED_PORT, {
+    runner: new RunnerClient({
+      fetch: async (url) => {
+        if (url.endsWith("/api/tags")) throw new TypeError("fetch failed");
+        return json200({ version: "0.12.3" });
+      },
+    }),
+  });
+  assert.deepEqual(await lone.status(), {
+    state: "unreachable",
+    model: "qwen3:4b",
+    downloaded: { standard: false, smaller: false },
+    version: null,
+  });
+});
+
+function json200(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+}

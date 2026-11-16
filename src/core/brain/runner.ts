@@ -189,7 +189,7 @@ export class RunnerClient {
 
   /**
    * The runner's version, or null when it doesn't say (or says something that isn't a plain version
-   * number). Only asked once the runner has answered for its models.
+   * number). Asked at the same time as the model list, with the same time limit.
    */
   async version(): Promise<string | null> {
     try {
