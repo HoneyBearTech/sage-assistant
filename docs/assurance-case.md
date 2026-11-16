@@ -450,9 +450,11 @@ model runner from its own registry; opening the install guide shows GitHub the P
 web page. Speech is turned into text
 on the PC, and replies are read aloud with the PC's own voices. With an online brain, the conversation,
 including tool results and words that came from talking, goes to the service the user chose: Anthropic
-for Claude, OpenAI for OpenAI, Google for Gemini (Google may use free-tier content to improve its
-products), or the address the user entered. Each choice in Settings says so, and Sage says it again in
-one line whenever an online brain is picked, and again when it is saved. Online brains are paid per use and Sage can't
+for Claude, OpenAI for OpenAI, Google for Gemini, or the address the user entered. What each company
+keeps, for how long and for what is set by its own data policies (free and paid terms can differ); Sage
+asks OpenAI not to keep the conversation for later use (`store: false`) but can't control or check any
+company's retention (the README and the Settings hint say so). Each choice in Settings says where its
+messages go, and Sage says it again in one line whenever an online brain is picked, and again when it is saved. Online brains are paid per use and Sage can't
 cap spending; Settings, the Welcome screen and the README point to each company's own limits.
 
 ## 4. Verification

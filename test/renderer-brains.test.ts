@@ -263,3 +263,17 @@ test("a key typed for one brain is cleared when another is picked, so it is neve
   pick(el, "other");
   assert.equal(el("online-key").value, "");
 });
+
+test("the privacy wording promises only what Sage can do: what a company keeps is up to its own policies", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const changelog = await readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+  for (const text of [readme, changelog, html]) {
+    assert.doesNotMatch(text, /nothing (is )?(stored|kept) at/i, "no promise about what a company keeps");
+  }
+  assert.match(readme, /not to keep the conversation for later use/);
+  assert.match(readme, /own data policies/);
+  assert.match(readme, /can't control or\s+check any company's retention/);
+  assert.match(html, /What a company\s+keeps, and for how long, is set by its own data policies/);
+  // On this computer, only the web searches asked for leave the PC.
+  assert.match(html, /nothing you type leaves this PC, apart from web searches you ask for/);
+});

@@ -168,14 +168,17 @@
         <fieldset>
           <legend>Brain</legend>
           <p class="hint">
-            Where Sage does its thinking. "On this computer" keeps everything local. An online brain uses your
-            own key, and Sage still asks you first before it opens or deletes anything.
+            Where Sage does its thinking. "On this computer" keeps your messages on this PC. An online brain
+            uses your own key, and Sage still asks you first before it opens or deletes anything. What a company
+            keeps, and for how long, is set by its own data policies; check them on its website.
           </p>
           <label class="choice">
             <input type="radio" name="brain" value="local" aria-describedby="brain-note-local" /> On this
             computer (Ollama)
           </label>
-          <p id="brain-note-local" class="choice-note">Free and private: nothing you type leaves this PC.</p>
+          <p id="brain-note-local" class="choice-note">
+            Free and private: nothing you type leaves this PC, apart from web searches you ask for.
+          </p>
           <label class="choice">
             <input type="radio" name="brain" value="claude" aria-describedby="brain-note-claude" /> Claude
             (your Anthropic key)

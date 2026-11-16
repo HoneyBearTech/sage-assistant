@@ -35,7 +35,8 @@ All notable changes to Sage are documented here. The format follows
   it), Sage says the same in one line. Sage's skills and its ask-first rule are unchanged: the services only
   answer, or ask to use one of Sage's skills.
 - **Claude through Anthropic's Messages API**, **OpenAI through its Responses API** (its current models
-  take tools only there; nothing is stored at OpenAI) and **Gemini through Google's own API**, each with
+  take tools only there; Sage asks OpenAI not to keep the conversation for later use with `store: false`,
+  while each company may still keep requests for a time under its own data policies) and **Gemini through Google's own API**, each with
   Sage's skills as tools. Within one message, each reply goes back to its service exactly as it came
   (thinking blocks, signatures and encrypted reasoning included), the tools list never changes (tool
   use is switched off past the skill limit), and a refused thinking signature is retried once without

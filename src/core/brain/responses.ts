@@ -22,7 +22,9 @@ import { OPENAI_ORIGIN } from "./services.js";
  * through this API, not through chat completions. Sage's skills go as function tools; the model only
  * answers, or asks to use a skill, which Sage runs itself through the ask-first gate.
  *
- * Nothing is stored at OpenAI (`store: false`): each request carries the whole message so far. The
+ * Sage asks OpenAI not to keep the conversation for later use (`store: false`), so each request
+ * carries the whole message so far; OpenAI may still keep requests for a time under its own data
+ * policies (for example to monitor abuse), which Sage can't control. The
  * model's own output items (its encrypted reasoning, skill requests and text) are sent back exactly
  * as they came within one message.
  */
@@ -221,7 +223,8 @@ export function responsesRequest(
     ...(instructions ? { instructions } : {}),
     input,
     ...(tools.length ? { tools: tools.map(toFunctionTool), tool_choice: allowTools ? "auto" : "none" } : {}),
-    // Nothing kept at OpenAI; its reasoning comes back encrypted, to be sent with the next request.
+    // Asks OpenAI not to keep the response for later use (its own data policies still apply); the
+    // reasoning comes back encrypted, to be sent with the next request.
     store: false,
     include: ["reasoning.encrypted_content"],
     max_output_tokens: MAX_OUTPUT_TOKENS,

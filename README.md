@@ -23,6 +23,12 @@ service. Keys are encrypted with your operating system's protection, each one is
 company's address, and Sage still asks you first before it opens or deletes anything, whichever brain
 you use.
 
+What a company does with what it receives is set by its own data policies, not by Sage: each may keep
+requests for a time (for example to monitor abuse), and terms can differ between free and paid use.
+Sage asks OpenAI not to keep the conversation for later use (`store: false`), but it can't control or
+check any company's retention. See each company's own data controls and privacy terms (in Anthropic
+Console, the OpenAI platform and Google AI Studio) before choosing one.
+
 > [!IMPORTANT]
 > **Online brains cost money.** Keys from Anthropic and OpenAI are paid per use, separately from any
 > subscription you have; Google has a free tier for some Gemini models, and charges beyond it. **Sage
@@ -154,7 +160,8 @@ Open **Settings** in Sage's window:
   **Test** checks it with one small request that costs nothing (listing the models). Sage talks to
   each company at its own fixed address: Claude through Anthropic's Messages API
   (`https://api.anthropic.com/v1/messages`), OpenAI through its Responses API
-  (`https://api.openai.com/v1/responses`, with nothing stored at OpenAI),
+  (`https://api.openai.com/v1/responses`; Sage asks OpenAI not to keep the conversation for later use,
+  with `store: false`),
   and Gemini through Google's own API (`https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`).
 - **Another online service** keeps the **Online service address**, **Online model name** and **Online
   service key** from before. Sage sends `POST <address>/v1/chat/completions` with the key as a bearer
