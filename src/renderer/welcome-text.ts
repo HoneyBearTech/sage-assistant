@@ -110,7 +110,30 @@ export function modelLines(choice: ModelChoice, result: PullResult): CheckLine[]
     case "cancelled":
       return [line(model, "download cancelled", "info")];
     case "failed":
-      return [line(model, "download failed", "fail")];
+      return [failedLine(model, result.code)];
+  }
+}
+
+/** A failed model request's line, from its support code: what failed, in a few words. */
+function failedLine(model: string, code: SupportCode): CheckLine {
+  switch (code) {
+    case "SAGE-RUN-01":
+      return line("Local model runner", "not found", "fail");
+    case "SAGE-RUN-02":
+      return line("Local model runner", "couldn't read it", "fail");
+    case "SAGE-SET-01":
+      return line(model, "downloaded, but not saved", "fail");
+    case "SAGE-MOD-02":
+      return line(model, "not enough space", "fail");
+    case "SAGE-MOD-04":
+      return line(model, "already downloading", "fail");
+    case "SAGE-APP-01":
+      return line(model, "couldn't check", "fail");
+    case "SAGE-MOD-01":
+    case "SAGE-MOD-03":
+    case "SAGE-NET-01":
+    case "SAGE-NET-02":
+      return line(model, "download failed", "fail");
   }
 }
 
