@@ -659,10 +659,14 @@ test("an unexpected error is logged as a fixed line, never with its text", async
 test("the model list and the version are asked at once, so a runner that hangs on one costs one wait", async (t) => {
   const asked: string[] = [];
   const tags = deferred<Response>();
+  const listAsked = deferred<void>();
   // The version request never answers; only its own time limit ends it.
   const fetch = async (url: string, init: RequestInit): Promise<Response> => {
     asked.push(new URL(url).pathname);
-    if (url.endsWith("/api/tags")) return tags.promise;
+    if (url.endsWith("/api/tags")) {
+      listAsked.resolve();
+      return tags.promise;
+    }
     return new Promise((_resolve, reject) => {
       init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
     });
@@ -672,8 +676,9 @@ test("the model list and the version are asked at once, so a runner that hangs o
     runner: new RunnerClient({ fetch, statusTimeoutMs: 30 }),
   });
   const status = setup.status();
-  for (let i = 0; i < 100 && asked.length < 2; i++) await settled();
-  assert.deepEqual(asked, ["/api/tags", "/api/version"], "both in flight before the list answers");
+  await listAsked.promise;
+  await settled();
+  assert.deepEqual(asked.sort(), ["/api/tags", "/api/version"], "both in flight before the list answers");
   tags.resolve(json200({ models: [{ name: "qwen3:4b" }] }));
   const answer = await status;
   assert.equal(answer.state, "ready");
