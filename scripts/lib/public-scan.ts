@@ -83,32 +83,115 @@ function isLockfileDeprecation(file: string, content: string): boolean {
   return /(^|[\\/])package-lock\.json$/.test(file) && LOCKFILE_DEPRECATION.test(content);
 }
 
-/** Finds every problem in one file's text. */
+/**
+ * The escapes the checker decodes, as JSON writes them: backslash-u with four hex digits (group 1),
+ * an escaped backslash (two backslashes), and backslash-slash. Nothing else is decoded.
+ */
+const ESCAPE = /\\(?:\\|\/|u([0-9a-fA-F]{4}))/g;
+
+/** Marks a finding that only shows once the line's escapes are decoded. */
+export const ESCAPES_NOTE = " (written with escapes)";
+
+export interface Decoded {
+  /** The line as JSON would read it. */
+  text: string;
+  /** True if it holds a backslash-u or backslash-slash escape (a lone backslash pair doesn't count). */
+  escaped: boolean;
+  /** For each decoded character, where it starts and ends in the written line. */
+  spans: Array<[number, number]>;
+}
+
+/**
+ * Decodes the escapes in one line in a single pass, the way JSON does: a backslash pair becomes one
+ * backslash, backslash-slash becomes a slash, backslash-u and four hex digits becomes that character.
+ * What a replacement produces is never decoded again. Surrogates are kept as written, so they can't crash.
+ */
+export function decodeEscapes(content: string): Decoded {
+  let text = "";
+  let escaped = false;
+  let last = 0;
+  const spans: Array<[number, number]> = [];
+  const plain = (start: number, end: number) => {
+    for (let i = start; i < end; i++) spans.push([i, i + 1]);
+    text += content.slice(start, end);
+  };
+  const decoded = (char: string, start: number, end: number) => {
+    spans.push([start, end]);
+    text += char;
+  };
+  for (const match of content.matchAll(ESCAPE)) {
+    const start = match.index ?? 0;
+    plain(last, start);
+    const hex = match[1];
+    if (hex) escaped = true;
+    else if (match[0] === "\\/") escaped = true;
+    const end = start + match[0].length;
+    decoded(hex ? String.fromCharCode(Number.parseInt(hex, 16)) : match[0].slice(1), start, end);
+    last = end;
+  }
+  plain(last, content.length);
+  return { text, escaped, spans };
+}
+
+type Hit = Pick<Finding, "kind" | "match"> & { index: number };
+
+/** Runs every rule on one line of text. */
+function scanLine(content: string, skipEmail: boolean): Hit[] {
+  const hits: Hit[] = [];
+  const at = (kind: FindingKind, match: RegExpMatchArray) =>
+    hits.push({ kind, match: match[0], index: match.index ?? 0 });
+  for (const match of content.matchAll(IPV4)) {
+    const octets = match.slice(1, 5).map(Number);
+    if (isPrivateIpv4(octets)) at("private-ip", match);
+  }
+  for (const match of content.matchAll(LAN_HOST)) at("lan-hostname", match);
+  for (const match of content.matchAll(POSIX_HOME)) {
+    if (!isPlaceholderUser(match[2] ?? "")) at("home-path", match);
+  }
+  for (const match of content.matchAll(WINDOWS_HOME)) {
+    if (!isPlaceholderUser(match[1] ?? "")) at("home-path", match);
+  }
+  for (const match of content.matchAll(EMAIL)) {
+    if (!skipEmail && !isAllowedEmail(match[0])) at("email", match);
+  }
+  return hits;
+}
+
+/**
+ * Finds every problem in one file's text. A line with a backslash-u or backslash-slash escape is
+ * scanned a second time, decoded, and every hit is placed by its span in the written line. A plain hit
+ * that overlaps a decoded hit of the same kind is the same problem seen in part, so it is dropped. A
+ * decoded hit on exactly a plain hit's span, with the same text, is reported plain; any other decoded
+ * hit gets ESCAPES_NOTE after the match. So each finding is one position in the line.
+ */
 export function scanText(file: string, text: string): Finding[] {
   const findings: Finding[] = [];
-  const lines = text.split(/\r?\n/);
-  lines.forEach((content, index) => {
+  text.split(/\r?\n/).forEach((content, index) => {
     const skipEmail = isLockfileDeprecation(file, content);
     const line = index + 1;
-    for (const match of content.matchAll(IPV4)) {
-      const octets = match.slice(1, 5).map(Number);
-      if (isPrivateIpv4(octets)) findings.push({ file, line, kind: "private-ip", match: match[0] });
+    let plain = scanLine(content, skipEmail);
+    const decoded = decodeEscapes(content);
+    const extra: Finding[] = [];
+    if (decoded.escaped) {
+      const hits = scanLine(decoded.text, skipEmail).map((hit) => ({
+        ...hit,
+        from: decoded.spans[hit.index]?.[0] ?? 0,
+        to: decoded.spans[hit.index + hit.match.length - 1]?.[1] ?? content.length,
+      }));
+      const overlaps = (p: Hit, d: (typeof hits)[number]) =>
+        p.kind === d.kind && p.index < d.to && d.from < p.index + p.match.length;
+      const same = (p: Hit, d: (typeof hits)[number]) =>
+        p.index === d.from && p.index + p.match.length === d.to && p.match === d.match;
+      const kept = plain.filter((p) => !hits.some((d) => overlaps(p, d)));
+      const unchanged = plain.filter((p) => hits.some((d) => overlaps(p, d) && same(p, d)));
+      for (const d of hits) {
+        if (unchanged.some((p) => p.kind === d.kind && same(p, d))) continue;
+        extra.push({ file, line, kind: d.kind, match: d.match + ESCAPES_NOTE });
+      }
+      plain = [...kept, ...unchanged];
     }
-    for (const match of content.matchAll(LAN_HOST)) {
-      findings.push({ file, line, kind: "lan-hostname", match: match[0] });
-    }
-    for (const match of content.matchAll(POSIX_HOME)) {
-      if (!isPlaceholderUser(match[2] ?? ""))
-        findings.push({ file, line, kind: "home-path", match: match[0] });
-    }
-    for (const match of content.matchAll(WINDOWS_HOME)) {
-      if (!isPlaceholderUser(match[1] ?? ""))
-        findings.push({ file, line, kind: "home-path", match: match[0] });
-    }
-    for (const match of content.matchAll(EMAIL)) {
-      if (!skipEmail && !isAllowedEmail(match[0]))
-        findings.push({ file, line, kind: "email", match: match[0] });
-    }
+    for (const hit of plain) findings.push({ file, line, kind: hit.kind, match: hit.match });
+    findings.push(...extra);
   });
   return findings;
 }

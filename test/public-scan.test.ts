@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isAllowedEmail, isPrivateIpv4, looksBinary, scanText } from "../scripts/lib/public-scan.js";
+import {
+  ESCAPES_NOTE,
+  isAllowedEmail,
+  isPrivateIpv4,
+  looksBinary,
+  scanText,
+} from "../scripts/lib/public-scan.js";
 
 // The examples are assembled at run time so this file doesn't trip the checker itself.
 const ip = (...parts: number[]) => parts.join(".");
 const at = (local: string, domain: string) => `${local}@${domain}`;
 const kinds = (text: string) => scanText("f", text).map((f) => f.kind);
+const BS = String.fromCharCode(92);
+/** One character written as a JSON/JavaScript escape: backslash, u and four hex digits. */
+const esc = (char: string) => `${BS}u${char.charCodeAt(0).toString(16).padStart(4, "0")}`;
+/** Writes every character of the text as an escape. */
+const escAll = (text: string) => [...text].map(esc).join("");
 
 test("private IPv4 ranges are found; loopback, public and documentation addresses are fine", () => {
   for (const address of [
@@ -142,4 +153,138 @@ test("findings carry the file and line, and binary files are recognised", () => 
   assert.deepEqual(findings, [{ file: "docs/x.md", line: 2, kind: "private-ip", match: ip(192, 168, 0, 9) }]);
   assert.equal(looksBinary(new Uint8Array([1, 0, 2])), true);
   assert.equal(looksBinary(new TextEncoder().encode("text")), false);
+});
+
+test("addresses written with JSON escapes are found, decoded and marked", () => {
+  const address = at("jane.doe", "gmail.com");
+  const written = `${"jane.doe"}${esc("@")}${"gmail.com"}`;
+  assert.deepEqual(scanText("a.json", `  "mail": "${written}",\n`), [
+    { file: "a.json", line: 1, kind: "email", match: address + ESCAPES_NOTE },
+  ]);
+  assert.deepEqual(kinds(escAll(address)), ["email"], "every character escaped");
+  const dotted = ip(192, 168, 1, 20).replace(/\./g, esc("."));
+  assert.deepEqual(scanText("a.json", `ok\n"ip": "${dotted}"`), [
+    { file: "a.json", line: 2, kind: "private-ip", match: ip(192, 168, 1, 20) + ESCAPES_NOTE },
+  ]);
+  const host = ["nas", "local"].join(esc("."));
+  assert.deepEqual(kinds(`"host": "${host}"`), ["lan-hostname"]);
+  assert.deepEqual(kinds(`"dir": "${"/ho" + "me"}${BS}/jdoe"`), ["home-path"], "escaped slash");
+  assert.deepEqual(kinds(`ssh ${"nas.lo" + "cal"} and ${escAll(["a", "la" + "n"].join("."))}`), [
+    "lan-hostname",
+    "lan-hostname",
+  ]);
+});
+
+test("allowed addresses written with escapes still pass", () => {
+  for (const ok of [at("you", "example.com"), at("no-reply", "somewhere.org")]) {
+    assert.deepEqual(kinds(ok.replace("@", esc("@"))), [], ok);
+    assert.deepEqual(kinds(escAll(ok)), [], ok);
+  }
+  assert.deepEqual(kinds(`${ip(8, 8, 8, 8).replace(/\./g, esc("."))}`), []);
+  assert.deepEqual(kinds(`/home/you${BS}/x`), []);
+  const notice = `      "deprecated": "Contact ${"author"}${esc("@")}${"maintainer.org"}",`;
+  assert.deepEqual(kinds(notice), ["email"]);
+  assert.deepEqual(
+    scanText("package-lock.json", notice).map((f) => f.kind),
+    [],
+    "the lockfile deprecation rule covers the decoded line too",
+  );
+});
+
+test("a problem visible in the plain line is reported once, even with other escapes around", () => {
+  const address = at("jane.doe", "gmail.com");
+  assert.deepEqual(scanText("f", `{"a": "${address}", "b": "tab${esc("\t")}", "c": "x${BS}/y"}`), [
+    { file: "f", line: 1, kind: "email", match: address },
+  ]);
+  // The same address in both forms on one line is two positions, so two findings.
+  assert.deepEqual(
+    scanText("f", `${address} ${address.replace("@", esc("@"))}`).map((f) => f.match),
+    [address, address + ESCAPES_NOTE],
+  );
+  // A different address written with escapes next to a plain one is found as well.
+  const other = at("john", "gmail.com");
+  assert.deepEqual(
+    scanText("f", `${address} ${other.replace("@", esc("@"))}`).map((f) => f.match),
+    [address, other + ESCAPES_NOTE],
+  );
+});
+
+test("backslashes that are not escapes are not misread", () => {
+  assert.deepEqual(kinds(`C:\\${"Us" + "ers"}\\jdoe\\x`), ["home-path"], "still found, plain");
+  assert.deepEqual(
+    scanText("f", `C:${BS}${"Us" + "ers"}${BS}jdoe${BS}x`).map((f) => f.match),
+    [`C:${BS}${"Us" + "ers"}${BS}jdoe`],
+  );
+  assert.deepEqual(kinds(`const re = /^\\d+\\.\\w+$/; path = "C:${BS}${BS}temp${BS}${BS}ufiles"`), []);
+  assert.deepEqual(kinds(`${BS}user ${BS}u12 ${BS}u00zz ${BS}uD83D ${BS}uD83D${BS}uDE00 ${BS}ud800x`), []);
+  // An escaped backslash before u is a backslash and a u, not an escape: no "@" appears.
+  const doubled = `jane.doe${BS}${BS}u0040gmail.com`;
+  assert.deepEqual(kinds(doubled), []);
+  // Invalid hex is left alone, and valid escapes after it are still decoded.
+  assert.deepEqual(kinds(`jane.doe${BS}u00zzgmail.com ${at("a", "gmail.com").replace("@", esc("@"))}`), [
+    "email",
+  ]);
+});
+
+test("mixed escapes decode in one pass, the way JSON does", () => {
+  const dir = `C:${esc(BS)}${BS}${BS}${"Us" + "ers"}${BS}${BS}jdoe${BS}${BS}x`;
+  assert.deepEqual(
+    scanText("a.json", `"p": "${dir}"`).map((f) => f.kind),
+    ["home-path"],
+    "a backslash escape before an escaped backslash pair",
+  );
+  const slashed = `"p": "${"/ho" + "me"}${BS}/jdoe${BS}${BS}x"`;
+  assert.deepEqual(kinds(slashed), ["home-path"]);
+  // Doubled-backslash paths with no other escape are still found, once, as plain text.
+  const plainPath = `"p": "C:${BS}${BS}${"Us" + "ers"}${BS}${BS}jdoe${BS}${BS}x"`;
+  assert.deepEqual(
+    scanText("a.json", plainPath).map((f) => f.match),
+    [`C:${BS}${BS}${"Us" + "ers"}${BS}${BS}jdoe`],
+  );
+  // What a replacement produces is not decoded again: an escaped backslash then u0040 stays text.
+  assert.deepEqual(kinds(`jane.doe${BS}${BS}u0040gmail.com ${esc("x")}`), []);
+});
+
+test("an address with an escape inside it is reported once, in full", () => {
+  const written = `jane${esc(".")}doe${"@"}gmail.com`;
+  assert.deepEqual(
+    scanText("f", written).map((f) => f.match),
+    [at("jane.doe", "gmail.com") + ESCAPES_NOTE],
+  );
+  const other = at("john", "gmail.com").replace("@", esc("@"));
+  assert.deepEqual(
+    scanText("f", `${at("sam", "gmail.com")} ${other}`).map((f) => f.match),
+    [at("sam", "gmail.com"), at("john", "gmail.com") + ESCAPES_NOTE],
+    "a plain address and a different escaped one are two findings",
+  );
+  assert.deepEqual(
+    scanText("f", `${written} ${at("sam", "gmail.com")}`).map((f) => f.match),
+    [at("sam", "gmail.com"), at("jane.doe", "gmail.com") + ESCAPES_NOTE],
+  );
+});
+
+test("each finding is one position: distinct or repeated addresses are never merged or split", () => {
+  const address = at("jane.doe", "gmail.com");
+  const split = `jane${esc(".")}doe${"@"}gmail.com`;
+  // A: a plain address, then the same address written with an escape: two findings.
+  assert.deepEqual(
+    scanText("f", `${address} ${split}`).map((f) => f.match),
+    [address, address + ESCAPES_NOTE],
+  );
+  // The tail a plain scan sees after the escape is a different, distinct address: still found.
+  const tail = at("doe", "gmail.com");
+  assert.deepEqual(
+    scanText("f", `${address} ${esc("j")}${tail}`).map((f) => f.match),
+    [address, at("jdoe", "gmail.com") + ESCAPES_NOTE],
+  );
+  // B: the same plain address twice, with an unrelated escape elsewhere: two plain findings, no tail.
+  assert.deepEqual(
+    scanText("f", `${address} ${address} ${esc("x")}`).map((f) => f.match),
+    [address, address],
+  );
+  // The same address twice with escapes in only one of them.
+  assert.deepEqual(
+    scanText("f", `${split} ${split}`).map((f) => f.match),
+    [address + ESCAPES_NOTE, address + ESCAPES_NOTE],
+  );
 });

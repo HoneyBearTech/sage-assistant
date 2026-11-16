@@ -8,6 +8,10 @@ All notable changes to Sage are documented here. The format follows
 
 ### Fixed
 
+- **The public-repo checker also reads text written with escapes.** An e-mail address, private address,
+  LAN host name or home folder written with JSON escapes is now decoded and checked too, and reported once, marked "(written with
+  escapes)". The escapes decoded are `\u` with four hex digits, an escaped backslash (two backslashes)
+  and `\/`; nothing else.
 - **A deleted reminder can no longer show once in the chat.** Opening Chat, or bringing the window back
   into view, now collects Sage's notices again before confirming the ones held, so a notice whose
   reminder was just deleted is removed instead of appearing.

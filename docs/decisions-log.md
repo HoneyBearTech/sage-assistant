@@ -2,6 +2,24 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - public-scan-escapes
+
+**Context:** the owner asked for the next roadmap item: "Public-repo checker: also catch e-mail
+addresses written with JSON escapes", a gap found during the installer job.
+
+**Decisions:**
+- **Decode the way JSON does, in one pass:** `\u` with four hex digits, an escaped backslash (to one
+  backslash) and `\/`, in every text file, with no repeated decoding. Every rule runs on the decoded line
+  too, with the same exceptions.
+- **Findings are placed by position, not by text.** A plain finding that overlaps one in the decoded
+  line is replaced by the fuller decoded one, so each occurrence is reported once.
+- *Not covered:* HTML entities, `%40`, base64, `\x40`, `\u{40}` and words like "at" and "dot".
+
+**Review:** the Security Officer found nothing to fix and noted the wording should name the exact
+escapes (done). The Auditor found a Windows path hidden by mixed escapes and an address reported twice,
+then two dedupe cases left by matching on text; the position rule fixed both. The Auditor approved
+after checking thousands of generated lines against the old checker.
+
 ## 2026-11-16 - notice-recollect
 
 **Context:** the owner asked to move to the next roadmap item: "re-collect window notices before showing
