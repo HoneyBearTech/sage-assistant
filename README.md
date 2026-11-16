@@ -64,6 +64,24 @@ runner downloads the model and checks its files, with progress and **Cancel**, a
 this computer with it (Sage switches to **On this computer**, even if you were using an online service). **Skip
 setup** is always there, and **Settings → Set up Sage** brings the screen back.
 
+The steps are numbered (01 Where Sage thinks, 02 Model runner, 03 Model, 04 Ready), and each one lists
+what Sage checked in short typed lines, such as "Looking for the local model runner... found", each
+written from a real answer (with reduced motion on, they appear at once).
+
+### Support codes and Copy diagnostics
+
+When a check fails, Sage shows a short **support code** next to its plain sentence, such as
+`SAGE-RUN-01` (the local model runner didn't answer). The
+[table of support codes](docs/installing.md#support-codes) says what each means and what to try.
+
+**Copy diagnostics…** on a failed step shows a short text that Sage puts together on your PC, in full,
+and **Copy to clipboard** copies exactly that, for you to paste wherever you ask for help. It holds
+Sage's version, the system and its version, the processor type, the step and its code, the kind of
+brain (local, claude, openai, gemini or other), whether the local model runner answered and its version,
+whether the chosen model is there (named only if it is one of Sage's two), the voice status, and the
+theme and reduced-motion settings. It never holds a key, a web or e-mail address, your user name, a
+folder path, notes or reminders, and **Sage sends it nowhere**: it is copied only when you choose Copy.
+
 ## What Sage can do
 
 | Skill | What it does | Asks first? |

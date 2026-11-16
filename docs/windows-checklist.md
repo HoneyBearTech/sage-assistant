@@ -134,16 +134,33 @@ any release. You need the network for the download (the Smaller model is about 1
 Welcome screen again at any time, choose **Settings → Set up Sage**.
 
 - [ ] **No runner.** Quit the local model runner (its icon by the clock → Quit). Choose **Settings → Set
-      up Sage**: the Welcome screen opens with no tabs, the focus on "Where should Sage think?", and
-      **Skip setup** at the top. Choose **On this computer**: it says Sage can't reach the local model
-      runner (not installed yet, or not running), with install steps, **Open the install guide**, and
-      **Check again**. **Next** is greyed out.
+      up Sage**: the Welcome screen opens with no tabs, the focus on "01 Where Sage thinks", and
+      **Skip setup** at the top. Choose **On this computer**: under "02 Model runner" one line types out,
+      "Looking for the local model runner... not found", and it says Sage can't reach the local model
+      runner (not installed yet, or not running), with **Support code: SAGE-RUN-01** in amber next to
+      it, install steps, **Open the install guide**, **Check again** and **Copy diagnostics…**. **Next**
+      is greyed out.
+- [ ] **Numbered sections.** The four steps are labelled 01 Where Sage thinks, 02 Model runner, 03 Model
+      and 04 Ready, in small monospace capitals, each in a panel with corner ticks, in both the dark and
+      the light theme.
+- [ ] **Copy diagnostics.** On the failed runner step, choose **Copy diagnostics…**: a box opens below
+      with the whole text, and the keyboard focus moves to it. Read it: Sage's version, "System:
+      Windows" and its version, the CPU, "Setup step: 02 Model runner", "Support code: SAGE-RUN-01: …",
+      "Brain: local", "Local model runner: didn't answer", the runner version, the chosen model, the
+      voice status, the theme and reduced motion. Choose **Copy to clipboard**: it says "Copied."
+      Open Notepad and paste: the text is exactly what the box showed. Check it holds no user name, no
+      `C:\Users\…` path, no e-mail address, no key, no web address, and no note or reminder text (with
+      an online key saved and a note added beforehand, for a real test). Nothing else happens: no
+      browser opens and nothing is sent.
 - [ ] **The install guide box.** Choose **Open the install guide**: Sage's own box asks *"Open Sage's
       install guide in your web browser?"*, with **Not now** selected. Choose **Not now**: nothing opens,
       and the screen says so. Choose it again, then **Open**: the web browser opens the "local model
       runner" part of `docs/installing.md` on GitHub, and nothing else opens.
-- [ ] **Runner stopped, then started.** Start the runner again and choose **Check again**: it says the
-      local model runner is running, and **Next** works.
+- [ ] **Runner stopped, then started.** Start the runner again and choose **Check again**: the lines
+      type out one after another ("Looking for the local model runner... found", "Runner version …...
+      ok", then one line for each of Sage's two models, downloaded or not), the code, **Copy
+      diagnostics…** and the box are gone, it says the local model runner is running, and **Next**
+      works. Choose **Check again** and press a key while the lines type: all of them show at once.
 - [ ] **Runner without the model.** Choose **Next**: the Standard model shows "Already downloaded." (from
       the setup at the top of this checklist) and its button says **Use this model**. Choose **Smaller**:
       the button says **Download**.
@@ -159,11 +176,15 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
 - [ ] **Offline.** **Try again**, then **Download**; once it is downloading, turn the network off. Within
       about 2 minutes Sage stops it with a plain message (that this PC may be offline, or "The download
       made no progress for 2 minutes…"), in Sage's plain words rather than a technical error from the
-      runner, and offers **Try again**. Turn
-      the network back on.
+      runner, with the line "Model qwen3:1.7b... download failed", a support code (`SAGE-NET-01` or
+      `SAGE-NET-02`) and **Copy diagnostics…**, and offers **Try again**. Look the code up in
+      `docs/installing.md` (Troubleshooting → Support codes). Choose **Copy diagnostics…**: the box says
+      "Setup step: 03 Model" and the same code. Turn the network back on.
 - [ ] **A real download.** **Try again**, then **Download**: the progress goes up to the full size, then
-      it says "The Smaller model is ready." with **Next**, and no warning about skills. Choose **Next**:
-      "Sage is ready" says Sage will think with the Smaller model (qwen3:1.7b) and how to talk to it.
+      it says "The Smaller model is ready." with **Next**, the lines "Model qwen3:1.7b... ready" and
+      "Skills... supported", no code, and no warning about skills. Choose **Next**: "04 Ready" lists
+      "Model qwen3:1.7b... ready" and the voice ("Voice... not downloaded", or ready), and says Sage
+      will think with the Smaller model (qwen3:1.7b) and how to talk to it.
       Choose **Start chatting**: the chat opens, the header shows "Brain: on this computer (qwen3:1.7b)",
       and a message gets a reply.
 - [ ] **Already there.** **Settings → Set up Sage** → **On this computer** → **Next** → **Standard** →
@@ -181,6 +202,15 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
       computer** → **Next** → **Standard** → **Use this model**: it says the Standard model is ready, and
       after **Next** and **Start chatting** the header shows "Brain: on this computer (qwen3:4b)". In Settings, the
       online address and model are still there, and the key is still saved.
+- [ ] **Reduced motion.** Turn on Windows Settings → Accessibility → Visual effects → Animation effects
+      off, then **Settings → Set up Sage** → **On this computer**: all the check lines appear at once,
+      with no typing and no blinking cursor. **Copy diagnostics…** on a failed step says "Reduced
+      motion: on". Turn animation effects back on.
+- [ ] **Keyboard only.** Unplug or ignore the mouse. **Settings → Set up Sage**, then Tab through every
+      step: each button, including **Copy diagnostics…**, the diagnostics box and **Copy to clipboard**,
+      shows a visible focus ring and works with Enter or Space; the text box can be scrolled with the
+      arrow keys. With Narrator on, each set of check lines is read once, as a whole, and the support
+      code with it.
 - [ ] **Notices and the talk key.** Add a reminder for one minute from now, then **Settings → Set up
       Sage** and wait on the Welcome screen until it is due (with notifications turned off for Sage in
       Windows Settings → System → Notifications, it goes to the chat window instead): when you choose **Skip setup**, the reminder is in the chat. On the Welcome screen,

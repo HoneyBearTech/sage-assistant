@@ -27,6 +27,24 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **The Welcome screen as a start-up sequence.** Its four steps are numbered sections in the new look
+  (01 Where Sage thinks, 02 Model runner, 03 Model, 04 Ready), and each one lists what Sage checked as
+  short typed lines, such as "Looking for the local model runner... found", "Runner version 0.12.3...
+  ok", "Model qwen3:4b... ready" or "Voice... not downloaded". Every line comes from a real answer
+  (the runner's status and version, the model download's result, the voice status), never made-up
+  progress. A click or a key shows them all; with reduced motion they appear at once; screen readers
+  hear each set once, through one polite status area. Sage now asks the local model runner for its
+  version, and keeps it only if it is a plain version number.
+- **Support codes.** A failed check shows a short code next to its plain sentence, such as
+  `SAGE-RUN-01` (the local model runner didn't answer) or `SAGE-MOD-02` (not enough disk space). The new
+  [Support codes](docs/installing.md#support-codes) table under Troubleshooting says what each means
+  and what to try.
+- **Copy diagnostics.** A failed step offers **Copy diagnostics…**: Sage puts together a short text on
+  your PC (its version, the system, the processor, the step and code, the kind of brain, whether the
+  runner answered and its version, whether the chosen model is there, the voice status, the theme and
+  reduced motion), shows all of it in a read-only box, and **Copy to clipboard** copies exactly that.
+  It never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders,
+  and Sage sends it nowhere.
 - **A Home screen, first in the tab bar (Home, Chat, Settings).** Sage now opens on Home (the Welcome
   screen still comes first until setup is done). Home has a large orb that shows the same state as the
   chat's, a clock in your PC's own time format (it changes on the minute), a greeting for the time of

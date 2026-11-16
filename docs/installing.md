@@ -129,18 +129,21 @@ PowerShell or a terminal, `cd sage-assistant`, and run `npm start`.
 
 ### The Welcome screen
 
-The first time Sage starts, it opens a **Welcome screen** instead of the chat. It goes step by step:
+The first time Sage starts, it opens a **Welcome screen** instead of the chat. It goes step by step,
+in numbered sections, and each step lists what Sage checked in short typed lines (a click or a key
+shows them all at once; with your system's "reduce motion" setting on they appear at once). If a check
+fails, Sage shows a [support code](#support-codes) and **Copy diagnostics…**.
 
-1. **Where should Sage think?** **On this computer** (recommended, private) or **An online service
+1. **01 Where Sage thinks.** **On this computer** (recommended, private) or **An online service
    (Claude, OpenAI, Gemini or another)**. The online choice opens Settings, where you pick the brain and
    save its key (see [The online brain](#the-online-brain-optional)), then choose **Save settings**. Setup counts as done
    from that choice, so if you close Sage before saving, use **Settings → Set up Sage** to start again.
-2. **The local model runner.** Sage checks whether the runner is running. If it can't reach it (not
+2. **02 Model runner.** Sage checks whether the runner is running. If it can't reach it (not
    installed yet, or not started; Sage can't tell which), it shows short install steps and **Open the
    install guide**. Sage first asks in its own box, then opens the
    [local model runner](#local-model-runner) part of this guide in your web browser; if no browser
    opens, it shows the address to copy. When the runner is running, choose **Check again**.
-3. **A model.** **Standard** (`qwen3:4b`, about 2.5 GB, Sage's default) or **Smaller, for PCs with less
+3. **03 Model.** **Standard** (`qwen3:4b`, about 2.5 GB, Sage's default) or **Smaller, for PCs with less
    memory** (`qwen3:1.7b`, about 1.4 GB, faster but makes more mistakes). A model already downloaded is
    marked, and needs no download. **Download** asks first in Sage's own box, with the size; it needs an
    internet connection and free disk space. The local model runner downloads the model and checks its
@@ -150,7 +153,7 @@ The first time Sage starts, it opens a **Welcome screen** instead of the chat. I
    model **and switches the brain to On this computer**, even if you were using an online service (the
    download box says so; your online settings and key stay saved, and you can
    switch back in Settings). Then it checks with the runner that the model can use Sage's skills.
-4. **Done.** **Start chatting** opens the chat.
+4. **04 Ready.** It lists the model and whether voice is ready; **Start chatting** opens the chat.
 
 **Skip setup** is always there. Skipping or finishing changes nothing else (apps, folders, the online
 service and its key stay as they are), and the Welcome screen doesn't come back by itself. To see it
@@ -303,3 +306,28 @@ the local model runner (its models are in its own folder).
 | "The download of the speech file stopped making progress…" | Nothing arrived for 30 seconds. Check the PC is online, then choose **Try again**. |
 | The window doesn't open on Linux | See [the sandbox note](#linux-notes). |
 | `npm install` fails | Check `node --version` shows v24, then delete `node_modules` and run `npm install` again. |
+
+### Support codes
+
+When a check on the Welcome screen fails, Sage shows a short support code next to its plain sentence,
+such as `SAGE-RUN-01`, and a **Copy diagnostics…** button. The code says which check failed; the table
+says what to try. If you ask for help, give the code, and paste the diagnostics if you like: **Copy
+diagnostics…** shows the whole text first, and **Copy to clipboard** copies it. It holds Sage's version,
+the system and its version, the processor type, the step and its code, the kind of brain (never a key or
+an online address), whether the runner answered and its version, whether the chosen model is there (by
+name only if it is one of Sage's two), the voice status, and the theme and reduced-motion settings. It
+never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders. Sage
+sends it nowhere.
+
+| Code | What it means | What to try |
+| --- | --- | --- |
+| `SAGE-RUN-01` | The local model runner didn't answer: it isn't installed yet, or it isn't running. Sage can't tell which. | Install it with the steps under [local model runner](#local-model-runner), or start it (on Windows, from the Start menu), then choose **Check again**. |
+| `SAGE-RUN-02` | The runner answered, but with something Sage couldn't read: usually an old runner, or another program using the runner's port (11434). | Update the local model runner and start it again, and check that nothing else uses port 11434; then choose **Check again** (or **Try again**). |
+| `SAGE-MOD-01` | The runner couldn't download the model and didn't say why. | Choose **Try again**. If it keeps happening, restart the runner, or download the model with the runner's own command (see [step 1](#local-model-runner)). |
+| `SAGE-MOD-02` | There isn't enough free disk space for the model. | Free up some space (Standard needs about 2.5 GB, Smaller about 1.4 GB), then choose **Try again**. |
+| `SAGE-MOD-03` | The runner couldn't find the model. | Update the local model runner, then choose **Try again**. |
+| `SAGE-MOD-04` | Another model download was still running. | Wait for it to finish or choose **Cancel**, then **Try again**; restarting Sage stops it too. |
+| `SAGE-NET-01` | The runner couldn't reach the internet to download the model. | Check that the PC is online (and that a firewall or proxy lets the runner out), then choose **Try again**. |
+| `SAGE-NET-02` | The download made no progress for 2 minutes, so Sage stopped it. | Check that the PC is online, then choose **Try again**. |
+| `SAGE-SET-01` | The model is downloaded, but Sage couldn't save it as the local model in its settings file. | Check that the disk isn't full and Sage's [data folder](#where-your-data-is) can be written to, then choose **Try again** (no new download is needed). |
+| `SAGE-APP-01` | Sage couldn't run the check itself: the window's request to the rest of Sage failed. | Choose **Check again** or **Try again**. If it keeps happening, restart Sage, and report it as an issue with the code and the diagnostics. |
