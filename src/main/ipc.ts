@@ -7,6 +7,7 @@ import {
   CHANNELS,
   type Channel,
   MAX_ACK_IDS,
+  MAX_MESSAGE_CHARS,
   MAX_VOICE_SAMPLES,
   type PublicSettings,
   type Result,
@@ -21,7 +22,7 @@ export interface Pickers {
 
 export type Handler = (payload: unknown) => Promise<unknown>;
 
-const sendPayload = z.strictObject({ text: z.string().trim().min(1).max(8_000) });
+const sendPayload = z.strictObject({ text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS) });
 const keyPayload = z.strictObject({
   key: z.string().min(1).max(1_000),
   // The address on screen when Save key was pressed; checked against the saved one.

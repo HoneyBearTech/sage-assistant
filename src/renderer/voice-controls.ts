@@ -1,4 +1,4 @@
-import type { DownloadResult, PublicSettings, SageApi } from "../shared/api.js";
+import { type DownloadResult, MAX_MESSAGE_CHARS, type PublicSettings, type SageApi } from "../shared/api.js";
 import { Recording, Speaker, toPcm16k } from "./voice.js";
 import {
   appendTranscript,
@@ -36,6 +36,8 @@ export interface VoiceControls {
 type TalkSource = "key" | "button" | "button-key";
 interface Talk {
   source: TalkSource;
+  /** For a recording held from the keyboard on the Talk button: the key that started it. */
+  key?: string;
   startedAt: number;
   recording: Recording | null;
   timer: ReturnType<typeof setInterval>;
@@ -88,10 +90,14 @@ export function createVoiceControls(
     }
   }
 
-  async function startTalk(source: TalkSource): Promise<void> {
+  async function startTalk(source: TalkSource, key?: string): Promise<void> {
     // Sage never hears itself: talking stops any reply being read aloud.
     speaker.stop();
-    if (talk || working) return;
+    if (talk) return;
+    if (working) {
+      show(VOICE_TEXT.stillWorking);
+      return;
+    }
     if (downloading) {
       show(VOICE_TEXT.waitForDownload, { cancel: true });
       return;
@@ -103,6 +109,7 @@ export function createVoiceControls(
     const startedAt = Date.now();
     const current: Talk = {
       source,
+      ...(key ? { key } : {}),
       startedAt,
       recording: null,
       timer: setInterval(() => show(VOICE_TEXT.listening(Date.now() - startedAt)), 250),
@@ -183,7 +190,13 @@ export function createVoiceControls(
         show(VOICE_TEXT.nothingHeard);
         return;
       }
-      el.input.value = appendTranscript(el.input.value, result.text);
+      const combined = appendTranscript(el.input.value, result.text);
+      if (combined.length > MAX_MESSAGE_CHARS) {
+        // Setting the value directly skips the box's own limit; the draft is kept as it is.
+        show(VOICE_TEXT.tooLong);
+        return;
+      }
+      el.input.value = combined;
       fromVoice = true;
       show("");
       el.input.focus();
@@ -210,13 +223,16 @@ export function createVoiceControls(
     if (event.repeat) return;
     void startTalk("key");
   });
+  // Letting go is watched on the whole page, so it works wherever the focus has moved meanwhile.
   document.addEventListener("keyup", (event) => {
-    if (talk?.source !== "key") return;
-    // Letting go of either key stops it.
-    if (event.key === "Control" || event.code === "Space" || event.key === " ") {
-      event.preventDefault();
-      void stopTalk();
-    }
+    const stops =
+      talk?.source === "key"
+        ? // Letting go of either key stops it.
+          event.key === "Control" || event.code === "Space" || event.key === " "
+        : talk?.source === "button-key" && event.key === talk.key;
+    if (!stops) return;
+    event.preventDefault();
+    void stopTalk();
   });
 
   // The Talk button: press and hold with the mouse, a finger or a pen, or hold Space or Enter on it.
@@ -234,12 +250,12 @@ export function createVoiceControls(
   el.talkButton.addEventListener("keydown", (event) => {
     if (event.ctrlKey || (event.key !== " " && event.key !== "Enter")) return;
     event.preventDefault();
-    if (!event.repeat) void startTalk("button-key");
+    if (!event.repeat) void startTalk("button-key", event.key);
   });
-  el.talkButton.addEventListener("keyup", (event) => {
-    if (talk?.source !== "button-key" || (event.key !== " " && event.key !== "Enter")) return;
-    event.preventDefault();
-    void stopTalk();
+  // Held from the keyboard and the focus moves away (Tab, or a reply focusing the message box): it
+  // stops there, and what was said so far is worked out.
+  el.talkButton.addEventListener("blur", () => {
+    if (talk?.source === "button-key") void stopTalk();
   });
 
   window.addEventListener("blur", () => cancelTalk(VOICE_TEXT.lostFocus));
@@ -289,6 +305,10 @@ export function createVoiceControls(
       cancelTalk("");
       generation++;
       speaker.stop();
+      // The old chat's words are gone from Sage's point of view, and so is their status line; a
+      // download keeps its progress line.
+      fromVoice = false;
+      if (!downloading) show("");
     },
     takeFromVoice() {
       const taken = fromVoice;

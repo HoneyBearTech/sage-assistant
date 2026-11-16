@@ -13,6 +13,9 @@ export const VOICE_LIST_WAIT_MS = 10_000;
 export const VOICE_TEXT = {
   listening: (ms: number) => `Listening… ${formatSeconds(ms)}`,
   working: "Working out what you said…",
+  stillWorking: "Still working out what you said…",
+  tooLong:
+    "Those words don't fit in the message box (8,000 characters at most), so they weren't added. Send or shorten what's there, then try again.",
   tap: "Hold the key or the Talk button while you speak, and let go when you're done.",
   nothingHeard: "Sage didn't catch any words. Hold the key and try again.",
   lostFocus: "Sage stopped listening because its window lost focus.",

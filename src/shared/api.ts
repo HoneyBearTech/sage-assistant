@@ -17,6 +17,9 @@ export const CHANNELS = {
   transcribe: "sage:voice-transcribe",
 } as const;
 
+/** The longest message the window may send; the message box has the same limit. */
+export const MAX_MESSAGE_CHARS = 8_000;
+
 /** One recording: 16,000 samples a second, one channel, at most 30 seconds. */
 export const VOICE_SAMPLE_RATE = 16_000;
 export const MAX_VOICE_SAMPLES = VOICE_SAMPLE_RATE * 30;

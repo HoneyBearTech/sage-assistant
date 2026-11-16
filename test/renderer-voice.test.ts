@@ -8,7 +8,7 @@ import {
   shouldSpeak,
   VOICE_TEXT,
 } from "../src/renderer/voice-text.js";
-import { MAX_VOICE_SAMPLES, type TranscribeResult } from "../src/shared/api.js";
+import { MAX_MESSAGE_CHARS, MAX_VOICE_SAMPLES, type TranscribeResult } from "../src/shared/api.js";
 import { blurWindow, pressKey, setWindowVisibility } from "./fake-dom.js";
 import { FakeStream, micError, voice } from "./fake-media.js";
 import { deferred, settled } from "./helpers.js";
@@ -184,15 +184,61 @@ test("losing focus, hiding the window or New chat closes the microphone and drop
   assert.equal(media.streams.length, 3);
 });
 
-test("New chat while a recording is being worked out drops its words", async (t) => {
+test("New chat while a recording is being worked out drops its words and clears the status", async (t) => {
   const answer = deferred<TranscribeResult>();
   const { el, hold, status } = await voiceWindow(t, { transcribe: () => answer.promise });
   await hold(2_000);
   assert.equal(status(), "Working out what you said…");
   el("new-chat").click();
+  assert.equal(status(), "", "the status doesn't stay on screen");
   answer.resolve({ ok: true, text: "old words" });
   await settled();
   assert.equal(el("input").value, "");
+  assert.equal(status(), "");
+});
+
+test("pressing the talk key while the last recording is worked out says so", async (t) => {
+  const answer = deferred<TranscribeResult>();
+  const { el, hold, status, media } = await voiceWindow(t, { transcribe: () => answer.promise });
+  await hold(2_000);
+  pressKey("keydown", ctrlSpace);
+  await settled();
+  assert.equal(status(), VOICE_TEXT.stillWorking);
+  assert.equal(media.streams.length, 1, "no second recording");
+  pressKey("keyup", { key: "Control" });
+  answer.resolve({ ok: true, text: "done" });
+  await settled();
+  assert.equal(el("input").value, "done");
+});
+
+test("words that would push the message box past its limit aren't added, and the draft is kept", async (t) => {
+  const { el, hold, status } = await voiceWindow(t);
+  const draft = "x".repeat(MAX_MESSAGE_CHARS - 5);
+  el("input").value = draft;
+  await hold(1_000);
+  assert.equal(el("input").value, draft, "the draft is untouched");
+  assert.equal(status(), VOICE_TEXT.tooLong);
+  // Words that just fit are added.
+  el("input").value = "x".repeat(MAX_MESSAGE_CHARS - "hello Sage".length - 1);
+  await hold(1_000);
+  assert.equal(el("input").value.length, MAX_MESSAGE_CHARS);
+  assert.equal(status(), "");
+});
+
+test("New chat clears the mark that the words came from talking", async (t) => {
+  const { el, media, hold, calls } = await voiceWindow(t);
+  await hold(1_000);
+  el("new-chat").click();
+  await settled();
+  el("input").dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["hello Sage"]);
+  assert.equal(media.speech.spoken.length, 0, "not counted as a voice message after New chat");
+});
+
+test("the message box's limit is the one the main process accepts", async () => {
+  const html = await readFile(new URL("../src/renderer/index.html", import.meta.url), "utf8");
+  assert.match(html, new RegExp(`<textarea id="input"[^>]*maxlength="${MAX_MESSAGE_CHARS}"`));
 });
 
 test("one recording at a time: talking again while the last one is worked out does nothing", async (t) => {
@@ -235,9 +281,12 @@ test("the Talk button works by press and hold, and from the keyboard", async (t)
   t.mock.timers.tick(1_000);
   talk.dispatch("pointerup");
   assert.equal(media.streams[1]!.open, true, "a pointer release doesn't stop a keyboard recording");
-  talk.dispatch("keyup", { key: "a" });
-  assert.equal(media.streams[1]!.open, true);
-  talk.dispatch("keyup", { key: " " });
+  // Key events bubble from the button to the page, where letting go is watched.
+  pressKey("keyup", { key: "a" });
+  pressKey("keyup", { key: "Enter" });
+  pressKey("keyup", { key: "Control" });
+  assert.equal(media.streams[1]!.open, true, "only the key that started it");
+  assert.equal(pressKey("keyup", { key: " " }).prevented, true);
   assert.equal(media.streams[1]!.open, false);
   await settled();
   await settled();
@@ -248,6 +297,47 @@ test("the Talk button works by press and hold, and from the keyboard", async (t)
   await settled();
   assert.equal(media.streams.length, 2);
   assert.equal(el("input").value, "hello Sage hello Sage");
+});
+
+test("held from the keyboard on the Talk button, letting go stops it wherever the focus has moved", async (t) => {
+  const { el, media, sent } = await voiceWindow(t);
+  const talk = el("talk");
+  // Hold Enter on the button, press Tab (the focus moves on, but the key events still reach the
+  // page), let go of Enter somewhere else.
+  talk.dispatch("keydown", { key: "Enter" });
+  await settled();
+  t.mock.timers.tick(1_000);
+  pressKey("keyup", { key: "Enter" });
+  assert.equal(media.streams[0]!.open, false);
+  await settled();
+  await settled();
+  assert.equal(sent.length, 1, "what was said is worked out");
+});
+
+test("held from the keyboard on the Talk button, the button losing focus stops it", async (t) => {
+  const { el, media, sent, status } = await voiceWindow(t);
+  const talk = el("talk");
+  talk.dispatch("keydown", { key: " " });
+  await settled();
+  t.mock.timers.tick(1_000);
+  // A reply arrives and focuses the message box, or Tab moves on.
+  talk.dispatch("blur");
+  assert.equal(media.streams[0]!.open, false, "not left running to the 30-second cap");
+  await settled();
+  await settled();
+  assert.equal(sent.length, 1);
+  assert.equal(el("input").value, "hello Sage");
+  pressKey("keyup", { key: " " });
+  await settled();
+  assert.equal(sent.length, 1, "the later key release does nothing more");
+  assert.equal(status(), "");
+  // A button recording made with the mouse isn't stopped by a blur: the pointer is held.
+  talk.dispatch("pointerdown", { button: 0, pointerId: 1 });
+  await settled();
+  talk.dispatch("blur");
+  assert.equal(media.streams[1]!.open, true);
+  talk.dispatch("pointerup");
+  assert.equal(media.streams[1]!.open, false);
 });
 
 test("microphone errors give plain messages, and nothing is left open", async (t) => {
