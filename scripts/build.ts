@@ -1,8 +1,10 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { build } from "esbuild";
 
-// Builds the app into dist/: the main process and the preload as CommonJS files for Electron, and
-// the chat window as one plain script next to its HTML and CSS. Nothing is fetched at run time.
+// Builds the app into dist/: the main process, the preload and the speech helper as CommonJS files
+// for Electron, and the chat window as one plain script next to its HTML and CSS. Nothing is fetched
+// at run time. The speech engine (sherpa-onnx-node, with its native files) isn't bundled: the helper
+// loads it from node_modules, and the packaged app keeps its native files outside the archive.
 
 const common = {
   bundle: true,
@@ -22,7 +24,16 @@ await Promise.all([
     platform: "node",
     format: "cjs",
     target: "node22",
-    external: ["electron"],
+    external: ["electron", "sherpa-onnx-node"],
+  }),
+  build({
+    ...common,
+    entryPoints: ["src/helper/voice-helper.ts"],
+    outfile: "dist/voice-helper.cjs",
+    platform: "node",
+    format: "cjs",
+    target: "node22",
+    external: ["electron", "sherpa-onnx-node"],
   }),
   // A sandboxed preload can only require("electron"), so everything else is bundled in.
   build({

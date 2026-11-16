@@ -189,3 +189,36 @@ test("nothing in the app sends telemetry or analytics", async () => {
   }
   for (const url of allowed) assert.ok(urls.includes(url), `${url} is the one in the code`);
 });
+
+test("the speech engine is the one run-time dependency, kept out of the bundles, its native files unpacked", async () => {
+  const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  assert.deepEqual(pkg.dependencies, { "sherpa-onnx-node": "2.0.1" }, "one dependency, exact version");
+  const build = await readFile(join(root, "scripts", "build.ts"), "utf8");
+  assert.match(
+    build,
+    /entryPoints: \["src\/helper\/voice-helper\.ts"\],\s+outfile: "dist\/voice-helper\.cjs"/,
+  );
+  assert.equal(build.match(/external: \["electron", "sherpa-onnx-node"\]/g)?.length, 2, "main and helper");
+  const builder = JSON.parse(await readFile(join(root, "electron-builder.json"), "utf8"));
+  assert.deepEqual(builder.asarUnpack, ["node_modules/sherpa-onnx-*-*/*.{node,dll,so,dylib}"]);
+  assert.deepEqual(builder.files, ["dist/**/*", "!dist/**/*.map", "package.json"]);
+  // Only the speech helper loads the engine; the main process and the window never do.
+  const users: string[] = [];
+  for (const entry of await readdir(join(root, "src"), { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".ts") || entry.name.endsWith(".d.ts")) continue;
+    const text = await readFile(join(entry.parentPath, entry.name), "utf8");
+    if (/from "sherpa-onnx-node"|require\("sherpa-onnx-node"\)/.test(text)) users.push(entry.name);
+  }
+  assert.deepEqual(users, ["voice-helper.ts"]);
+});
+
+test("the speech helper never logs, writes files or opens a connection", async () => {
+  for (const file of [
+    join("src", "helper", "voice-helper.ts"),
+    join("src", "core", "voice", "helper-protocol.ts"),
+    join("src", "core", "voice", "transcriber.ts"),
+  ]) {
+    const text = await readFile(join(root, file), "utf8");
+    assert.doesNotMatch(text, /console\.|node:fs|fetch\(|node:net|node:http|writeFile/, file);
+  }
+});

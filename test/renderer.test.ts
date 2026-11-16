@@ -84,6 +84,10 @@ async function startWindow(
     chooseApp: async () => null,
     takeNotices: async () => [],
     ackNotices: async () => {},
+    voiceStatus: async () => ({ model: "ready", received: 0, total: 44_243_206 }),
+    downloadVoice: async () => ({ status: "done" }),
+    cancelVoiceDownload: async () => {},
+    transcribe: async () => ({ ok: true, text: "" }),
     ...overrides,
   };
   const elements = installFakeDom(ids, api);

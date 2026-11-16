@@ -64,6 +64,14 @@
       ]
     },
     {
+      "description": "The speech engine: sherpa-onnx-node and its ready-built packages for each kind of PC share one version, so they come in one pull request.",
+      "matchPackageNames": ["sherpa-onnx-node", "sherpa-onnx-*"],
+      "groupName": "sherpa-onnx speech engine",
+      "prBodyNotes": [
+        "Speech engine update: it brings native code, which runs outside the app archive's integrity check. Check the install scripts again (npm install-scripts ls, and \"hasInstallScript\" in the package-lock.json diff), make sure electron-builder.json still unpacks its native files, and run the Voice section of docs/windows-checklist.md (from source and in the installed app) before merging."
+      ]
+    },
+    {
       "description": "biome.jsonc names the Biome version in its $schema line.",
       "matchPackageNames": ["@biomejs/biome"],
       "prBodyNotes": [

@@ -33,6 +33,9 @@
     "secret-scan": "tsx scripts/secret-scan.ts",
     "verify": "npm run check && npm run typecheck && npm run test:coverage && npm run check:public && npm run secret-scan"
   },
+  "dependencies": {
+    "sherpa-onnx-node": "2.0.1"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
     "@electron/fuses": "2.1.3",
