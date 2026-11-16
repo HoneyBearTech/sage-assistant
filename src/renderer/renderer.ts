@@ -89,6 +89,7 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
   chatGeneration++;
   const generation = chatGeneration;
   messages.replaceChildren();
+  forgetHeldNotices();
   sendButton.disabled = true;
   void sage
     .resetChat()
@@ -171,6 +172,19 @@ const confirming = new Set<string>();
 
 function chatVisible(): boolean {
   return !views.chat.hidden && document.visibilityState !== "hidden";
+}
+
+/**
+ * New chat removes the lines, so notices still held lose theirs: the next collection adds them
+ * again (Sage hands them out until they are confirmed) as fresh hidden lines. Notices whose
+ * confirmation is already on its way were revealed before the chat was cleared, so they stay.
+ */
+function forgetHeldNotices(): void {
+  for (const id of [...held.keys()]) {
+    if (confirming.has(id)) continue;
+    held.delete(id);
+    shownNotices.delete(id);
+  }
 }
 
 async function confirmShown(): Promise<void> {
@@ -263,7 +277,11 @@ document.addEventListener("visibilitychange", () => {
 /** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
 function startNotices(): void {
   void collectNotices();
-  setInterval(() => void collectNotices(), NOTICE_POLL_MS);
+  // A poll never queues another collection behind a running one: a slow answer would then be
+  // followed by one more every time, and nothing would ever be confirmed.
+  setInterval(() => {
+    if (!collecting) void collectNotices();
+  }, NOTICE_POLL_MS);
 }
 
 // --- Settings ---
