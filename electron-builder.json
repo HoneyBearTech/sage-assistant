@@ -20,9 +20,11 @@
   },
   "electronFuses": {
     "runAsNode": false,
+    "enableCookieEncryption": true,
     "enableNodeOptionsEnvironmentVariable": false,
     "enableNodeCliInspectArguments": false,
     "enableEmbeddedAsarIntegrityValidation": true,
-    "onlyLoadAppFromAsar": true
+    "onlyLoadAppFromAsar": true,
+    "grantFileProtocolExtraPrivileges": false
   }
 }

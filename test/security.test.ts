@@ -128,15 +128,39 @@ test("the microphone is the only permission the page can get", () => {
   assert.equal(isPermissionCheckAllowed("geolocation", { requestingUrl: appUrl }, appUrl), false);
 });
 
-test("the fuses switch off Node entry points and require the integrity-checked archive", () => {
+test("the fuses switch off Node entry points and file:// extras, and require the integrity-checked archive", () => {
   assert.deepEqual(SAGE_FUSES, {
     version: FuseVersion.V1,
     [FuseV1Options.RunAsNode]: false,
+    [FuseV1Options.EnableCookieEncryption]: true,
     [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
     [FuseV1Options.EnableNodeCliInspectArguments]: false,
     [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
     [FuseV1Options.OnlyLoadAppFromAsar]: true,
+    [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
   });
+});
+
+test("the installer settings set exactly the fuses in fuses-config.ts, and the app id Sage uses", async () => {
+  const builder = JSON.parse(await readFile(join(root, "electron-builder.json"), "utf8"));
+  // electron-builder names each fuse in camelCase: FuseV1Options.RunAsNode is "runAsNode".
+  const expected: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(SAGE_FUSES)) {
+    if (key === "version") continue;
+    const name = FuseV1Options[Number(key)];
+    assert.ok(name, `fuse ${key} has a name`);
+    expected[name.charAt(0).toLowerCase() + name.slice(1)] = value as boolean;
+  }
+  assert.deepEqual(builder.electronFuses, expected);
+
+  const main = await readFile(join(root, "src", "main", "main.ts"), "utf8");
+  const ids = [...main.matchAll(/setAppUserModelId\(app\.isPackaged \? "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(ids, [builder.appId]);
+  // The data folder comes from package.json's name, so the product name lives only in the builder file.
+  const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  assert.equal(pkg.name, "sage-assistant");
+  assert.equal(pkg.productName, undefined);
+  assert.equal(builder.extraMetadata, undefined);
 });
 
 test("nothing in the app sends telemetry or analytics", async () => {

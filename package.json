@@ -31,7 +31,6 @@
     "check": "biome check . --error-on-warnings",
     "check:public": "tsx scripts/check-public.ts",
     "secret-scan": "tsx scripts/secret-scan.ts",
-    "fuses": "tsx scripts/fuses.ts",
     "verify": "npm run check && npm run typecheck && npm run test:coverage && npm run check:public && npm run secret-scan"
   },
   "devDependencies": {
