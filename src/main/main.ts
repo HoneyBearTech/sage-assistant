@@ -15,7 +15,7 @@ import {
 } from "electron";
 import type { Launcher } from "../core/apps.js";
 import { announcingPresenter } from "../core/asking.js";
-import { EncryptedFileKeyStore, type Encryptor, osEncryptionUsable } from "../core/keystore.js";
+import { type Encryptor, encryptedKeyStores, osEncryptionUsable } from "../core/keystore.js";
 import { consoleSink } from "../core/log.js";
 import { createSage } from "../core/sage.js";
 import { GUIDE_DETAIL, GUIDE_QUESTION, PULL_DETAIL, pullQuestion } from "../core/setup.js";
@@ -131,7 +131,10 @@ async function askFirst(message: string, detail: string, yes: string): Promise<b
 const setupParts = {
   confirmPull: (choice: ModelChoice) => askFirst(pullQuestion(choice), PULL_DETAIL, "Download"),
   confirmOpenGuide: () => askFirst(GUIDE_QUESTION, GUIDE_DETAIL, "Open"),
-  // Only ever called with the install guide's fixed address (src/core/setup.ts).
+  // Before a company's key page opens (src/core/online-services.ts): the same box.
+  confirmOpenPage: (question: string, detail: string) => askFirst(question, detail, "Open"),
+  // Only ever called with the install guide's fixed address (src/core/setup.ts) or one of the
+  // companies' fixed key pages (src/core/brain/services.ts).
   openExternal: (url: string) => shell.openExternal(url),
 };
 
@@ -195,7 +198,8 @@ async function start(): Promise<void> {
   });
   const sage = createSage({
     dataDir,
-    keyStore: new EncryptedFileKeyStore(join(dataDir, "online-key.bin"), encryptor),
+    // One encrypted file per online brain; "other" keeps the file from Sage 0.1.1.
+    keyStores: encryptedKeyStores(dataDir, encryptor),
     presenter,
     notify,
     openPath: (path) => shell.openPath(path),

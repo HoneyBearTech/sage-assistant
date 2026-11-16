@@ -14,6 +14,14 @@ const source = await readFile(rendererFile, "utf8");
 // The real window script, run against a small fake DOM (test/fake-dom.ts) and a fake window.sage.
 const ids = [...source.matchAll(/byId<\w+>\("([\w-]+)"\)/g)].map((match) => match[1]!);
 
+/** Sample models for the ready-made services, and no keys: for tests that build their own settings. */
+export const SAMPLE_SERVICES: PublicSettings["services"] = {
+  claude: { model: "claude-model" },
+  openai: { model: "openai-model" },
+  gemini: { model: "gemini-model" },
+};
+export const NO_KEYS: PublicSettings["keys"] = { claude: false, openai: false, gemini: false, other: false };
+
 export interface WindowOptions {
   /** Settings the window loads at start-up, over the defaults. */
   settings?: Partial<PublicSettings>;
@@ -40,11 +48,18 @@ export async function startWindow(
     cancelPull: 0,
     openGuide: 0,
     sound: [] as boolean[],
+    keys: [] as [string, string][],
+    cleared: [] as string[],
+    listModels: [] as string[],
+    testKey: [] as string[],
+    keyPages: [] as string[],
   };
   const settings: PublicSettings = {
     brain: "local",
     local: { model: "small-model" },
-    online: { baseUrl: "", model: "", hasKey: false },
+    online: { baseUrl: "", model: "" },
+    services: structuredClone(SAMPLE_SERVICES),
+    keys: { ...NO_KEYS },
     apps: [],
     folders: [],
     speakReplies: "voice",
@@ -71,11 +86,28 @@ export async function startWindow(
       calls.saved.push(structuredClone(input));
       return { ok: true };
     },
-    setKey: async () => {
-      settings.online.hasKey = true;
+    setKey: async (brain, key) => {
+      calls.keys.push([brain, key]);
+      settings.keys[brain] = true;
       return { ok: true };
     },
-    clearKey: async () => ({ ok: true }),
+    clearKey: async (brain) => {
+      calls.cleared.push(brain);
+      settings.keys[brain] = false;
+      return { ok: true };
+    },
+    listModels: async (company) => {
+      calls.listModels.push(company);
+      return { ok: true, models: [`${company}-a`, `${company}-b`] };
+    },
+    testKey: async (company) => {
+      calls.testKey.push(company);
+      return { ok: true, message: "The key works." };
+    },
+    openKeyPage: async (company) => {
+      calls.keyPages.push(company);
+      return { status: "opened" };
+    },
     chooseFolder: async () => null,
     chooseApp: async () => null,
     takeNotices: async () => [],

@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Brain, BrainReply, ChatMessage, ToolCall, ToolSpec } from "../src/core/brain/brain.js";
-import type { Encryptor, KeyStore, SavedKey } from "../src/core/keystore.js";
+import type { Encryptor, KeyStore, KeyStores, SavedKey } from "../src/core/keystore.js";
 import { createLogger, type Logger, SecretRedactor } from "../src/core/log.js";
 import type { Clock } from "../src/core/scheduler.js";
 import type { Timers } from "../src/core/voice/download.js";
@@ -122,6 +122,16 @@ export class MemoryKeyStore implements KeyStore {
   async clear() {
     this.saved = null;
   }
+}
+
+/** One fake key store per online brain, as Sage gets them from the main process. */
+export function memoryKeyStores(): KeyStores & Record<keyof KeyStores, MemoryKeyStore> {
+  return {
+    claude: new MemoryKeyStore(),
+    openai: new MemoryKeyStore(),
+    gemini: new MemoryKeyStore(),
+    other: new MemoryKeyStore(),
+  };
 }
 
 /** Stands in for the operating system's encryption. Its output never contains the input. */

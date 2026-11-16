@@ -9,7 +9,7 @@ import {
   deferred,
   FakeClock,
   FakePresenter,
-  MemoryKeyStore,
+  memoryKeyStores,
   REFUSED_PORT,
   settled,
   tempDir,
@@ -39,7 +39,7 @@ test("saving or removing the key refreshes only the key status", () => {
     assert.doesNotMatch(handler, /loadSettings\(/, button);
   }
   const refresh = body("async function refreshKeyStatus(");
-  assert.match(refresh, /settings\.online\.hasKey = latest\.online\.hasKey/);
+  assert.match(refresh, /settings\.keys = latest\.keys/);
   assert.doesNotMatch(refresh, /render\(\)/);
 });
 
@@ -78,7 +78,7 @@ test("New chat during a pending reply: Send works again, and the old reply never
 });
 
 test("in the real window script, unsaved settings survive saving the key and switching tabs", async (t) => {
-  const { el, calls } = await startWindow(t, async () => "");
+  const { el, calls } = await startWindow(t, async () => "", {}, { settings: { brain: "other" } });
   assert.equal(calls.getSettings, 1, "loaded once at startup");
   el("tab-settings").click();
   el("local-model").value = "typed but not saved";
@@ -94,19 +94,24 @@ test("in the real window script, unsaved settings survive saving the key and swi
 });
 
 test("Save key sends the address on screen with the key, and shows a refusal", async (t) => {
-  const sent: [string, string][] = [];
-  const { el } = await startWindow(t, async () => "", {
-    setKey: async (key, baseUrl) => {
-      sent.push([key, baseUrl]);
-      return { ok: false, message: "Save settings first, then save the key." };
+  const sent: [string, string, string][] = [];
+  const { el } = await startWindow(
+    t,
+    async () => "",
+    {
+      setKey: async (brain, key, baseUrl) => {
+        sent.push([brain, key, baseUrl]);
+        return { ok: false, message: "Save settings first, then save the key." };
+      },
     },
-  });
+    { settings: { brain: "other" } },
+  );
   el("tab-settings").click();
   el("online-url").value = "https://b.example/v1";
   el("online-key").value = "fake-key-for-service-b";
   el("save-key").click();
   await settled();
-  assert.deepEqual(sent, [["fake-key-for-service-b", "https://b.example/v1"]]);
+  assert.deepEqual(sent, [["other", "fake-key-for-service-b", "https://b.example/v1"]]);
   assert.equal(el("settings-status").textContent, "Key not saved: Save settings first, then save the key.");
   assert.equal(el("online-key").value, "", "the key field is emptied either way");
   assert.doesNotMatch(el("key-status").textContent, /A key is saved/);
@@ -229,7 +234,7 @@ test("Settings open, a fallback reminder is collected, Sage restarts before Chat
   const start = () => {
     const sage = createSage({
       dataDir,
-      keyStore: new MemoryKeyStore(),
+      keyStores: memoryKeyStores(),
       presenter: new FakePresenter(false),
       notify: () => false, // no desktop notifications: reminders go to the window
       openPath: async () => "",
@@ -286,7 +291,7 @@ test("a reminder deleted while its notice is held behind Settings never appears 
   const asked = deferred<void>();
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: {
       ask: () => {
         asked.resolve();
@@ -350,7 +355,7 @@ test("a reminder deleted while held behind Settings is gone when Chat opens, bef
   const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: { ask: async () => true },
     notify: () => false, // no desktop notifications: reminders go to the window
     openPath: async () => "",

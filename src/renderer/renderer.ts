@@ -1,4 +1,15 @@
-import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
+import {
+  BRAIN_LABELS,
+  type BrainChoice,
+  BRAINS,
+  type Company,
+  COMPANIES,
+  MAX_ACK_IDS,
+  type PublicAppEntry,
+  type PublicSettings,
+  privacyLine,
+  type SageApi,
+} from "../shared/api.js";
 import { createAskingCards } from "./asking-cards.js";
 import { applyTheme, prefersReducedMotion, toTheme } from "./look.js";
 import { createOrb } from "./orb.js";
@@ -357,18 +368,53 @@ export function startChatWindow(): void {
   const onlineUrl = byId<HTMLInputElement>("online-url");
   const onlineModel = byId<HTMLInputElement>("online-model");
   const keyInput = byId<HTMLInputElement>("online-key");
+  const keyLabel = byId<HTMLLabelElement>("online-key-label");
   const keyStatus = byId<HTMLParagraphElement>("key-status");
+  const keyResult = byId<HTMLParagraphElement>("key-result");
   const appsList = byId<HTMLUListElement>("apps");
   const foldersList = byId<HTMLUListElement>("folders");
   const settingsStatus = byId<HTMLSpanElement>("settings-status");
   const brainStatus = byId<HTMLSpanElement>("brain-status");
   const speakReplies = byId<HTMLSelectElement>("speak-replies");
   const themeChoice = byId<HTMLSelectElement>("theme");
+  const brainNotice = byId<HTMLParagraphElement>("brain-notice");
+  const panels = {
+    local: byId<HTMLDivElement>("brain-local"),
+    other: byId<HTMLDivElement>("brain-other"),
+    service: byId<HTMLDivElement>("brain-service"),
+    key: byId<HTMLDivElement>("brain-key"),
+  };
+  const serviceModel = byId<HTMLInputElement>("service-model");
+  const serviceModelLabel = byId<HTMLLabelElement>("service-model-label");
+  const loadModels = byId<HTMLButtonElement>("load-models");
+  const modelList = byId<HTMLSelectElement>("model-list");
+  const modelListLabel = byId<HTMLLabelElement>("model-list-label");
+  const modelsStatus = byId<HTMLParagraphElement>("models-status");
+  const testKey = byId<HTMLButtonElement>("test-key");
+  const getKeyRow = byId<HTMLDivElement>("get-key-row");
+
+  /** The ready-made services' models as the form shows them, saved or not. */
+  let draftModels: Record<Company, string> = { claude: "", openai: "", gemini: "" };
+  /** The company whose model the model box shows now (null when another brain is chosen). */
+  let shownCompany: Company | null = null;
+  /** Goes up whenever the chosen company changes; a model list for an earlier one is dropped. */
+  let companyChanges = 0;
+
+  function isCompany(brain: string): brain is Company {
+    return (COMPANIES as readonly string[]).includes(brain);
+  }
+
+  /** The brain picked in the form. Anything unknown counts as on this computer. */
+  function chosenBrain(): BrainChoice {
+    const value = checkedBrain();
+    return (BRAINS as readonly string[]).includes(value ?? "") ? (value as BrainChoice) : "local";
+  }
 
   function describeBrain(current: PublicSettings): string {
-    return current.brain === "local"
-      ? `Brain: on this computer (${current.local.model})`
-      : `Brain: online (${current.online.model || "no model chosen"})`;
+    if (current.brain === "local") return `Brain: on this computer (${current.local.model})`;
+    if (current.brain === "other") return `Brain: online (${current.online.model || "no model chosen"})`;
+    const model = current.services[current.brain].model;
+    return `Brain: ${BRAIN_LABELS[current.brain].name} (${model || "no model chosen"})`;
   }
 
   function removable(list: HTMLUListElement, label: string, onRemove: () => void): void {
@@ -402,26 +448,74 @@ export function startChatWindow(): void {
     });
   }
 
+  function clearModelList(): void {
+    modelList.replaceChildren();
+    modelList.hidden = true;
+    modelListLabel.hidden = true;
+    modelsStatus.textContent = "";
+  }
+
+  /**
+   * Shows the parts of the brain section for the brain picked in the form: the local model, another
+   * service's address and model, or a ready-made service's model; and the key for an online brain.
+   * The model box keeps each company's model apart, so switching back and forth loses nothing.
+   */
+  function showBrainPanels(): void {
+    const brain = chosenBrain();
+    if (shownCompany) draftModels[shownCompany] = serviceModel.value;
+    const company = isCompany(brain) ? brain : null;
+    if (company !== shownCompany) {
+      companyChanges++;
+      clearModelList();
+      keyResult.textContent = "";
+    }
+    shownCompany = company;
+    panels.local.hidden = brain !== "local";
+    panels.other.hidden = brain !== "other";
+    panels.service.hidden = company === null;
+    panels.key.hidden = brain === "local";
+    if (company) {
+      serviceModel.value = draftModels[company];
+      serviceModelLabel.textContent = `${BRAIN_LABELS[company].name} model`;
+    }
+    keyLabel.textContent =
+      brain === "other" || brain === "local" ? "Online service key" : `${BRAIN_LABELS[brain].name} key`;
+    // Test and Get a key are for the ready-made services, whose addresses Sage knows.
+    testKey.hidden = company === null;
+    getKeyRow.hidden = company === null;
+    renderKeyStatus();
+  }
+
   function render(): void {
     if (!settings) return;
-    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
-      radio.checked = radio.value === settings.brain;
-    }
+    setBrainRadios(settings.brain);
     localModel.value = settings.local.model;
     onlineUrl.value = settings.online.baseUrl;
     onlineModel.value = settings.online.model;
+    draftModels = {
+      claude: settings.services.claude.model,
+      openai: settings.services.openai.model,
+      gemini: settings.services.gemini.model,
+    };
+    shownCompany = null;
+    brainNotice.textContent = "";
+    showBrainPanels();
     speakReplies.value = settings.speakReplies;
     showSound(settings.sound);
     themeChoice.value = settings.theme;
     applyTheme(settings.theme);
-    renderKeyStatus();
     brainStatus.textContent = describeBrain(settings);
     renderLists();
   }
 
   function renderKeyStatus(): void {
     if (!settings) return;
-    keyStatus.textContent = settings.online.hasKey
+    const brain = chosenBrain();
+    if (brain === "local") {
+      keyStatus.textContent = "";
+      return;
+    }
+    keyStatus.textContent = settings.keys[brain]
       ? "A key is saved, encrypted by your system. It is never shown again."
       : "No key saved.";
   }
@@ -442,11 +536,11 @@ export function startChatWindow(): void {
     render();
   }
 
-  /** After saving or removing the key: updates only the key line, so unsaved form changes stay. */
+  /** After saving or removing a key: updates only the key line, so unsaved form changes stay. */
   async function refreshKeyStatus(): Promise<void> {
     const latest = await sage.getSettings();
     if (!settings) return;
-    settings.online.hasKey = latest.online.hasKey;
+    settings.keys = latest.keys;
     renderKeyStatus();
   }
 
@@ -455,19 +549,31 @@ export function startChatWindow(): void {
     return value === "always" || value === "never" ? value : "voice";
   }
 
+  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+    radio.addEventListener("change", () => {
+      showBrainPanels();
+      const brain = chosenBrain();
+      // Picking an online brain (other than the saved one) says, in one line, what goes where.
+      brainNotice.textContent = brain !== "local" && brain !== settings?.brain ? privacyLine(brain) : "";
+      settingsStatus.textContent = "Not saved yet: choose Save settings.";
+    });
+  }
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!settings) return;
     settingsGeneration++;
-    const brain =
-      form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value === "online"
-        ? "online"
-        : "local";
+    if (shownCompany) draftModels[shownCompany] = serviceModel.value;
     void sage
       .saveSettings({
-        brain,
+        brain: chosenBrain(),
         local: { model: localModel.value.trim() },
         online: { baseUrl: onlineUrl.value.trim(), model: onlineModel.value.trim() },
+        services: {
+          claude: { model: draftModels.claude.trim() },
+          openai: { model: draftModels.openai.trim() },
+          gemini: { model: draftModels.gemini.trim() },
+        },
         apps: settings.apps,
         folders: settings.folders,
         speakReplies: readSpeakReplies(),
@@ -492,20 +598,106 @@ export function startChatWindow(): void {
   byId<HTMLButtonElement>("save-key").addEventListener("click", () => {
     const key = keyInput.value;
     keyInput.value = "";
-    if (!key.trim()) return;
-    // The address on screen goes with the key; the main process refuses it if that address isn't
-    // saved yet, so a key is never tied to the wrong service.
-    void sage.setKey(key, onlineUrl.value).then(async (result) => {
+    const brain = chosenBrain();
+    if (!key.trim() || brain === "local") return;
+    // For another online service the address on screen goes with the key; the main process refuses
+    // it if that address isn't saved yet, so a key is never tied to the wrong service. A company's
+    // key is tied to that company's fixed address by the main process.
+    void sage.setKey(brain, key, onlineUrl.value).then(async (result) => {
       settingsStatus.textContent = result.ok ? "Key saved." : `Key not saved: ${result.message}`;
       await refreshKeyStatus();
     });
   });
 
   byId<HTMLButtonElement>("clear-key").addEventListener("click", () => {
-    void sage.clearKey().then(async () => {
+    const brain = chosenBrain();
+    if (brain === "local") return;
+    void sage.clearKey(brain).then(async () => {
       settingsStatus.textContent = "Key removed.";
       await refreshKeyStatus();
     });
+  });
+
+  testKey.addEventListener("click", () => {
+    const company = shownCompany;
+    if (!company) return;
+    const mine = companyChanges;
+    testKey.disabled = true;
+    keyResult.textContent = `Checking the key with ${BRAIN_LABELS[company].name}…`;
+    void sage
+      .testKey(company)
+      .catch(() => ({ ok: false, message: "Sage couldn't check the key. Try again." }))
+      .then((result) => {
+        testKey.disabled = false;
+        if (mine !== companyChanges) return;
+        keyResult.textContent = result.ok ? (result.message ?? "The key works.") : result.message;
+      });
+  });
+
+  loadModels.addEventListener("click", () => {
+    const company = shownCompany;
+    if (!company) return;
+    const mine = companyChanges;
+    loadModels.disabled = true;
+    modelsStatus.textContent = `Asking ${BRAIN_LABELS[company].name} for its models…`;
+    void sage
+      .listModels(company)
+      .catch(() => ({ ok: false as const, message: "Sage couldn't load the models. Try again." }))
+      .then((result) => {
+        loadModels.disabled = false;
+        // Another brain was picked meanwhile: this list isn't for the model box any more.
+        if (mine !== companyChanges) return;
+        if (!result.ok) {
+          clearModelList();
+          modelsStatus.textContent = result.message;
+          return;
+        }
+        modelList.replaceChildren();
+        const prompt = document.createElement("option");
+        prompt.value = "";
+        prompt.textContent = "Pick a model…";
+        modelList.append(prompt);
+        for (const name of result.models) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          modelList.append(option);
+        }
+        modelList.value = result.models.includes(serviceModel.value) ? serviceModel.value : "";
+        modelList.hidden = result.models.length === 0;
+        modelListLabel.hidden = result.models.length === 0;
+        modelsStatus.textContent =
+          result.models.length === 0
+            ? `${BRAIN_LABELS[company].name} listed no models for this key.`
+            : `${result.models.length} models. Pick one, or type a name in the model box.`;
+      });
+  });
+
+  // Picking from the list fills in the model box, which stays editable.
+  modelList.addEventListener("change", () => {
+    if (!shownCompany || !modelList.value) return;
+    serviceModel.value = modelList.value;
+    draftModels[shownCompany] = modelList.value;
+    settingsStatus.textContent = "Not saved yet: choose Save settings.";
+  });
+
+  byId<HTMLButtonElement>("get-key").addEventListener("click", () => {
+    const company = shownCompany;
+    if (!company) return;
+    const mine = companyChanges;
+    keyResult.textContent = "Sage is asking whether to open the key page…";
+    void sage
+      .openKeyPage(company)
+      .catch(() => ({ status: "failed" as const, message: "Sage couldn't open the key page.", address: "" }))
+      .then((result) => {
+        if (mine !== companyChanges) return;
+        keyResult.textContent =
+          result.status === "opened"
+            ? "The key page opened in your web browser. Create a key there, paste it here and choose Save key."
+            : result.status === "declined"
+              ? "The key page wasn't opened."
+              : result.message;
+      });
   });
 
   const appName = byId<HTMLInputElement>("app-name");
@@ -590,9 +782,11 @@ export function startChatWindow(): void {
           input.focus();
         } else {
           show("settings");
-          // Picked in the form, unsaved, for the user to fill in and save.
-          setBrainRadios("online");
+          // The brain list, for the user to pick a service and save its key.
           settingsStatus.textContent = ONLINE_HINT;
+          for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="brain"]')) {
+            if (radio.value === "claude") radio.focus();
+          }
         }
         void refreshAfterSetup(shown);
       },
@@ -606,7 +800,7 @@ export function startChatWindow(): void {
   byId<HTMLButtonElement>("setup-again").addEventListener("click", () => openWelcome());
 
   const ONLINE_HINT =
-    "Enter the online service's address and model, choose Save settings, then paste the key and choose Save key.";
+    "Choose Claude, OpenAI, Gemini or Another online service under Brain, and choose Save settings. Then paste its key and choose Save key (Get a key opens the company's key page).";
 
   function checkedBrain(): string | undefined {
     return form.querySelector<HTMLInputElement>('input[name="brain"]:checked')?.value;
@@ -645,7 +839,10 @@ export function startChatWindow(): void {
     }
     if (latest.brain !== settings.brain) {
       settings.brain = latest.brain;
-      if (checkedBrain() === shown.brain) setBrainRadios(latest.brain);
+      if (checkedBrain() === shown.brain) {
+        setBrainRadios(latest.brain);
+        showBrainPanels();
+      }
     }
     brainStatus.textContent = describeBrain(settings);
   }

@@ -7,7 +7,7 @@ import { createSage } from "../src/core/sage.js";
 import type { ConfirmRequest } from "../src/core/skills/gate.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { type AskingEvent, CHANNELS, EVENTS, MAX_ASKING_TEXT, readAskingEvent } from "../src/shared/api.js";
-import { FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
+import { FakePresenter, memoryKeyStores, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
 
 // The asking card's news (src/core/asking.ts and the one-way event): the window is told when Sage's
 // own box opens and closes, and nothing it can do answers the box.
@@ -72,7 +72,7 @@ test("through the gate, the card's text is the very sentence the box shows", asy
   const dialog = new FakePresenter(false);
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: announcingPresenter(dialog, (event) => told.push(event)),
     notify: () => true,
     openPath: async () => "",
@@ -124,7 +124,7 @@ test("nothing the window can call answers the box", async (t) => {
   for (const name of Object.keys(CHANNELS)) assert.doesNotMatch(name, /ask|allow|approv|confirm|answer/i);
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",

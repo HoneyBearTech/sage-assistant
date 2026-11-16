@@ -5,7 +5,12 @@ import type { Sage } from "../core/sage.js";
 import type { Settings } from "../core/settings.js";
 import {
   CHANNELS,
+  COMPANIES,
   type Channel,
+  type GuideResult,
+  type ModelListResult,
+  ONLINE_BRAINS,
+  privacyLine,
   MAX_ACK_IDS,
   MAX_MESSAGE_CHARS,
   MAX_VOICE_SAMPLES,
@@ -26,10 +31,16 @@ export type Handler = (payload: unknown) => Promise<unknown>;
 
 const sendPayload = z.strictObject({ text: z.string().trim().min(1).max(MAX_MESSAGE_CHARS) });
 const keyPayload = z.strictObject({
+  // Which brain the key is for: a closed list.
+  brain: z.enum(ONLINE_BRAINS),
   key: z.string().min(1).max(1_000),
-  // The address on screen when Save key was pressed; checked against the saved one.
+  // For another online service: the address on screen when Save key was pressed; checked against
+  // the saved one. Ignored for a ready-made service, whose address is fixed.
   baseUrl: z.string().trim().max(500),
 });
+const clearKeyPayload = z.strictObject({ brain: z.enum(ONLINE_BRAINS) });
+// Load models, Test and Get a key: the window names a company, nothing else.
+const companyPayload = z.strictObject({ company: z.enum(COMPANIES) });
 
 // Notice ids are short (see NoticeBoard). The window sends at most MAX_ACK_IDS per call, in
 // batches, since confirmations can pile up while the Chat view is hidden.
@@ -60,11 +71,19 @@ export const BAD_RECORDING = "Sage couldn't read that recording. Try again.";
 
 export const SAVE_SETTINGS_FIRST = "Save settings first, then save the key.";
 
-export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSettings {
+export const NOT_READ = "Sage couldn't read that choice.";
+
+export function toPublicSettings(settings: Settings, keys: PublicSettings["keys"]): PublicSettings {
   return {
     brain: settings.brain,
     local: { model: settings.local.model },
-    online: { baseUrl: settings.online.baseUrl, model: settings.online.model, hasKey },
+    online: { baseUrl: settings.online.baseUrl, model: settings.online.model },
+    services: {
+      claude: { model: settings.services.claude.model },
+      openai: { model: settings.services.openai.model },
+      gemini: { model: settings.services.gemini.model },
+    },
+    keys: { claude: keys.claude, openai: keys.openai, gemini: keys.gemini, other: keys.other },
     apps: settings.apps.map((app) => ({ name: app.name, path: app.path, args: [...app.args] })),
     folders: [...settings.folders],
     speakReplies: settings.speakReplies,
@@ -95,7 +114,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       sage.assistant.reset();
     },
     [CHANNELS.getSettings]: async () =>
-      toPublicSettings(await sage.settings.load(), await sage.keyStore.has()),
+      toPublicSettings(await sage.settings.load(), await sage.keyStore.hasKeys()),
     [CHANNELS.saveSettings]: async (payload): Promise<Result> => {
       // The Settings screen saves everything it shows; "set up" and the sound switch aren't among
       // them, so their saved values are kept (read and written under the settings lock).
@@ -113,36 +132,65 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       if (previous.brain !== result.settings.brain || serviceOrigin(previous.online.baseUrl) !== after) {
         sage.assistant.stopTurn();
       }
-      // A saved key belongs to the service it was entered for. If the address now points at a
-      // different service, the key is removed so it is never sent there.
+      const notes: string[] = [];
+      // An online brain chosen now that wasn't before: one line on what is sent to which company.
+      const brain = result.settings.brain;
+      if (brain !== "local" && brain !== previous.brain) notes.push(privacyLine(brain));
+      // Another online service's key belongs to the service it was entered for. If the address now
+      // points at a different service, the key is removed so it is never sent there.
       if ((await sage.keyStore.afterAddressSaved(after)) === "removed") {
-        return {
-          ok: true,
-          message:
-            "The online service's address changed, so the saved key was removed. Enter the key for the new service again.",
-        };
+        notes.push(
+          "The online service's address changed, so the saved key was removed. Enter the key for the new service again.",
+        );
       }
-      return { ok: true };
+      return notes.length ? { ok: true, message: notes.join(" ") } : { ok: true };
     },
     [CHANNELS.setKey]: async (payload): Promise<Result> => {
       const parsed = keyPayload.safeParse(payload);
       if (!parsed.success) return fail("That doesn't look like a key.");
       try {
-        // The key belongs to the service whose address is saved now (or, if none is saved yet, to
-        // the first address saved after it). The user typed it for the address on screen, so if
-        // that isn't the saved one, nothing is stored: the key would otherwise be tied to a
-        // service it wasn't entered for.
+        const brain = parsed.data.brain;
+        if (brain !== "other") {
+          // A company's key is bound to that company's fixed address, held in the main process.
+          await sage.keyStore.setCompanyKey(brain, parsed.data.key);
+          return { ok: true };
+        }
+        // Another online service's key belongs to the service whose address is saved now (or, if
+        // none is saved yet, to the first address saved after it). The user typed it for the
+        // address on screen, so if that isn't the saved one, nothing is stored: the key would
+        // otherwise be tied to a service it wasn't entered for.
         const origin = serviceOrigin((await sage.settings.load()).online.baseUrl);
         if (serviceOrigin(parsed.data.baseUrl) !== origin) return fail(SAVE_SETTINGS_FIRST);
-        await sage.keyStore.set(parsed.data.key, origin);
+        await sage.keyStore.setOtherKey(parsed.data.key, origin);
         return { ok: true };
       } catch (error) {
+        // The key store's own messages (a key that doesn't look right, no system protection).
         return fail(describeError(error));
       }
     },
-    [CHANNELS.clearKey]: async (): Promise<Result> => {
-      await sage.keyStore.clear();
+    [CHANNELS.clearKey]: async (payload): Promise<Result> => {
+      const parsed = clearKeyPayload.safeParse(payload);
+      if (!parsed.success) return fail(NOT_READ);
+      await sage.keyStore.clear(parsed.data.brain);
       return { ok: true };
+    },
+    // Each of these sends only a company's id; the addresses are fixed in the main process, and a
+    // key is handed out only for its own company. Errors are Sage's own plain sentences.
+    [CHANNELS.listModels]: async (payload): Promise<ModelListResult> => {
+      const parsed = companyPayload.safeParse(payload);
+      if (!parsed.success) return { ok: false, message: NOT_READ };
+      return sage.services.listModels(parsed.data.company);
+    },
+    [CHANNELS.testKey]: async (payload): Promise<Result> => {
+      const parsed = companyPayload.safeParse(payload);
+      if (!parsed.success) return fail(NOT_READ);
+      return sage.services.testKey(parsed.data.company);
+    },
+    // Asks first, then opens one of the companies' fixed key pages; nothing else from the window is used.
+    [CHANNELS.openKeyPage]: async (payload): Promise<GuideResult> => {
+      const parsed = companyPayload.safeParse(payload);
+      if (!parsed.success) return { status: "failed", message: NOT_READ, address: "" };
+      return sage.services.openKeyPage(parsed.data.company);
     },
     [CHANNELS.chooseFolder]: () => pickers.chooseFolder(),
     [CHANNELS.chooseApp]: () => pickers.chooseApp(),
@@ -173,7 +221,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     // The main process asks the user first, in its own box; the window can only ask for it.
     [CHANNELS.pullModel]: async (payload): Promise<PullResult> => {
       const parsed = pullPayload.safeParse(payload);
-      if (!parsed.success) return { status: "failed", message: "Sage couldn't read that choice." };
+      if (!parsed.success) return { status: "failed", message: NOT_READ };
       return sage.setup.pullModel(parsed.data.choice);
     },
     [CHANNELS.pullStatus]: async () => sage.setup.pullStatus(),
@@ -185,7 +233,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     // nor lost.
     [CHANNELS.setSound]: async (payload): Promise<Result> => {
       const parsed = soundPayload.safeParse(payload);
-      if (!parsed.success) return fail("Sage couldn't read that choice.");
+      if (!parsed.success) return fail(NOT_READ);
       const result = await sage.settings.update((current) => ({ ...current, sound: parsed.data.on }));
       return result.ok ? { ok: true } : fail(result.message);
     },

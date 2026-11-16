@@ -4,7 +4,7 @@ import { PULL_POLL_MS, WELCOME_TEXT } from "../src/renderer/welcome-text.js";
 import type { Notice, PullResult, PullStatus, RunnerStatus, SageApi } from "../src/shared/api.js";
 import { focusedElement, pressKey } from "./fake-dom.js";
 import { deferred, settled } from "./helpers.js";
-import { startWindow } from "./window.js";
+import { NO_KEYS, SAMPLE_SERVICES, startWindow } from "./window.js";
 
 // The Welcome screen (src/renderer/welcome.ts, wired up in renderer.ts), run against the fake DOM
 // with a fake window.sage. New windows here start "not set up yet".
@@ -101,18 +101,23 @@ test("if setup can't be saved as done, the Welcome screen stays and says so; try
   assert.equal(calls.finishSetup, 3);
 });
 
-test("An online service saves that setup is done and opens Settings with the online choice picked", async (t) => {
+test("An online service saves that setup is done and opens Settings at the brain list", async (t) => {
   const { el, click, calls } = await welcomeWindow(t);
   await click("place-online");
   assert.equal(calls.finishSetup, 1);
   assert.equal(el("view-settings").hidden, false);
   assert.equal(el("view-welcome").hidden, true);
   const radios = el("settings-form").radios;
+  // Nothing is picked for the user: the saved brain stays checked, and the keyboard starts at Claude.
   assert.deepEqual(
     radios.filter((radio) => radio.checked).map((radio) => radio.value),
-    ["online"],
+    ["local"],
   );
-  assert.match(el("settings-status").textContent, /Save settings, then paste the key/);
+  assert.equal(focusedElement()?.value, "claude");
+  assert.match(
+    el("settings-status").textContent,
+    /^Choose Claude, OpenAI, Gemini or Another online service under Brain, and choose Save settings\. Then paste its key/,
+  );
   assert.equal(calls.saved.length, 0, "nothing saved until the user chooses Save settings");
 });
 
@@ -396,7 +401,9 @@ test("after a download, Settings shows the new local model without losing other 
     getSettings: async () => ({
       brain: "local",
       local: { model },
-      online: { baseUrl: "", model: "", hasKey: false },
+      online: { baseUrl: "", model: "" },
+      services: SAMPLE_SERVICES,
+      keys: NO_KEYS,
       apps: [],
       folders: [],
       speakReplies: "voice",
@@ -499,21 +506,21 @@ test("Skip changes nothing in the Settings form, including unsaved edits", async
   el("tab-settings").click();
   el("local-model").value = "typed-but-not-saved";
   const radios = el("settings-form").radios;
-  for (const radio of radios) radio.checked = radio.value === "online";
+  for (const radio of radios) radio.checked = radio.value === "other";
   await click("setup-again");
   await click("welcome-skip");
   el("tab-settings").click();
   assert.equal(el("local-model").value, "typed-but-not-saved");
   assert.deepEqual(
     radios.filter((radio) => radio.checked).map((radio) => radio.value),
-    ["online"],
+    ["other"],
   );
   assert.equal(el("brain-status").textContent, "Brain: on this computer (small-model)");
 });
 
 test("a late answer after setup doesn't overwrite edits made since", async (t) => {
   let model = "small-model";
-  let brain: "local" | "online" = "online";
+  let brain: "local" | "other" = "other";
   let hold: ReturnType<typeof deferred<void>> | undefined;
   const { el, click } = await welcomeWindow(t, {
     runnerStatus: async () => runner("no-model"),
@@ -521,7 +528,9 @@ test("a late answer after setup doesn't overwrite edits made since", async (t) =
       const answer = {
         brain,
         local: { model },
-        online: { baseUrl: "https://api.example.com", model: "m", hasKey: false },
+        online: { baseUrl: "https://api.example.com", model: "m" },
+        services: SAMPLE_SERVICES,
+        keys: NO_KEYS,
         apps: [],
         folders: [],
         speakReplies: "voice" as const,
@@ -549,7 +558,7 @@ test("a late answer after setup doesn't overwrite edits made since", async (t) =
   const radios = el("settings-form").radios;
   assert.deepEqual(
     radios.filter((radio) => radio.checked).map((radio) => radio.value),
-    ["online"],
+    ["other"],
   );
   el("local-model").value = "edited-since";
   hold.resolve();
@@ -592,9 +601,11 @@ test("Cancel after the download finished is too late: the window keeps the model
 test("a late setup refresh never overwrites a Settings save that finished first", async (t) => {
   // What the main process has stored; the fake's getSettings answers with it as it was when asked.
   const stored = {
-    brain: "online" as "local" | "online",
+    brain: "other" as "local" | "other",
     local: { model: "small-model" },
-    online: { baseUrl: "https://api.example.com", model: "m", hasKey: false },
+    online: { baseUrl: "https://api.example.com", model: "m" },
+    services: SAMPLE_SERVICES,
+    keys: NO_KEYS,
     apps: [],
     folders: [],
     speakReplies: "voice" as const,
@@ -637,7 +648,7 @@ test("a late setup refresh never overwrites a Settings save that finished first"
   // Meanwhile the user saves Settings: online again, with a model of their own. The save and its
   // reload finish first.
   el("tab-settings").click();
-  for (const radio of el("settings-form").radios) radio.checked = radio.value === "online";
+  for (const radio of el("settings-form").radios) radio.checked = radio.value === "other";
   el("local-model").value = "users-own-model";
   el("settings-form").dispatch("submit");
   await settled();
@@ -652,10 +663,10 @@ test("a late setup refresh never overwrites a Settings save that finished first"
     el("settings-form")
       .radios.filter((radio) => radio.checked)
       .map((radio) => radio.value),
-    ["online"],
+    ["other"],
   );
   // The next save sends what the user stored, not the stale answer.
   el("settings-form").dispatch("submit");
   await settled();
-  assert.equal((calls.saved.at(-1) as { brain: string }).brain, "online");
+  assert.equal((calls.saved.at(-1) as { brain: string }).brain, "other");
 });
