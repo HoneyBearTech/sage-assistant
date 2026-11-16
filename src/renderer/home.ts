@@ -195,10 +195,15 @@ export function createHome(sage: SageApi, el: HomeElements, hooks: HomeHooks): H
   async function morningBrief(): Promise<void> {
     if (claiming || !hooks.settings()?.morningBrief || !onScreen()) return;
     claiming = true;
-    const mine = ++briefs;
+    // The check takes no brief number of its own until the day is claimed, so a check that comes to
+    // nothing never drops a brief asked for meanwhile.
+    const asked = briefs;
     try {
-      // Claimed but no longer wanted (Brief me was pressed, Home was left): the day counts anyway.
-      if ((await sage.claimMorningBrief()) && stillWanted(mine)) await brief(mine, "morning");
+      if (!(await sage.claimMorningBrief())) return;
+      // Claimed but no longer wanted (Brief me was pressed, Home was left or the window hidden
+      // meanwhile): the day counts anyway.
+      if (briefs !== asked || !onScreen()) return;
+      await brief(++briefs, "morning");
     } catch {
       // Asked again the next time Home is shown.
     } finally {

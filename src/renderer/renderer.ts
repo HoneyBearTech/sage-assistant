@@ -187,7 +187,12 @@ export function startChatWindow(): void {
   const TABBED = ["home", "chat", "settings"] as const;
 
   // All four views start hidden; the first one is chosen once the settings have loaded.
+  /** The view on screen; none until the first is chosen. */
+  let shownView: "home" | "chat" | "settings" | "welcome" | null = null;
   function show(view: "home" | "chat" | "settings" | "welcome"): void {
+    // The view already shown (its tab clicked again): nothing changes, and nothing is reloaded.
+    if (view === shownView) return;
+    shownView = view;
     const wasHome = !homeView.hidden;
     for (const name of ["home", "chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
     // The Welcome screen has no tab: it is left with Skip setup, Start chatting or the online choice.

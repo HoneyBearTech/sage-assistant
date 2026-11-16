@@ -231,8 +231,10 @@ function showView(view: "home" | "chat" | "settings" | "welcome"): void {
 /** Switches Home's sample data and shows Home with it. */
 function homeData(sample: HomeSummary): void {
   homeSample = sample;
-  // Showing Home, even when it is open already, loads it again.
+  // Home loads each time it is shown; clicking its tab while it is open does nothing, so go by Chat.
   showView("home");
+  element("tab-chat").click();
+  element("tab-home").click();
 }
 
 const controls: Control[] = [

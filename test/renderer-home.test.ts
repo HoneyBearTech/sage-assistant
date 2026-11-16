@@ -807,3 +807,52 @@ test("the brief is never read aloud while Talk is held", async (t) => {
   el("talk").dispatch("pointerup", { button: 0, pointerId: 1 });
   await settled();
 });
+
+// --- A morning check that comes to nothing never drops a brief asked for meanwhile ---
+
+test("Brief me, then the active Home tab clicked, with the day already claimed: the brief still shows", async (t) => {
+  const { el, calls, media, answers } = await heldBriefs(t, {
+    settings: { morningBrief: true, speakReplies: "voice" },
+  });
+  const claims = calls.claims;
+  el("home-brief").click();
+  el("tab-home").click();
+  answers[1]!.resolve(SAMPLE);
+  await settled();
+  assert.equal(el("home-brief-panel").hidden, false);
+  assert.match(el("home-brief-text").textContent, /^Good morning\. It's Monday 16 November\./);
+  assert.equal(media.speech.spoken.length, 1);
+  assert.equal(calls.claims, claims, "the tab click asked nothing");
+});
+
+test("clicking the tab of the view already shown does nothing", async (t) => {
+  const { el, calls } = await homeWindow(t, { settings: { morningBrief: true } });
+  const loads = calls.homeSummary;
+  const claims = calls.claims;
+  el("tab-home").click();
+  await settled();
+  assert.equal(calls.homeSummary, loads, "Home isn't loaded again");
+  assert.equal(calls.claims, claims, "nor the morning brief asked for");
+  assert.equal(el("view-home").hidden, false);
+  assert.equal(el("tab-home").getAttribute("aria-pressed"), "true");
+  el("tab-settings").click();
+  el("tab-settings").click();
+  assert.equal(el("view-settings").hidden, false);
+  el("tab-home").click();
+  await settled();
+  assert.equal(calls.homeSummary, loads + 1, "shown again after another view: loaded");
+});
+
+test("a morning check that is declined while Brief me waits doesn't drop the brief", async (t) => {
+  // Home's own check runs again when the window says it is in view; this one is declined.
+  const { el, media, answers } = await heldBriefs(t, { settings: { morningBrief: true } });
+  el("home-brief").click();
+  setWindowVisibility("visible");
+  await settled();
+  answers[2]!.resolve(EMPTY_HOME);
+  answers[1]!.resolve(SAMPLE);
+  await settled();
+  assert.equal(el("home-brief-panel").hidden, false);
+  assert.match(el("home-brief-text").textContent, /Your latest notes: Shopping and Ideas\./);
+  assert.equal(media.speech.spoken.length, 1);
+});
