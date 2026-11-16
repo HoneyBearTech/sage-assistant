@@ -94,3 +94,15 @@ test("all motion stops when the system asks for reduced motion", () => {
   assert.match(block, /animation: none !important;/);
   assert.match(block, /transition: none !important;/);
 });
+
+test("the hidden attribute wins over every display rule, so held notices stay hidden", () => {
+  // renderer.ts hides a held notice with item.hidden = true, and .message sets display: grid; the
+  // views, Welcome steps, voice buttons and tabs are hidden the same way.
+  const rule = css.match(/^\[hidden\] \{([^}]*)\}/m);
+  assert.ok(rule, "a top-level [hidden] rule");
+  assert.match(rule[1]!, /display: none !important;/);
+  // Nothing else may give a hidden element a display of its own with !important.
+  const important = [...css.matchAll(/display: (\w+) !important;/g)].map((match) => match[1]);
+  assert.deepEqual(important, ["none"]);
+  assert.match(css, /\.message \{[^}]*display: grid;/, "the case that needed it");
+});
