@@ -13,6 +13,10 @@ export const CHANNELS = {
   ackNotices: "sage:notices-ack",
 } as const;
 
+/** One recording: 16,000 samples a second, one channel, at most 30 seconds. */
+export const VOICE_SAMPLE_RATE = 16_000;
+export const MAX_VOICE_SAMPLES = VOICE_SAMPLE_RATE * 30;
+
 /** The most notice ids one `ackNotices` call may carry; the window sends more in batches. */
 export const MAX_ACK_IDS = 50;
 

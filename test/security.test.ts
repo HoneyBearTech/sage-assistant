@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -164,21 +164,28 @@ test("the installer settings set exactly the fuses in fuses-config.ts, and the a
 });
 
 test("nothing in the app sends telemetry or analytics", async () => {
-  const { readdir } = await import("node:fs/promises");
   const sources: string[] = [];
   for (const entry of await readdir(join(root, "src"), { recursive: true, withFileTypes: true })) {
     if (entry.isFile()) sources.push(await readFile(join(entry.parentPath, entry.name), "utf8"));
   }
   const all = sources.join("\n");
   assert.doesNotMatch(all, /telemetry|analytics|sentry|crashReporter|mixpanel|posthog|segment\.io/i);
-  // The only network addresses in the app: the local runner, the search page, and the user's own service.
+  // The only network addresses in the app: the local runner, the search page, the user's own
+  // service, and the three files of the speech model, pinned to one commit on Hugging Face.
+  const speechModel =
+    "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/d1e6c30921780b8508d04b492dfb3ce8a51605d4/";
+  const allowed = new Set(
+    ["encoder_model.ort", "decoder_model_merged.ort", "tokens.txt"].map((name) => `${speechModel}${name}`),
+  );
   const urls = [...all.matchAll(/https?:\/\/[^\s"'`)]+/g)].map((m) => m[0]);
   for (const url of urls) {
     assert.ok(
-      /^https:\/\/html\.duckduckgo\.com\/html\/$|^http:\/\/\$\{LOCAL_HOST\}|^https:\/\/api\.example\.com|^https:\/\/duckduckgo\.com$/.test(
-        url,
-      ),
+      allowed.has(url) ||
+        /^https:\/\/html\.duckduckgo\.com\/html\/$|^http:\/\/\$\{LOCAL_HOST\}|^https:\/\/api\.example\.com|^https:\/\/duckduckgo\.com$/.test(
+          url,
+        ),
       `unexpected address in src/: ${url}`,
     );
   }
+  for (const url of allowed) assert.ok(urls.includes(url), `${url} is the one in the code`);
 });
