@@ -7,6 +7,20 @@ import { type ModelFile, modelDir, modelsDir, partialDir, type SpeechModel } fro
 /** Hugging Face forwards each address to its download servers; more than this is refused. */
 export const MAX_FORWARDS = 5;
 
+/** A download that receives nothing (no reply, or no bytes) for this long is stopped. */
+export const STALL_TIMEOUT_MS = 30_000;
+
+/** The timer the stall check uses; the tests pass one they fire by hand. */
+export interface Timers {
+  setTimeout(callback: () => void, ms: number): unknown;
+  clearTimeout(handle: unknown): void;
+}
+
+const systemTimers: Timers = {
+  setTimeout: (callback, ms) => setTimeout(callback, ms),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout> | undefined),
+};
+
 export const DOWNLOAD_MESSAGES = {
   offline:
     "Sage couldn't reach Hugging Face to download the speech file. Check that this PC is online, then try again.",
@@ -15,6 +29,8 @@ export const DOWNLOAD_MESSAGES = {
   mismatch:
     "The downloaded speech file wasn't the one Sage expected, so Sage deleted it and didn't use it. Try again later.",
   disk: "Sage couldn't save the speech file. Check there is free space on this PC, then try again.",
+  stalled:
+    "The download of the speech file stopped making progress, so Sage stopped it. Check that this PC is online, then try again.",
 } as const;
 
 /** A download failure with a message for the user; nothing in it comes from the server. */
@@ -31,7 +47,13 @@ export interface DownloadOptions {
   fetch: FetchLike;
   signal: AbortSignal;
   onProgress?: (progress: Progress) => void;
+  /** How long to wait for a reply or the next bytes; STALL_TIMEOUT_MS unless a test says otherwise. */
+  stallMs?: number;
+  timers?: Timers;
 }
+
+/** The options inside one download: the signal includes the stall check, and `alive` resets it. */
+type Running = DownloadOptions & { alive: () => void };
 
 /**
  * Downloads every file of `model` into a temporary folder in `<userData>/models`, checks each
@@ -44,22 +66,41 @@ export async function downloadModel(options: DownloadOptions): Promise<void> {
   const temp = partialDir(dataDir);
   const total = model.files.reduce((sum, file) => sum + file.size, 0);
   let done = 0;
+  // Waiting for a reply or for the next bytes for longer than stallMs stops the download, with the
+  // same clean-up as a cancel.
+  const timers = options.timers ?? systemTimers;
+  const stall = new AbortController();
+  let timer: unknown;
+  const running: Running = {
+    ...options,
+    signal: AbortSignal.any([options.signal, stall.signal]),
+    alive: () => {
+      timers.clearTimeout(timer);
+      timer = timers.setTimeout(
+        () => stall.abort(new DownloadError(DOWNLOAD_MESSAGES.stalled)),
+        options.stallMs ?? STALL_TIMEOUT_MS,
+      );
+    },
+  };
   try {
     await rm(temp, { recursive: true, force: true });
     await mkdir(temp, { recursive: true });
     for (const file of model.files) {
-      await downloadFile(file, join(temp, file.name), options, (received) =>
+      await downloadFile(file, join(temp, file.name), running, (received) =>
         options.onProgress?.({ received: done + received, total }),
       );
       done += file.size;
     }
-    options.signal.throwIfAborted();
+    timers.clearTimeout(timer);
+    running.signal.throwIfAborted();
     const target = modelDir(dataDir, model);
     await rm(target, { recursive: true, force: true });
     await rename(temp, target);
   } catch (error) {
     await rm(temp, { recursive: true, force: true }).catch(() => undefined);
     throw error;
+  } finally {
+    timers.clearTimeout(timer);
   }
 }
 
@@ -71,10 +112,11 @@ export async function removeLeftovers(dataDir: string): Promise<void> {
 async function downloadFile(
   file: ModelFile,
   path: string,
-  options: DownloadOptions,
+  options: Running,
   onBytes: (received: number) => void,
 ): Promise<void> {
   const response = await follow(file.url, options);
+  options.alive();
   const declared = response.headers.get("content-length");
   if (declared !== null && Number(declared) !== file.size) {
     await response.body?.cancel().catch(() => undefined);
@@ -102,6 +144,7 @@ async function downloadFile(
         throw networkError(error, options.signal);
       }
       if (chunk.done) break;
+      options.alive();
       received += chunk.value.byteLength;
       // Stopped as soon as it is bigger than it should be, whatever the server said.
       if (received > file.size) {
@@ -130,10 +173,11 @@ async function downloadFile(
  * Fetches `url`, following forwards by hand: at most MAX_FORWARDS, each to an https address
  * (a relative one is resolved against the current address). No cookies or credentials are sent.
  */
-async function follow(url: string, options: DownloadOptions): Promise<Response> {
+async function follow(url: string, options: Running): Promise<Response> {
   let current = url;
   for (let forwards = 0; ; forwards++) {
     if (!isHttps(current)) throw new DownloadError(DOWNLOAD_MESSAGES.untrusted);
+    options.alive();
     let response: Response;
     try {
       response = await options.fetch(current, {

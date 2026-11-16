@@ -11,6 +11,8 @@ import {
   downloadModel,
   MAX_FORWARDS,
   removeLeftovers,
+  STALL_TIMEOUT_MS,
+  type Timers,
 } from "../src/core/voice/download.js";
 import {
   DOWNLOAD_QUESTION,
@@ -343,4 +345,107 @@ test("a model folder with a missing or wrong-sized file doesn't count as ready",
     false,
     "a folder isn't a file",
   );
+});
+
+/** The stall check's timer, fired by the test instead of by time passing. */
+class ManualTimers implements Timers {
+  private next = 1;
+  readonly pending = new Map<number, { callback: () => void; ms: number }>();
+  readonly started: number[] = [];
+  setTimeout(callback: () => void, ms: number) {
+    const id = this.next++;
+    this.pending.set(id, { callback, ms });
+    this.started.push(ms);
+    return id;
+  }
+  clearTimeout(handle: unknown) {
+    this.pending.delete(handle as number);
+  }
+  /** As if the wait ran out now. */
+  fire() {
+    const due = [...this.pending.values()];
+    this.pending.clear();
+    for (const timer of due) timer.callback();
+  }
+}
+
+test("a server that never answers is given up on after 30 seconds, and nothing is left behind", async (t) => {
+  const dataDir = await tempDir(t);
+  const arrived = deferred<void>();
+  // Takes the request and never answers it.
+  const fake = await server(t, { "/files/encoder_model.ort": () => arrived.resolve() });
+  const timers = new ManualTimers();
+  const result = downloadModel({
+    dataDir,
+    model: fake.model,
+    fetch: tunnel,
+    signal: new AbortController().signal,
+    timers,
+  });
+  await arrived.promise;
+  assert.deepEqual(
+    [...timers.pending.values()].map((p) => p.ms),
+    [STALL_TIMEOUT_MS],
+  );
+  assert.equal(STALL_TIMEOUT_MS, 30_000);
+  timers.fire();
+  await assert.rejects(result, new DownloadError(DOWNLOAD_MESSAGES.stalled));
+  assert.deepEqual(await leftovers(dataDir), []);
+});
+
+test("a download whose bytes stop coming is given up on, and its partial files are deleted", async (t) => {
+  const dataDir = await tempDir(t);
+  const fake = await server(t, {
+    "/files/encoder_model.ort": (_req, res) => {
+      res.writeHead(200, { "content-length": String(encoder.data.length) });
+      res.write(encoder.data.subarray(0, 1_000));
+    },
+  });
+  const timers = new ManualTimers();
+  const started = deferred<void>();
+  const result = downloadModel({
+    dataDir,
+    model: fake.model,
+    fetch: tunnel,
+    signal: new AbortController().signal,
+    timers,
+    onProgress: () => started.resolve(),
+  });
+  await started.promise;
+  assert.ok((await leftovers(dataDir)).includes(".partial/encoder_model.ort"));
+  assert.equal(timers.pending.size, 1, "one wait running at a time");
+  timers.fire();
+  await assert.rejects(result, new DownloadError(DOWNLOAD_MESSAGES.stalled));
+  assert.deepEqual(await leftovers(dataDir), []);
+});
+
+test("the stall check restarts with every reply and every piece of a file, and stops at the end", async (t) => {
+  const dataDir = await tempDir(t);
+  const fake = await server(t);
+  const timers = new ManualTimers();
+  await downloadModel({
+    dataDir,
+    model: fake.model,
+    fetch: tunnel,
+    signal: new AbortController().signal,
+    timers,
+  });
+  assert.ok(timers.started.length >= 4, "before and after each request, and for each piece");
+  assert.ok(timers.started.every((ms) => ms === STALL_TIMEOUT_MS));
+  assert.equal(timers.pending.size, 0, "nothing left waiting");
+  assert.equal(await isModelReady(dataDir, fake.model), true);
+  // A cancel is still a cancel, not a stall.
+  const cancelled = new AbortController();
+  cancelled.abort(new Error("cancelled"));
+  await assert.rejects(
+    downloadModel({
+      dataDir: await tempDir(t),
+      model: fake.model,
+      fetch: tunnel,
+      signal: cancelled.signal,
+      timers,
+    }),
+    /cancelled/,
+  );
+  assert.equal(timers.pending.size, 0);
 });
