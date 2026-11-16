@@ -1,6 +1,7 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
-import { applyTheme, toTheme } from "./look.js";
+import { applyTheme, prefersReducedMotion, toTheme } from "./look.js";
 import { createOrb } from "./orb.js";
+import { createTypist } from "./typing.js";
 import { createVoiceControls } from "./voice-controls.js";
 import { createWelcome } from "./welcome.js";
 
@@ -32,6 +33,8 @@ export function startChatWindow(): void {
   const sendButton = byId<HTMLButtonElement>("send");
   // Sage's presence above the message box: resting, listening, thinking or speaking.
   const orb = createOrb(byId<HTMLDivElement>("orb"), byId<HTMLParagraphElement>("orb-state"));
+  // The newest reply types itself out; a click or a key shows it at once.
+  const typist = createTypist(prefersReducedMotion);
 
   function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
     const item = document.createElement("li");
@@ -71,6 +74,7 @@ export function startChatWindow(): void {
     orb.update({ thinking: false });
     pending.textContent = reply;
     pending.classList.remove("pending");
+    if (answered) typist.type(pending, reply);
     sendButton.disabled = false;
     input.focus();
     // Only Sage's final reply is read aloud; never notices.
@@ -97,6 +101,7 @@ export function startChatWindow(): void {
     chatGeneration++;
     const generation = chatGeneration;
     orb.update({ thinking: false });
+    typist.finish();
     messages.replaceChildren();
     forgetHeldNotices();
     sendButton.disabled = true;

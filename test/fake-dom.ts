@@ -162,6 +162,18 @@ export function rootElement(): FakeElement {
   return document.documentElement;
 }
 
+/**
+ * The system's "reduce motion" setting, as the page's matchMedia reports it. Without this the fake
+ * window has no matchMedia, which the window treats as reduced motion.
+ */
+export function setReducedMotion(reduce: boolean): void {
+  const window = (globalThis as { window?: Record<string, unknown> }).window;
+  if (!window) throw new Error("the fake DOM isn't installed");
+  window.matchMedia = (query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)" && reduce,
+  });
+}
+
 /** The window loses focus (another app was clicked). */
 export function blurWindow(): void {
   const window = (globalThis as { window?: { dispatch(type: string): void } }).window;

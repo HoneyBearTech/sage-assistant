@@ -381,18 +381,88 @@ legend::before {
   scrollbar-color: var(--line-bright) transparent;
 }
 
+/*
+ * Each row: a label column (YOU in amber, SAGE in the accent) and the text. The labels are drawn
+ * here, so the row's text is exactly the message; screen readers hear "You:" and "Sage:".
+ */
 .message {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 16px;
   line-height: 1.55;
+  animation: message-in 220ms ease-out both;
+}
+
+.message:last-child {
+  border-bottom-color: transparent;
+}
+
+.message.user::before,
+.message.assistant::before,
+.message.notice::before {
+  grid-column: 1;
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  font-weight: 600;
+  font-style: normal;
+  /* The label sits on the first line of the text. */
+  line-height: calc(16px * 1.55);
+  letter-spacing: var(--label-spacing);
+  white-space: nowrap;
+}
+
+.message.user::before {
+  content: "YOU" / "You:";
+  color: var(--amber);
+}
+
+.message.assistant::before {
+  content: "SAGE" / "Sage:";
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--glow);
 }
 
 .message.pending {
   color: var(--muted);
   font-style: italic;
+  animation:
+    message-in 220ms ease-out both,
+    pending 1.2s ease-in-out 220ms infinite alternate;
 }
 
+/* While the newest reply types itself out, its own text is held invisible underneath. */
+.message.typing {
+  color: transparent;
+}
+
+.message .typed {
+  position: absolute;
+  grid-column: 2;
+  grid-row: 1;
+  inset: 0;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.message .typed::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--glow);
+  animation: caret 0.8s steps(1) infinite;
+}
+
+/* Notices from Sage itself keep their own dashed card. */
 .message.notice {
   align-self: center;
   margin: 8px 0;
@@ -400,6 +470,34 @@ legend::before {
   border: 1px dashed var(--accent-dim);
   border-radius: 2px;
   background: var(--accent-wash);
+}
+
+.message.notice::before {
+  content: "NOTICE" / "Notice:";
+  color: var(--muted);
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pending {
+  to {
+    opacity: 0.55;
+  }
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
 }
 
 .composer {
