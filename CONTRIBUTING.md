@@ -146,6 +146,11 @@ like any other change, because an update can carry a compromised release:
 - After a Biome update, update the version in the `$schema` line of `biome.jsonc` and fix any new
   warnings.
 - Push those changes as a signed-off commit (`git commit -s`) on the same pull request.
+- `package.json` has an `overrides` entry that moves two copies of `minimatch` (the ones `app-builder-lib`
+  and `@electron/universal` ask for) to version 11, because of GHSA-g3hv-75wg-m249 and because no
+  electron-builder release takes the fixed `minimatch` yet. Remove it once electron-builder's
+  `app-builder-lib` asks for `minimatch` 11.0.1 or later: delete the `overrides` entry, run `npm install`,
+  and check `npm ls minimatch` and `npm audit`.
 - A new Electron major version comes in its own pull request. CI can't open the window, so run the
   [Windows checklist](docs/windows-checklist.md) before merging.
 
