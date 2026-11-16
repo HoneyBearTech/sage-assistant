@@ -26,6 +26,12 @@ Workflows:
 - [Scorecard](../.github/workflows/scorecard.yml): the OpenSSF Scorecard, on every push to `main` and
   weekly (it doesn't run on pull requests).
 
+The OpenSSF Best Practices badge at the top of the README is different from the Scorecard. The Scorecard is
+an automatic check that runs on GitHub. The badge comes from the OpenSSF Best Practices programme, where the
+owner answers a questionnaire about how the project is run; its page is
+<https://www.bestpractices.dev/projects/16810>. The badge shows "in progress" until that questionnaire is
+complete, and the owner keeps it up to date.
+
 Not in place yet:
 
 - **Release**: builds the Windows installer on a version tag such as `v0.2.0`, with a checksum file and

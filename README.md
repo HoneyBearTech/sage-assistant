@@ -2,6 +2,8 @@
 
 # Sage
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16810/badge)](https://www.bestpractices.dev/projects/16810)
+
 **S.A.G.E.** (System for Assistance, Guidance & Execution), "Sage" for short, is a desktop assistant
 that runs on your own computer. You chat with it in its own window. It can search the web, keep notes
 and reminders, and open the apps and files you allow, and it **always asks you first** before it opens
