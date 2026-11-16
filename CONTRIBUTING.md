@@ -113,6 +113,8 @@ one more reason to use Node 24.
 - **Bug fixes come with a regression test** that fails without the fix, unless that is impractical, in
   which case the pull request says why.
 - **Security-relevant changes come with a test that proves the protection works.**
+- **Window code is written as functions the tests call** (like `startChatWindow` and `createWelcome`),
+  not as code that runs when the file loads, so the coverage report counts each file once.
 - **Tests use mocked timers or events, never sleeps or real timeouts.** A test that waits for
   something waits for the event itself (a promise the fake resolves, the scheduler's own queue), and
   anything on a timer runs on `FakeClock` or node:test's mock timers (`t.mock.timers`). A short
