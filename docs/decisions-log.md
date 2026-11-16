@@ -2,6 +2,23 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - openssf-badge
+
+**Context:** the owner asked for the OpenSSF badge in the README (project 16810 on bestpractices.dev).
+
+**Decisions:**
+- **The Best Practices badge only**, under the title, linked to the project page. Other badges (such as
+  the Scorecard's) were left out to keep the change to what was asked.
+- **No changelog entry:** it changes nothing in Sage itself.
+- **The questionnaire stays with the owner,** because it needs his sign-in. The badge reads "in progress"
+  until it is complete.
+
+**Review:** the Security Officer cleared it (only bestpractices.dev links over https; nothing private).
+The Auditor approved (README layout unchanged; the badge page and image checked live). A two-file text
+change, so no Researcher, QA or plain-English check.
+
+**Rejected findings:** none.
+
 ## 2026-11-16 - brains-api
 
 **Context:** the owner asked for Sage to use the big online model services as well as local models,
