@@ -287,7 +287,7 @@ The lines type out one after another with the chat's typist (`typing.ts`); a cli
 all, and with reduced motion they appear at once. Each new set is read out once, in full, through one
 polite status area (`welcome-checks-status`), which is cleared first and set a moment later
 (`ANNOUNCE_DELAY_MS`) so the same result is read out again after Check again. A result still
-waiting is dropped, and the area emptied, when a check or download starts again, the step changes, or
+waiting is dropped, and the area emptied, when a check or download starts again, the other model is chosen, the step changes, or
 setup is finished or skipped; the delayed write also checks that its step is still showing; the lists themselves
 aren't live regions.
 

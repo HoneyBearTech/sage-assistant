@@ -466,6 +466,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
         el.modelStatus.textContent = "";
         el.modelSkills.textContent = "";
         setFailed("model", null);
+        clearAnnouncement();
         stopTyping();
         el.checks.model.replaceChildren();
       }

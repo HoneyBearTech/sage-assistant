@@ -1099,6 +1099,25 @@ test("an announcement still waiting is dropped when the next step opens", async 
   assert.equal(area.textContent, "");
 });
 
+test("an announcement still waiting is dropped when the other model is chosen", async (t) => {
+  const { el, click } = await welcomeWindow(t, {
+    runnerStatus: async () => runner("ready"),
+    pullModel: async () => ({ status: "failed", message: "Not enough space.", code: "SAGE-MOD-02" }),
+  });
+  const area = el("welcome-checks-status");
+  await click("place-local");
+  await click("runner-next");
+  await click("model-download");
+  assert.equal(el("model-code").textContent, "Support code: SAGE-MOD-02");
+  // Smaller chosen within the 100 ms: Standard's failure isn't read out over the new choice.
+  el("model-standard").checked = false;
+  el("model-smaller").checked = true;
+  el("model-smaller").dispatch("change");
+  assert.equal(el("model-code").hidden, true);
+  t.mock.timers.tick(ANNOUNCE_DELAY_MS * 2);
+  assert.equal(area.textContent, "");
+});
+
 test("an announcement still waiting is dropped when setup finishes or is skipped", async (t) => {
   const { el, click } = await welcomeWindow(t, { runnerStatus: async () => runner("unreachable") });
   const area = el("welcome-checks-status");
