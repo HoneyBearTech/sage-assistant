@@ -1,5 +1,6 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
 import { applyTheme, toTheme } from "./look.js";
+import { createOrb } from "./orb.js";
 import { createVoiceControls } from "./voice-controls.js";
 import { createWelcome } from "./welcome.js";
 
@@ -29,6 +30,8 @@ export function startChatWindow(): void {
   const composer = byId<HTMLFormElement>("composer");
   const input = byId<HTMLTextAreaElement>("input");
   const sendButton = byId<HTMLButtonElement>("send");
+  // Sage's presence above the message box: resting, listening, thinking or speaking.
+  const orb = createOrb(byId<HTMLDivElement>("orb"), byId<HTMLParagraphElement>("orb-state"));
 
   function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
     const item = document.createElement("li");
@@ -55,6 +58,7 @@ export function startChatWindow(): void {
     addMessage("user", text);
     const pending = addMessage("assistant", "Thinking…", true);
     sendButton.disabled = true;
+    orb.update({ thinking: true });
     let reply: string;
     let answered = false;
     try {
@@ -64,6 +68,7 @@ export function startChatWindow(): void {
       reply = "Something went wrong. Try again.";
     }
     if (generation !== chatGeneration) return;
+    orb.update({ thinking: false });
     pending.textContent = reply;
     pending.classList.remove("pending");
     sendButton.disabled = false;
@@ -91,6 +96,7 @@ export function startChatWindow(): void {
     // The old chat's pending reply is abandoned at once; Send comes back when Sage has reset.
     chatGeneration++;
     const generation = chatGeneration;
+    orb.update({ thinking: false });
     messages.replaceChildren();
     forgetHeldNotices();
     sendButton.disabled = true;
@@ -122,6 +128,7 @@ export function startChatWindow(): void {
       voiceNote: byId<HTMLParagraphElement>("voice-note"),
     },
     typeof speechSynthesis === "undefined" ? undefined : speechSynthesis,
+    (change) => orb.update(change),
   );
 
   // --- Tabs ---

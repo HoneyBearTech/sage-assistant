@@ -34,6 +34,11 @@
   --grid: light-dark(rgb(29 106 82 / 0.07), rgb(95 211 168 / 0.045));
   --scanline: light-dark(transparent, rgb(0 0 0 / 0.14));
   --glass: light-dark(rgb(255 255 255 / 0.86), rgb(10 25 20 / 0.84));
+  /* The orb's core: a bright centre fading to the accent, with the leaf cut out of it. */
+  --orb-hot: light-dark(#7fd6b4, #e4fff4);
+  --orb-mid: light-dark(#2f8a6c, #5fd3a8);
+  --orb-edge: light-dark(rgb(29 106 82 / 0.1), rgb(47 138 108 / 0.08));
+  --orb-leaf: light-dark(rgb(255 255 255 / 0.9), rgb(3 20 14 / 0.62));
 
   /* The PC's own fonts only: monospace for the window's chrome, the system font for reading. */
   --mono:
@@ -455,6 +460,275 @@ legend::before {
   box-shadow: 0 0 14px -2px var(--amber-glow);
 }
 
+/* --- The orb: Sage's presence, above the message box --- */
+
+.orb-dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0 10px;
+}
+
+.orb {
+  position: relative;
+  width: 116px;
+  height: 116px;
+}
+
+/* A soft glow behind the rings. */
+.orb::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
+  transform-origin: center;
+}
+
+.orb-art {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.orb-core,
+.orb-ticks,
+.orb-ticks-major,
+.orb-arcs,
+.orb-inner,
+.orb-ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* The stroked shapes; the core's disc is filled by its gradient (set in index.html). */
+.orb-frame,
+.orb-ticks,
+.orb-ticks-major,
+.orb-arcs,
+.orb-inner,
+.orb-ripple,
+.orb-vein {
+  fill: none;
+}
+
+.orb-frame {
+  stroke: var(--line-bright);
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+/* Sixty small ticks, and a longer one every five. */
+.orb-ticks {
+  stroke: var(--line-bright);
+  stroke-width: 5;
+  stroke-dasharray: 1.6 7.8248;
+}
+
+.orb-ticks-major {
+  stroke: var(--accent-dim);
+  stroke-width: 9;
+  stroke-dasharray: 2.4 44.7239;
+}
+
+/* Broken arcs: they turn while Sage thinks. */
+.orb-arcs {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 90 30 40 30 120 50 60 57.5;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.orb-inner {
+  stroke: var(--line-bright);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+}
+
+.orb-stop-hot {
+  stop-color: var(--orb-hot);
+}
+
+.orb-stop-mid {
+  stop-color: var(--orb-mid);
+}
+
+.orb-stop-edge {
+  stop-color: var(--orb-edge);
+}
+
+.orb-art .orb-leaf {
+  fill: var(--orb-leaf);
+}
+
+.orb-vein {
+  stroke: var(--orb-mid);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+/* Rings that spread out while you talk (amber) and while Sage speaks (accent). */
+.orb-ripple {
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.orb-caption {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Resting: a slow breath. */
+.orb[data-state="idle"] .orb-core,
+.orb[data-state="idle"]::before {
+  animation: orb-breathe 3.6s ease-in-out infinite;
+}
+
+/* Listening: quick pulses and amber rings, while the microphone is open. */
+.orb[data-state="listening"]::before {
+  background: radial-gradient(circle, var(--amber-glow) 0%, transparent 70%);
+}
+
+.orb[data-state="listening"] .orb-core {
+  animation: orb-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.orb[data-state="listening"] .orb-arcs,
+.orb[data-state="listening"] .orb-ripple {
+  stroke: var(--amber);
+}
+
+.orb[data-state="listening"] .orb-ripple,
+.orb[data-state="speaking"] .orb-ripple {
+  animation: orb-ripple 1.6s ease-out infinite;
+}
+
+.orb[data-state="listening"] .orb-ripple-late,
+.orb[data-state="speaking"] .orb-ripple-late {
+  animation-delay: 0.8s;
+}
+
+.orb[data-state="listening"] + .orb-caption {
+  color: var(--amber);
+}
+
+/* Thinking: the rings turn, the core breathes faster. */
+.orb[data-state="thinking"] .orb-ticks,
+.orb[data-state="thinking"] .orb-ticks-major {
+  animation: orb-turn 14s linear infinite;
+}
+
+.orb[data-state="thinking"] .orb-arcs {
+  opacity: 1;
+  animation: orb-turn 3.2s linear infinite reverse;
+}
+
+.orb[data-state="thinking"] .orb-inner {
+  animation: orb-turn 7s linear infinite;
+}
+
+.orb[data-state="thinking"] .orb-core {
+  animation: orb-breathe 1.6s ease-in-out infinite;
+}
+
+/* Speaking: an uneven pulse, like a voice. */
+.orb[data-state="speaking"] .orb-core {
+  animation: orb-speak 1.3s ease-in-out infinite;
+}
+
+.orb[data-state="thinking"] + .orb-caption,
+.orb[data-state="speaking"] + .orb-caption {
+  color: var(--accent);
+}
+
+/* The window is hidden or minimised. */
+.orb.paused,
+.orb.paused::before,
+.orb.paused * {
+  animation-play-state: paused;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@keyframes orb-pulse {
+  from {
+    transform: scale(0.98);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes orb-speak {
+  0%,
+  100% {
+    transform: scale(0.97);
+  }
+  20% {
+    transform: scale(1.06);
+  }
+  35% {
+    transform: scale(1);
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  75% {
+    transform: scale(0.99);
+  }
+}
+
+@keyframes orb-ripple {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes orb-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Short windows: a smaller orb, then just the word. */
+@media (max-height: 640px) {
+  .orb {
+    width: 76px;
+    height: 76px;
+  }
+}
+
+@media (max-height: 500px) {
+  .orb {
+    display: none;
+  }
+}
+
 /* --- Settings --- */
 
 .settings {
@@ -572,6 +846,13 @@ progress {
 
 /* With the system's "reduce motion" on, nothing moves: no animation, no transitions. */
 @media (prefers-reduced-motion: reduce) {
+  /* The orb still shows its state, standing still: one ring out while listening or speaking. */
+  .orb[data-state="listening"] .orb-ripple:not(.orb-ripple-late),
+  .orb[data-state="speaking"] .orb-ripple:not(.orb-ripple-late) {
+    opacity: 0.6;
+    transform: scale(1.4);
+  }
+
   *,
   *::before,
   *::after {

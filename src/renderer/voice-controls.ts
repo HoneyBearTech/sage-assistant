@@ -54,11 +54,15 @@ interface Talk {
 /** How often the window asks how far the download has got. */
 const DOWNLOAD_POLL_MS = 500;
 
+/** What voice is doing, for the orb: the microphone is open, or a reply is being read aloud. */
+export type VoiceActivity = { listening: boolean } | { speaking: boolean };
+
 /** Sets up voice in the window: keys, the Talk button, the download offer and spoken replies. */
 export function createVoiceControls(
   sage: SageApi,
   el: VoiceElements,
   synth: SpeechSynthesis | undefined,
+  onActivity: (change: VoiceActivity) => void = () => {},
 ): VoiceControls {
   let talk: Talk | null = null;
   /** Goes up on New chat; a transcript for an older chat is dropped. */
@@ -72,6 +76,7 @@ export function createVoiceControls(
 
   const speaker = new Speaker(synth, (current) => {
     el.stopSpeaking.hidden = !current.speaking;
+    onActivity({ speaking: current.speaking });
     el.voiceNote.textContent = current.availability === "none" ? VOICE_TEXT.noVoice : "";
   });
 
@@ -85,6 +90,7 @@ export function createVoiceControls(
   function setTalkButton(active: boolean): void {
     el.talkButton.classList.toggle("active", active);
     el.talkButton.setAttribute("aria-pressed", String(active));
+    onActivity({ listening: active });
   }
 
   async function refreshStatus(): Promise<void> {
