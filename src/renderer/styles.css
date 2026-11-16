@@ -147,9 +147,12 @@ label:not(.choice),
   box-shadow: 0 0 10px var(--glow);
 }
 
+/* The status takes the free space, so the tabs and the sound switch sit at the right (also on the
+   Welcome screen, which hides the tabs). */
 .status {
   flex: 0 1 auto;
   min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -170,7 +173,6 @@ label:not(.choice),
 }
 
 .tabs {
-  margin-left: auto;
   display: flex;
   gap: 2px;
 }
