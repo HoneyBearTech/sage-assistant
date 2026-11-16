@@ -2,6 +2,51 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - renovate
+
+**Context:** the owner asked: "This will use Renovate instead of Dependabot." By then the owner had added
+the GitHub workflows, CODEOWNERS, private vulnerability reporting and a branch ruleset ("Main"). They
+had also installed the Renovate app and merged its starter config. That config failed the Biome format
+check, so CI on `main` was red until this job.
+
+**Decisions:**
+- **Scope:** Renovate for npm and GitHub Actions only (`enabledManagers`).
+- **Schedule:** weekly, before 6am on Monday, US Central time. Security fixes come at any time, with a
+  `security` label. The lockfile is refreshed monthly.
+- **Exact versions:** kept with the `:pinAllExceptPeerDependencies` preset.
+  *Rejected:* a global `rangeStrategy: "pin"`. It would also pin `engines.node` to one exact Node release.
+- **Actions:** stay pinned to a full SHA (`helpers:pinGitHubActionDigests`). Minor, patch and digest
+  updates of actions are grouped, and the CodeQL actions always move together.
+- **A 3-day wait** before a new npm release is proposed, as a guard against a just-published bad release.
+  - Vulnerability-alert pull requests are exempt: that is Renovate's default.
+  - The monthly lockfile refresh is exempt too, because it has no release date. Without the exemption its
+    check would stay pending forever.
+- **Electron:** major versions come in their own pull request, with a note pointing to the Windows
+  checklist.
+- **Manual follow-ups:** esbuild and Biome updates carry notes about the change a person has to make on
+  the same pull request (`allowScripts`, the `biome.jsonc` schema line).
+- **No auto-merge.** Renovate never merges its own pull requests.
+- **The checks page:** `docs/github-checks-to-add.md` became `docs/github-checks.md`, a short record with
+  links to the workflow files instead of copies of them. Settings the team can't read (secret scanning and
+  push protection, Dependabot alerts on, Dependabot's own update pull requests off) are listed for the
+  owner to check.
+
+**Review:** QA, the Security Officer, a second security review and the Auditor, with two fix rounds. The
+install-script finding was raised by both security reviews, so it counted as confirmed. The checklist now
+covers any package that adds an install script, not only esbuild.
+
+**Windows test fix:** with `main`'s format error gone, CI ran the tests on Windows for the first time.
+Three file-opening tests failed there. The runner's temp folder has a short 8.3 name, while Sage
+correctly reports real (long) paths. The test helper now returns the real path. This was test-only; the
+app was right.
+
+**Rejected or deferred findings:**
+- *"Renovate is installed" can't be shown from the repo.* Rejected: the onboarding pull request (#2) was
+  merged, and Renovate has opened update pull requests.
+- *The DCO check's bot exemption trusts the commit author, which a contributor could fake.* Deferred: it
+  needs a workflow change, which is the owner's to make. The risk is low, since the owner reviews every
+  pull request.
+
 ## 2026-11-15 - sage-foundation
 
 **Context:** the first job for S.A.G.E. (System for Assistance, Guidance & Execution). The owner wants a
@@ -40,8 +85,9 @@ desktop assistant that runs on a Windows PC, installs as its own app, and runs f
 - **Licence:** MIT.
 - **Search:** DuckDuckGo's HTML page, with no key. The source can be swapped, and results are untrusted
   text.
-- **No GitHub workflows from the team:** the checks run locally with `npm run verify`. Ready-to-paste
-  workflow text is in `docs/github-checks-to-add.md`.
+- **No GitHub workflows from the team:** the checks ran locally with `npm run verify`, and the job handed
+  over ready-to-paste workflow text. The owner has since added the workflows; `docs/github-checks.md`
+  now records what is in place.
 - **Order of the next jobs:** Windows installer, then voice, then first-run setup.
 
 **Review:**

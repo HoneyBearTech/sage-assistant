@@ -191,10 +191,11 @@ Sage has no updater and no installer yet, so today code reaches a user only when
   the installer job: no `ELECTRON_RUN_AS_NODE`, no `NODE_OPTIONS`, no `--inspect`, the app archive
   checked against the hash built into the binary, and the app loaded only from that archive. That stops
   a local program from using Sage's binary to run its own code with Sage's identity.
-- **Planned before any release** (see the [roadmap](roadmap.md)): CI with SHA-pinned actions,
-  dependency review, CodeQL, a secret scan and Scorecard
-  ([github-checks-to-add.md](github-checks-to-add.md)); a signed installer; and signed updates checked
-  before they are applied.
+- **On GitHub now** ([github-checks.md](github-checks.md)): CI with SHA-pinned actions, the DCO check,
+  dependency review, CodeQL, a secret scan and Scorecard, with Renovate opening the update pull requests
+  for review.
+- **Planned before any release** (see the [roadmap](roadmap.md)): a signed installer, and signed updates
+  checked before they are applied.
 
 ### The window itself
 

@@ -39,14 +39,17 @@ Keep it that way.
 
 | Check | What it does | Runs locally with | On GitHub |
 | --- | --- | --- | --- |
-| Lint and format | [Biome](https://biomejs.dev/) 2.5.15 with its recommended rules (`biome.jsonc`); warnings fail too | `npm run check` | planned |
-| Typecheck | TypeScript in strict mode: `tsconfig.json` (main process, preload, tests, scripts) and `src/renderer/tsconfig.json` (the window) | `npm run typecheck` | planned |
-| Tests and coverage | Node's built-in test runner through `tsx`, with an 80% line-coverage floor | `npm run test:coverage` (`npm test` without coverage) | planned |
-| Public-repo check | No private IP addresses, LAN host names, home folders or personal e-mail addresses in any file | `npm run check:public` | planned |
-| Secret scan | gitleaks over the git history and the working tree; skipped with a message if gitleaks isn't installed | `npm run secret-scan` | planned |
+| Lint and format | [Biome](https://biomejs.dev/) 2.5.15 with its recommended rules (`biome.jsonc`); warnings fail too | `npm run check` | CI, every pull request |
+| Typecheck | TypeScript in strict mode: `tsconfig.json` (main process, preload, tests, scripts) and `src/renderer/tsconfig.json` (the window) | `npm run typecheck` | CI, every pull request |
+| Tests and coverage | Node's built-in test runner through `tsx`, with an 80% line-coverage floor | `npm run test:coverage` (`npm test` without coverage) | CI, every pull request |
+| Public-repo check | No private IP addresses, LAN host names, home folders or personal e-mail addresses in any file | `npm run check:public` | CI, every pull request |
+| Secret scan | gitleaks over the git history and the working tree; skipped with a message if gitleaks isn't installed | `npm run secret-scan` | a gitleaks workflow on every pull request (history only); the local scan inside CI's verify step is skipped, because gitleaks isn't installed on those runners |
 
-`npm run verify` runs all five, in that order. Nothing runs on GitHub yet: the workflows are written out,
-ready to add, in [docs/github-checks-to-add.md](docs/github-checks-to-add.md).
+`npm run verify` runs all five, in that order, and stays the command to run locally. On GitHub, every pull
+request gets CI (`npm run verify` on Ubuntu and Windows, plus a dependency audit), the DCO check, the
+secret scan, CodeQL and dependency review; the OpenSSF Scorecard runs on `main` and weekly. The workflows
+are in [.github/workflows/](.github/workflows/), and [docs/github-checks.md](docs/github-checks.md) records
+them.
 
 `npm run format` rewrites files in the house style, and `npx biome check --write .` also applies safe lint
 fixes.
@@ -119,6 +122,28 @@ one more reason to use Node 24.
   test can take it in between. Start a fake server on port 0 and keep it open, or use
   `REFUSED_PORT` from `test/helpers.ts` for "nothing is listening".
 
+## Reviewing a Renovate update
+
+Renovate opens the dependency update pull requests (see [renovate.json](renovate.json)). Review each one
+like any other change, because an update can carry a compromised release:
+
+- It runs every check on GitHub, like any other pull request. Don't merge it until they pass.
+- New releases wait 3 days before Renovate proposes them. Security fixes don't wait.
+- After an esbuild update, or any update of a package that runs an install script, inspect the new
+  script and update the `allowScripts` entry in `package.json` (the list of packages allowed to run
+  install scripts). Entries are keyed by exact version, such as `esbuild@0.28.2`, so each esbuild update
+  needs a new key.
+- Look for new or changed install scripts in every update pull request, including the monthly lockfile
+  refresh: in the `package-lock.json` diff, look for `"hasInstallScript": true` on new or changed
+  entries; or run `npm install-scripts ls` locally, which lists packages whose install scripts aren't
+  reviewed yet (npm 11.19.1, which comes with Node 24.22, has it; if your npm lacks the command, use the
+  lockfile diff).
+- After a Biome update, update the version in the `$schema` line of `biome.jsonc` and fix any new
+  warnings.
+- Push those changes as a signed-off commit (`git commit -s`) on the same pull request.
+- A new Electron major version comes in its own pull request. CI can't open the window, so run the
+  [Windows checklist](docs/windows-checklist.md) before merging.
+
 ## Developer Certificate of Origin
 
 Every commit must be signed off to certify the [Developer Certificate of Origin](https://developercertificate.org/)
@@ -130,8 +155,9 @@ Signed-off-by: Your Name <you@example.com>
 ```
 
 A GitHub `noreply` address is fine. To fix a missing sign-off, amend or rebase with `--signoff` (for example
-`git rebase --signoff main`) and force-push your branch. There is no automatic DCO check on GitHub yet
-(it is planned); the maintainer checks it in review.
+`git rebase --signoff main`) and force-push your branch. A DCO check runs on every pull request and
+fails if a commit has no sign-off; commits from the Renovate and Dependabot bots and merge commits are
+exempt.
 
 ## Pull requests
 

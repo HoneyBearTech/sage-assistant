@@ -82,8 +82,9 @@ strike them through with a reason.
 - **Dependencies**: exact versions, few, permissive licences, no vendor SDKs (plain `fetch`).
 - **Public repository**: no private IP addresses, LAN host names, home paths or personal e-mail
   addresses; `npm run check:public` enforces it. Product docs may name the local model runner.
-- **Checks run locally** with `npm run verify`. GitHub runs nothing yet; never claim it does. The
-  ready-to-paste workflows are in `docs/github-checks-to-add.md`, for the owner to add.
+- **Checks run locally** with `npm run verify`. On GitHub every pull request also gets CI (the same
+  command on Ubuntu and Windows), the DCO check, a secret scan, CodeQL and dependency review; Scorecard
+  runs on `main`. The record is `docs/github-checks.md`; the workflows are in `.github/workflows/`.
 - One change per pull request; every commit signed off (DCO). Never push to `main`.
 
 ## Context

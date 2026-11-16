@@ -26,8 +26,8 @@
 ## The project
 
 - [Roadmap](roadmap.md): what has shipped, what comes next, what comes later, and what Sage will not do.
-- [GitHub checks to add](github-checks-to-add.md): ready-to-paste workflows, a CODEOWNERS line and a
-  branch rule for the maintainer to add. Until then, the checks run locally with `npm run verify`.
+- [GitHub checks](github-checks.md): what runs on GitHub (CI, DCO, secret scan, CodeQL, dependency review,
+  Scorecard), how Renovate keeps dependencies current, and the branch rule. Locally, run `npm run verify`.
 - [Plans](plans/) and [reports](reports/): the plan for each job and the research behind it.
 
 The repository's root holds the [README](../README.md), the [security policy](../SECURITY.md), the

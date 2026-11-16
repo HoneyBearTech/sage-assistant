@@ -1,6 +1,67 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":pinAllExceptPeerDependencies"],
+  "timezone": "America/Chicago",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "assignees": ["HoneyBearTech"],
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": ["at any time"]
+  },
+  "enabledManagers": ["npm", "github-actions"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "packageRules": [
+    {
+      "description": "A just-published npm release isn't proposed for 3 days. Vulnerability-alert pull requests are exempt (Renovate's default for them is no wait).",
+      "matchManagers": ["npm"],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "The monthly lockfile refresh has no release timestamp, so it must not wait for the release age.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Small action updates (minor, patch and moved-tag digest updates) come in one pull request.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "GitHub Actions minor and patch updates"
+    },
+    {
+      "description": "init, analyze and upload-sarif must share one version: analyze refuses a configuration written by a different init.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["github/codeql-action", "github/codeql-action/**"],
+      "groupName": "codeql-action"
+    },
+    {
+      "description": "Each new Electron major version gets its own pull request, because CI can't open the window.",
+      "matchPackageNames": ["electron"],
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "prBodyNotes": [
+        "Electron major update: CI can't open the window, so run docs/windows-checklist.md on the Windows PC before merging."
+      ]
+    },
+    {
+      "description": "esbuild runs an install script that package.json lists under allowScripts.",
+      "matchPackageNames": ["esbuild"],
+      "prBodyNotes": [
+        "esbuild runs an install script: inspect the new script, then update the allowScripts entry in package.json in this pull request, in a signed-off commit (git commit -s)."
+      ]
+    },
+    {
+      "description": "biome.jsonc names the Biome version in its $schema line.",
+      "matchPackageNames": ["@biomejs/biome"],
+      "prBodyNotes": [
+        "Biome update: update the $schema version in biome.jsonc and fix any new warnings, in this pull request, in a signed-off commit (git commit -s)."
+      ]
+    }
   ]
 }
