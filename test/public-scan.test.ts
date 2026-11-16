@@ -225,3 +225,40 @@ test("backslashes that are not escapes are not misread", () => {
     "email",
   ]);
 });
+
+test("mixed escapes decode in one pass, the way JSON does", () => {
+  const dir = `C:${esc(BS)}${BS}${BS}${"Us" + "ers"}${BS}${BS}jdoe${BS}${BS}x`;
+  assert.deepEqual(
+    scanText("a.json", `"p": "${dir}"`).map((f) => f.kind),
+    ["home-path"],
+    "a backslash escape before an escaped backslash pair",
+  );
+  const slashed = `"p": "${"/ho" + "me"}${BS}/jdoe${BS}${BS}x"`;
+  assert.deepEqual(kinds(slashed), ["home-path"]);
+  // Doubled-backslash paths with no other escape are still found, once, as plain text.
+  const plainPath = `"p": "C:${BS}${BS}${"Us" + "ers"}${BS}${BS}jdoe${BS}${BS}x"`;
+  assert.deepEqual(
+    scanText("a.json", plainPath).map((f) => f.match),
+    [`C:${BS}${BS}${"Us" + "ers"}${BS}${BS}jdoe`],
+  );
+  // What a replacement produces is not decoded again: an escaped backslash then u0040 stays text.
+  assert.deepEqual(kinds(`jane.doe${BS}${BS}u0040gmail.com ${esc("x")}`), []);
+});
+
+test("an address with an escape inside it is reported once, in full", () => {
+  const written = `jane${esc(".")}doe${"@"}gmail.com`;
+  assert.deepEqual(
+    scanText("f", written).map((f) => f.match),
+    [at("jane.doe", "gmail.com") + ESCAPES_NOTE],
+  );
+  const other = at("john", "gmail.com").replace("@", esc("@"));
+  assert.deepEqual(
+    scanText("f", `${at("sam", "gmail.com")} ${other}`).map((f) => f.match),
+    [at("sam", "gmail.com"), at("john", "gmail.com") + ESCAPES_NOTE],
+    "a plain address and a different escaped one are two findings",
+  );
+  assert.deepEqual(
+    scanText("f", `${written} ${at("sam", "gmail.com")}`).map((f) => f.match),
+    [at("sam", "gmail.com"), at("jane.doe", "gmail.com") + ESCAPES_NOTE],
+  );
+});

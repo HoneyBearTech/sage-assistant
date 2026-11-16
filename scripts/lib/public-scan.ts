@@ -83,63 +83,108 @@ function isLockfileDeprecation(file: string, content: string): boolean {
   return /(^|[\\/])package-lock\.json$/.test(file) && LOCKFILE_DEPRECATION.test(content);
 }
 
-/** A JSON/JavaScript escape: backslash-u and four hex digits, or backslash-slash. Two backslashes in a row are skipped whole. */
+/**
+ * The escapes the checker decodes, as JSON writes them: backslash-u with four hex digits (group 1),
+ * an escaped backslash (two backslashes), and backslash-slash. Nothing else is decoded.
+ */
 const ESCAPE = /\\(?:\\|\/|u([0-9a-fA-F]{4}))/g;
 
 /** Marks a finding that only shows once the line's escapes are decoded. */
 export const ESCAPES_NOTE = " (written with escapes)";
 
-/** Decodes the escapes in one line; an escaped backslash stays as written, so a backslash pair before u is not an escape. */
-export function decodeEscapes(content: string): string {
-  return content.replace(ESCAPE, (all, hex?: string) =>
-    hex ? String.fromCharCode(Number.parseInt(hex, 16)) : all === "\\/" ? "/" : all,
-  );
+export interface Decoded {
+  /** The line as JSON would read it. */
+  text: string;
+  /** True if it holds a backslash-u or backslash-slash escape (a lone backslash pair doesn't count). */
+  escaped: boolean;
+  /** For each decoded character, where it starts and ends in the written line. */
+  spans: Array<[number, number]>;
 }
 
-type Hit = Pick<Finding, "kind" | "match">;
+/**
+ * Decodes the escapes in one line in a single pass, the way JSON does: a backslash pair becomes one
+ * backslash, backslash-slash becomes a slash, backslash-u and four hex digits becomes that character.
+ * What a replacement produces is never decoded again. Surrogates are kept as written, so they can't crash.
+ */
+export function decodeEscapes(content: string): Decoded {
+  let text = "";
+  let escaped = false;
+  let last = 0;
+  const spans: Array<[number, number]> = [];
+  const plain = (start: number, end: number) => {
+    for (let i = start; i < end; i++) spans.push([i, i + 1]);
+    text += content.slice(start, end);
+  };
+  const decoded = (char: string, start: number, end: number) => {
+    spans.push([start, end]);
+    text += char;
+  };
+  for (const match of content.matchAll(ESCAPE)) {
+    const start = match.index ?? 0;
+    plain(last, start);
+    const hex = match[1];
+    if (hex) escaped = true;
+    else if (match[0] === "\\/") escaped = true;
+    const end = start + match[0].length;
+    decoded(hex ? String.fromCharCode(Number.parseInt(hex, 16)) : match[0].slice(1), start, end);
+    last = end;
+  }
+  plain(last, content.length);
+  return { text, escaped, spans };
+}
+
+type Hit = Pick<Finding, "kind" | "match"> & { index: number };
 
 /** Runs every rule on one line of text. */
 function scanLine(content: string, skipEmail: boolean): Hit[] {
   const hits: Hit[] = [];
+  const at = (kind: FindingKind, match: RegExpMatchArray) =>
+    hits.push({ kind, match: match[0], index: match.index ?? 0 });
   for (const match of content.matchAll(IPV4)) {
     const octets = match.slice(1, 5).map(Number);
-    if (isPrivateIpv4(octets)) hits.push({ kind: "private-ip", match: match[0] });
+    if (isPrivateIpv4(octets)) at("private-ip", match);
   }
-  for (const match of content.matchAll(LAN_HOST)) {
-    hits.push({ kind: "lan-hostname", match: match[0] });
-  }
+  for (const match of content.matchAll(LAN_HOST)) at("lan-hostname", match);
   for (const match of content.matchAll(POSIX_HOME)) {
-    if (!isPlaceholderUser(match[2] ?? "")) hits.push({ kind: "home-path", match: match[0] });
+    if (!isPlaceholderUser(match[2] ?? "")) at("home-path", match);
   }
   for (const match of content.matchAll(WINDOWS_HOME)) {
-    if (!isPlaceholderUser(match[1] ?? "")) hits.push({ kind: "home-path", match: match[0] });
+    if (!isPlaceholderUser(match[1] ?? "")) at("home-path", match);
   }
   for (const match of content.matchAll(EMAIL)) {
-    if (!skipEmail && !isAllowedEmail(match[0])) hits.push({ kind: "email", match: match[0] });
+    if (!skipEmail && !isAllowedEmail(match[0])) at("email", match);
   }
   return hits;
 }
 
 /**
- * Finds every problem in one file's text. A line with escapes is scanned a second time, decoded;
- * what only shows up there is reported once, with ESCAPES_NOTE after the match.
+ * Finds every problem in one file's text. A line with a backslash-u or backslash-slash escape is
+ * scanned a second time, decoded. What only shows up there is reported once, with ESCAPES_NOTE after the
+ * match. A plain hit that overlaps a decoded hit of the same kind is the same problem seen in part
+ * (such as the tail of an address after an escape), so only the decoded, fuller one is reported.
  */
 export function scanText(file: string, text: string): Finding[] {
   const findings: Finding[] = [];
   text.split(/\r?\n/).forEach((content, index) => {
     const skipEmail = isLockfileDeprecation(file, content);
     const line = index + 1;
-    const plain = scanLine(content, skipEmail);
-    for (const hit of plain) findings.push({ file, line, ...hit });
+    let plain = scanLine(content, skipEmail);
     const decoded = decodeEscapes(content);
-    if (decoded === content) return;
-    const seen = new Set(plain.map((hit) => `${hit.kind}\0${hit.match}`));
-    for (const hit of scanLine(decoded, skipEmail)) {
-      const key = `${hit.kind}\0${hit.match}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      findings.push({ file, line, kind: hit.kind, match: hit.match + ESCAPES_NOTE });
+    const extra: Finding[] = [];
+    if (decoded.escaped) {
+      const known = new Set(plain.map((hit) => `${hit.kind}\0${hit.match}`));
+      for (const hit of scanLine(decoded.text, skipEmail)) {
+        const key = `${hit.kind}\0${hit.match}`;
+        if (known.has(key)) continue;
+        known.add(key);
+        const from = decoded.spans[hit.index]?.[0] ?? 0;
+        const to = decoded.spans[hit.index + hit.match.length - 1]?.[1] ?? content.length;
+        plain = plain.filter((p) => p.kind !== hit.kind || p.index + p.match.length <= from || p.index >= to);
+        extra.push({ file, line, kind: hit.kind, match: hit.match + ESCAPES_NOTE });
+      }
     }
+    for (const hit of plain) findings.push({ file, line, kind: hit.kind, match: hit.match });
+    findings.push(...extra);
   });
   return findings;
 }
