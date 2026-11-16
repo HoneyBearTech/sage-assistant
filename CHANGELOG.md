@@ -1,10 +1,12 @@
 # Changelog
 
 All notable changes to Sage are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions will follow
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-11-16
 
 ### Added
 
@@ -108,3 +110,6 @@ All notable changes to Sage are documented here. The format follows
   to **Settings → Set up Sage** instead of a command to type.
 - The talk key (Ctrl+Space) works only while the chat is shown, and Sage's window starts with the chat
   hidden until it knows whether to show the Welcome screen.
+
+[Unreleased]: https://github.com/HoneyBearTech/sage-assistant/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.1.0
