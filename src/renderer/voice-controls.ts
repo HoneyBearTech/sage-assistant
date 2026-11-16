@@ -38,6 +38,8 @@ export interface VoiceControls {
   holdingTalkKey(): boolean;
   /** Reads Sage's final reply aloud if the setting says so; never while Sage is listening. */
   replied(reply: string, fromVoice: boolean, setting: PublicSettings["speakReplies"]): void;
+  /** Reads Sage's own text (the daily brief) aloud; never while Sage is listening. */
+  speak(text: string): void;
 }
 
 type TalkSource = "key" | "button" | "button-key";
@@ -354,6 +356,9 @@ export function createVoiceControls(
     },
     replied(reply, spoken, setting) {
       if (!talk && shouldSpeak(setting, spoken)) speaker.speak(reply);
+    },
+    speak(text) {
+      if (!talk) speaker.speak(text);
     },
   };
 }

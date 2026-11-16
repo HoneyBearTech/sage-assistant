@@ -61,7 +61,15 @@ test("the page's CSP is strict and matches the one in the code", async () => {
 
 test("the renderer never inserts text as HTML", async () => {
   const files = (await readdir(join(root, "src", "renderer"))).filter((name) => name.endsWith(".ts"));
-  for (const file of ["renderer.ts", "main.ts", "welcome.ts", "welcome-text.ts", "asking-cards.ts"]) {
+  for (const file of [
+    "renderer.ts",
+    "main.ts",
+    "welcome.ts",
+    "welcome-text.ts",
+    "asking-cards.ts",
+    "home.ts",
+    "home-text.ts",
+  ]) {
     assert.ok(files.includes(file), file);
   }
   for (const file of files) {

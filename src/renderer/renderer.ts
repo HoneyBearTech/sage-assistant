@@ -11,6 +11,7 @@ import {
   type SageApi,
 } from "../shared/api.js";
 import { createAskingCards } from "./asking-cards.js";
+import { createHome } from "./home.js";
 import { applyTheme, prefersReducedMotion, toTheme } from "./look.js";
 import { createOrb } from "./orb.js";
 import { createSounds } from "./sounds.js";
@@ -44,8 +45,12 @@ export function startChatWindow(): void {
   const composer = byId<HTMLFormElement>("composer");
   const input = byId<HTMLTextAreaElement>("input");
   const sendButton = byId<HTMLButtonElement>("send");
-  // Sage's presence above the message box: resting, listening, thinking or speaking.
-  const orb = createOrb(byId<HTMLDivElement>("orb"), byId<HTMLParagraphElement>("orb-state"));
+  // Sage's presence: resting, listening, thinking or speaking. One state, drawn twice: above the
+  // message box, and large on Home.
+  const orb = createOrb([
+    { orb: byId<HTMLDivElement>("orb"), caption: byId<HTMLParagraphElement>("orb-state") },
+    { orb: byId<HTMLDivElement>("home-orb"), caption: byId<HTMLParagraphElement>("home-orb-state") },
+  ]);
   // The newest reply types itself out; a click or a key shows it at once.
   const typist = createTypist(prefersReducedMotion);
   // Sound effects: off unless the top bar's switch is on; no audio is made until the first sound.
@@ -165,24 +170,31 @@ export function startChatWindow(): void {
 
   const tabBar = byId<HTMLElement>("tabs");
   const tabs = {
+    home: byId<HTMLButtonElement>("tab-home"),
     chat: byId<HTMLButtonElement>("tab-chat"),
     settings: byId<HTMLButtonElement>("tab-settings"),
   };
+  const homeView = byId<HTMLElement>("view-home");
   const views = {
+    home: homeView,
     chat: chatView,
     settings: byId<HTMLElement>("view-settings"),
     welcome: byId<HTMLElement>("view-welcome"),
   };
+  const TABBED = ["home", "chat", "settings"] as const;
 
-  // All three views start hidden; the first one is chosen once the settings have loaded.
-  function show(view: "chat" | "settings" | "welcome"): void {
-    for (const name of ["chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
+  // All four views start hidden; the first one is chosen once the settings have loaded.
+  function show(view: "home" | "chat" | "settings" | "welcome"): void {
+    const wasHome = !homeView.hidden;
+    for (const name of ["home", "chat", "settings", "welcome"] as const) views[name].hidden = name !== view;
     // The Welcome screen has no tab: it is left with Skip setup, Start chatting or the online choice.
     tabBar.hidden = view === "welcome";
-    for (const name of ["chat", "settings"] as const) {
+    for (const name of TABBED) {
       tabs[name].classList.toggle("active", name === view);
       tabs[name].setAttribute("aria-pressed", String(name === view));
     }
+    if (view === "home") home.shown();
+    else if (wasHome) home.hidden();
     // The form isn't reloaded here: unsaved changes stay when switching tabs. Settings are loaded at
     // startup and again after each successful save.
   }
@@ -191,8 +203,41 @@ export function startChatWindow(): void {
     show("chat");
     void collectNotices();
   }
+  tabs.home.addEventListener("click", () => show("home"));
   tabs.chat.addEventListener("click", () => openChat());
   tabs.settings.addEventListener("click", () => show("settings"));
+
+  // --- Home ---
+
+  // The logic is in home.ts; this only finds the elements.
+  const home = createHome(
+    sage,
+    {
+      view: homeView,
+      clock: byId<HTMLParagraphElement>("home-clock"),
+      greeting: byId<HTMLElement>("home-greeting"),
+      today: byId<HTMLUListElement>("home-today"),
+      notes: byId<HTMLUListElement>("home-notes"),
+      brain: byId<HTMLElement>("home-brain"),
+      voice: byId<HTMLElement>("home-voice"),
+      sound: byId<HTMLElement>("home-sound"),
+      next: byId<HTMLElement>("home-next"),
+      status: byId<HTMLParagraphElement>("home-status"),
+      talk: byId<HTMLButtonElement>("home-talk"),
+      briefMe: byId<HTMLButtonElement>("home-brief"),
+      briefPanel: byId<HTMLElement>("home-brief-panel"),
+      briefText: byId<HTMLParagraphElement>("home-brief-text"),
+    },
+    {
+      talk: () => {
+        openChat();
+        input.focus();
+      },
+      settings: () => settings,
+      speak: (text) => voice.speak(text),
+      typist,
+    },
+  );
 
   // --- Sound switch ---
 
@@ -222,6 +267,8 @@ export function startChatWindow(): void {
     };
     void sage.setSound(on).then((result) => {
       if (!result.ok) undo();
+      // Home's Status panel says whether sound is on.
+      home.refresh();
     }, undo);
   });
 
@@ -304,13 +351,17 @@ export function startChatWindow(): void {
         held.delete(id);
         shownNotices.delete(id);
       }
+      let arrived = false;
       for (const notice of notices) {
         if (shownNotices.has(notice.id)) continue;
         const item = addMessage("notice", notice.text);
         item.hidden = true;
         held.set(notice.id, item);
         shownNotices.add(notice.id);
+        arrived = true;
       }
+      // A new notice is usually a reminder that fired: Home's Today panel catches up at once.
+      if (arrived) home.reminderArrived();
       return true;
     } catch {
       // The next poll tries again.
@@ -856,13 +907,12 @@ export function startChatWindow(): void {
     brainStatus.textContent = describeBrain(settings);
   }
 
-  // The first view: the Welcome screen until setup is finished or skipped, otherwise Chat. If the
-  // settings can't be read, Chat opens.
+  // The first view: the Welcome screen until setup is finished or skipped, otherwise Home. If the
+  // settings can't be read, Home opens.
   void loadSettings()
     .then(
-      () => (settings?.setupDone === false ? openWelcome() : openChat()),
-      () => openChat(),
+      () => (settings?.setupDone === false ? openWelcome() : show("home")),
+      () => show("home"),
     )
     .then(startNotices);
-  input.focus();
 }

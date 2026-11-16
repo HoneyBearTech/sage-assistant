@@ -331,6 +331,7 @@ input:focus-visible {
 }
 
 input[type="radio"],
+input[type="checkbox"],
 progress {
   accent-color: var(--accent);
 }
@@ -345,7 +346,8 @@ label:not(.choice) {
 
 fieldset,
 .step,
-.composer {
+.composer,
+.panel {
   position: relative;
   border: 1px solid var(--line);
   border-radius: 2px;
@@ -357,6 +359,7 @@ fieldset,
 fieldset::before,
 .step::before,
 .composer::before,
+.panel::before,
 .message.asking::before {
   --tick: 10px;
   --ink: var(--tick-color, var(--accent));
@@ -950,6 +953,209 @@ legend::before {
 @media (max-height: 500px) {
   .orb {
     display: none;
+  }
+}
+
+/* --- Home: the large orb, the clock and greeting, and the panels --- */
+
+.home {
+  overflow-y: auto;
+  padding: 20px clamp(16px, 4vw, 40px);
+  gap: 18px;
+}
+
+.home-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+.home-orb-dock {
+  padding: 0;
+}
+
+.orb.orb-large {
+  width: 188px;
+  height: 188px;
+}
+
+.home-hello {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The clock: big, in the PC's monospace font, changed once a minute and never animated. */
+.home-clock {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 44px;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.home-greeting {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: var(--label-spacing);
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 12px var(--glow);
+}
+
+.home-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.panel {
+  margin: 0;
+  padding: 12px 16px 14px;
+  min-width: 0;
+}
+
+/* The panels' names: monospace capitals, like the Settings legends. */
+.panel-label {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-spacing);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.panel-label::before {
+  content: "// ";
+  color: var(--muted);
+}
+
+.home-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.home-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  color: var(--text);
+}
+
+.home-when {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* A missed reminder waits on you: amber, like your rows and Sage's asking card. */
+.home-list li.missed .home-when,
+.home-tag {
+  color: var(--amber);
+}
+
+.home-tag {
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-spacing);
+  text-transform: uppercase;
+}
+
+/* An empty panel says so plainly, in a dashed box. */
+.home-list li.empty {
+  padding: 8px 10px;
+  border: 1px dashed var(--line-bright);
+  border-radius: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.home-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-facts div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+.home-facts dt {
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-spacing);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.home-facts dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* The daily brief, typed out like a reply: the text is there from the start, and a copy grows over it. */
+.brief-text {
+  position: relative;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.brief-text.typing {
+  color: transparent;
+}
+
+.brief-text .typed {
+  position: absolute;
+  inset: 0;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.brief-text .typed::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--glow);
+  animation: caret 0.8s steps(1) infinite;
+}
+
+/* Short windows: a smaller orb and clock on Home. */
+@media (max-height: 640px) {
+  .orb.orb-large {
+    width: 120px;
+    height: 120px;
+  }
+
+  .home-clock {
+    font-size: 32px;
   }
 }
 
