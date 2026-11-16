@@ -83,31 +83,62 @@ function isLockfileDeprecation(file: string, content: string): boolean {
   return /(^|[\\/])package-lock\.json$/.test(file) && LOCKFILE_DEPRECATION.test(content);
 }
 
-/** Finds every problem in one file's text. */
+/** A JSON/JavaScript escape: backslash-u and four hex digits, or backslash-slash. Two backslashes in a row are skipped whole. */
+const ESCAPE = /\\(?:\\|\/|u([0-9a-fA-F]{4}))/g;
+
+/** Marks a finding that only shows once the line's escapes are decoded. */
+export const ESCAPES_NOTE = " (written with escapes)";
+
+/** Decodes the escapes in one line; an escaped backslash stays as written, so a backslash pair before u is not an escape. */
+export function decodeEscapes(content: string): string {
+  return content.replace(ESCAPE, (all, hex?: string) =>
+    hex ? String.fromCharCode(Number.parseInt(hex, 16)) : all === "\\/" ? "/" : all,
+  );
+}
+
+type Hit = Pick<Finding, "kind" | "match">;
+
+/** Runs every rule on one line of text. */
+function scanLine(content: string, skipEmail: boolean): Hit[] {
+  const hits: Hit[] = [];
+  for (const match of content.matchAll(IPV4)) {
+    const octets = match.slice(1, 5).map(Number);
+    if (isPrivateIpv4(octets)) hits.push({ kind: "private-ip", match: match[0] });
+  }
+  for (const match of content.matchAll(LAN_HOST)) {
+    hits.push({ kind: "lan-hostname", match: match[0] });
+  }
+  for (const match of content.matchAll(POSIX_HOME)) {
+    if (!isPlaceholderUser(match[2] ?? "")) hits.push({ kind: "home-path", match: match[0] });
+  }
+  for (const match of content.matchAll(WINDOWS_HOME)) {
+    if (!isPlaceholderUser(match[1] ?? "")) hits.push({ kind: "home-path", match: match[0] });
+  }
+  for (const match of content.matchAll(EMAIL)) {
+    if (!skipEmail && !isAllowedEmail(match[0])) hits.push({ kind: "email", match: match[0] });
+  }
+  return hits;
+}
+
+/**
+ * Finds every problem in one file's text. A line with escapes is scanned a second time, decoded;
+ * what only shows up there is reported once, with ESCAPES_NOTE after the match.
+ */
 export function scanText(file: string, text: string): Finding[] {
   const findings: Finding[] = [];
-  const lines = text.split(/\r?\n/);
-  lines.forEach((content, index) => {
+  text.split(/\r?\n/).forEach((content, index) => {
     const skipEmail = isLockfileDeprecation(file, content);
     const line = index + 1;
-    for (const match of content.matchAll(IPV4)) {
-      const octets = match.slice(1, 5).map(Number);
-      if (isPrivateIpv4(octets)) findings.push({ file, line, kind: "private-ip", match: match[0] });
-    }
-    for (const match of content.matchAll(LAN_HOST)) {
-      findings.push({ file, line, kind: "lan-hostname", match: match[0] });
-    }
-    for (const match of content.matchAll(POSIX_HOME)) {
-      if (!isPlaceholderUser(match[2] ?? ""))
-        findings.push({ file, line, kind: "home-path", match: match[0] });
-    }
-    for (const match of content.matchAll(WINDOWS_HOME)) {
-      if (!isPlaceholderUser(match[1] ?? ""))
-        findings.push({ file, line, kind: "home-path", match: match[0] });
-    }
-    for (const match of content.matchAll(EMAIL)) {
-      if (!skipEmail && !isAllowedEmail(match[0]))
-        findings.push({ file, line, kind: "email", match: match[0] });
+    const plain = scanLine(content, skipEmail);
+    for (const hit of plain) findings.push({ file, line, ...hit });
+    const decoded = decodeEscapes(content);
+    if (decoded === content) return;
+    const seen = new Set(plain.map((hit) => `${hit.kind}\0${hit.match}`));
+    for (const hit of scanLine(decoded, skipEmail)) {
+      const key = `${hit.kind}\0${hit.match}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      findings.push({ file, line, kind: hit.kind, match: hit.match + ESCAPES_NOTE });
     }
   });
   return findings;
