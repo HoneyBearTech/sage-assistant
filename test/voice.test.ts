@@ -307,8 +307,13 @@ async function voiceSetup(
 ) {
   const dataDir = await tempDir(t);
   const data = randomBytes(5_000);
-  const gate = { hold: undefined as ReturnType<typeof deferred<void>> | undefined };
+  const gate = {
+    hold: undefined as ReturnType<typeof deferred<void>> | undefined,
+    /** Resolved when a request reaches the fake server, so a test can wait for it without guessing. */
+    reached: deferred<void>(),
+  };
   const fake = await fakeServer(t, async (_req, res) => {
+    gate.reached.resolve();
     await gate.hold?.promise;
     res.writeHead(200);
     res.write(data.subarray(0, 2_000));
@@ -378,8 +383,7 @@ test("while downloading: progress, one download at a time, no recordings, and Ca
   const { voice, gate, dataDir } = await voiceSetup(t);
   gate.hold = deferred<void>();
   const running = voice.downloadModel();
-  await settled();
-  await settled();
+  await gate.reached.promise;
   assert.equal((await voice.status()).model, "downloading");
   assert.deepEqual(await voice.downloadModel(), {
     status: "failed",
