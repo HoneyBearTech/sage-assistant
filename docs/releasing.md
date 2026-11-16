@@ -217,19 +217,22 @@ Notes on the workflow:
 
 ## Making a release, step by step
 
-1. **Pick the version.** Releases follow [Semantic Versioning](https://semver.org/): `1.2.3` means
+1. **Add the release workflow, once.** If `.github/workflows/release.yml` isn't on `main` yet, add it
+   from the [block above](#the-release-workflow) through a pull request first. Without it, pushing a tag
+   does nothing.
+2. **Pick the version.** Releases follow [Semantic Versioning](https://semver.org/): `1.2.3` means
    major.minor.patch. A fix only is a patch (`0.1.1`), new features are a minor version (`0.2.0`).
-2. **Open a release pull request** from a new branch:
+3. **Open a release pull request** from a new branch:
    - set the version in `package.json` and `package-lock.json` together with
      `npm version 0.2.0 --no-git-tag-version`;
    - in `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.2.0] - 2026-12-01` (the version and today's
      date) and add a new, empty `## [Unreleased]` above it;
    - commit with `git commit -s`, push the branch and open the pull request. Merge it once every check
      passes.
-3. **Optionally try the installer first** on a Windows PC: `npm run dist` on the merged `main`, install
+4. **Optionally try the installer first** on a Windows PC: `npm run dist` on the merged `main`, install
    `out/Sage-Setup-0.2.0.exe` and run the "Installed app" section of the
    [Windows checklist](windows-checklist.md).
-4. **Create and push the tag** on the merged commit, either way:
+5. **Create and push the tag** on the merged commit, either way:
    - **with git**, from an up-to-date `main`:
 
      ```sh
@@ -243,9 +246,10 @@ Notes on the workflow:
      tag** and pick **Create new tag: v0.2.0 on publish**, keep the target `main`, set the title
      `Sage 0.2.0`, attach no files, and choose **Publish release**. The workflow adds the three files to
      that release a few minutes later.
-5. **Watch the run** under **Actions → Release**. When it is green, the release has the installer,
+6. **Watch the run** under **Actions → Release**. When it is green, the release has the installer,
    `SHA256SUMS.txt` and the provenance file, and the attestation is listed under the repository's
-   **Attestations**. Download the installer and check it as below.
+   **Attestations**. Download the installer and check it as below. The provenance record proves where
+   and how the installer was built, not that the code in it is trustworthy.
 
 ## Checking a downloaded installer
 
