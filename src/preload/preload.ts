@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { CHANNELS, type SageApi } from "../shared/api.js";
+import { CHANNELS, EVENTS, readAskingEvent, type SageApi } from "../shared/api.js";
 
 // The page gets exactly these methods and nothing else: no ipcRenderer, no Node, no Electron.
 const api: SageApi = {
@@ -24,6 +24,15 @@ const api: SageApi = {
   openInstallGuide: () => ipcRenderer.invoke(CHANNELS.openInstallGuide),
   finishSetup: () => ipcRenderer.invoke(CHANNELS.finishSetup),
   setSound: (on) => ipcRenderer.invoke(CHANNELS.setSound, { on }),
+  // One way only: news that Sage's own box is asking something, and later its answer. The page gets
+  // the checked fields, never the IPC event (which could send a reply), and nothing it does can
+  // answer the box.
+  onAsking: (listener) => {
+    ipcRenderer.on(EVENTS.asking, (_event, payload: unknown) => {
+      const event = readAskingEvent(payload);
+      if (event) listener(event);
+    });
+  },
 };
 
 contextBridge.exposeInMainWorld("sage", api);

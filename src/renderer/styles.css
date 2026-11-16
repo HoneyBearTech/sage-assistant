@@ -313,25 +313,27 @@ fieldset,
   background: var(--glass);
 }
 
-/* The four corner ticks: eight short lines, drawn over the frame. */
+/* The four corner ticks: eight short lines, drawn over the frame, in --tick-color (the accent unless the
+   panel sets another). */
 fieldset::before,
 .step::before,
-.composer::before {
+.composer::before,
+.message.asking::before {
   --tick: 10px;
-  --tick-color: var(--accent);
+  --ink: var(--tick-color, var(--accent));
   content: "";
   position: absolute;
   inset: -1px;
   pointer-events: none;
   background:
-    linear-gradient(var(--tick-color), var(--tick-color)) top left / var(--tick) 1px no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) top left / 1px var(--tick) no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) top right / var(--tick) 1px no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) top right / 1px var(--tick) no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) bottom left / var(--tick) 1px no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) bottom left / 1px var(--tick) no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) bottom right / var(--tick) 1px no-repeat,
-    linear-gradient(var(--tick-color), var(--tick-color)) bottom right / 1px var(--tick) no-repeat;
+    linear-gradient(var(--ink), var(--ink)) top left / var(--tick) 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top left / 1px var(--tick) no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top right / var(--tick) 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) top right / 1px var(--tick) no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom left / var(--tick) 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom left / 1px var(--tick) no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom right / var(--tick) 1px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) bottom right / 1px var(--tick) no-repeat;
 }
 
 fieldset {
@@ -399,7 +401,7 @@ legend::before {
   animation: message-in 220ms ease-out both;
 }
 
-.message:last-child {
+.message:is(.user, .assistant):last-child {
   border-bottom-color: transparent;
 }
 
@@ -475,6 +477,90 @@ legend::before {
 .message.notice::before {
   content: "NOTICE" / "Notice:";
   color: var(--muted);
+}
+
+/*
+ * The asking card: while Sage's own box asks before an action, the same question in amber, then the
+ * answer. It has no buttons; the box is answered in the box.
+ */
+.message.asking {
+  --tick-color: var(--amber);
+  display: block;
+  margin: 10px 0;
+  padding: 12px 18px;
+  border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent);
+  border-radius: 2px;
+  background: var(--amber-wash);
+  box-shadow: 0 0 24px -12px var(--amber-glow);
+}
+
+.message.asking.open {
+  animation:
+    message-in 220ms ease-out both,
+    asking-glow 1.6s ease-in-out 220ms infinite alternate;
+}
+
+.asking-question {
+  margin: 0;
+  color: var(--text);
+}
+
+.asking-state {
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-spacing);
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.asking-state::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 10px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: currentcolor;
+  box-shadow: 0 0 8px currentcolor;
+}
+
+.message.asking.open .asking-state::before {
+  animation: caret 1s steps(1) infinite;
+}
+
+.message.asking.allowed {
+  --tick-color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-wash);
+  box-shadow: none;
+}
+
+.message.asking.allowed .asking-state {
+  color: var(--accent);
+}
+
+.message.asking.declined {
+  --tick-color: var(--muted);
+  border-color: var(--line-bright);
+  background: transparent;
+  box-shadow: none;
+}
+
+.message.asking.declined .asking-state {
+  color: var(--muted);
+}
+
+.message.asking.declined .asking-state::before {
+  box-shadow: none;
+}
+
+@keyframes asking-glow {
+  to {
+    box-shadow: 0 0 30px -6px var(--amber-glow);
+  }
 }
 
 @keyframes message-in {

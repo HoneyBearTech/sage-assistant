@@ -14,6 +14,7 @@ import {
   utilityProcess,
 } from "electron";
 import type { Launcher } from "../core/apps.js";
+import { announcingPresenter } from "../core/asking.js";
 import { EncryptedFileKeyStore, type Encryptor, osEncryptionUsable } from "../core/keystore.js";
 import { consoleSink } from "../core/log.js";
 import { createSage } from "../core/sage.js";
@@ -21,7 +22,7 @@ import { GUIDE_DETAIL, GUIDE_QUESTION, PULL_DETAIL, pullQuestion } from "../core
 import type { ConfirmPresenter } from "../core/skills/gate.js";
 import { DOWNLOAD_DETAIL, DOWNLOAD_QUESTION } from "../core/voice/model.js";
 import type { HelperProcess } from "../core/voice/transcriber.js";
-import { CHANNELS, type ModelChoice } from "../shared/api.js";
+import { CHANNELS, EVENTS, type ModelChoice } from "../shared/api.js";
 import { createIpcHandlers } from "./ipc.js";
 import { createNotifier } from "./notify.js";
 import {
@@ -53,7 +54,8 @@ const encryptor: Encryptor = {
   decrypt: (data) => safeStorage.decryptString(data),
 };
 
-const presenter: ConfirmPresenter = {
+// The box that asks before Sage acts. Only this box can answer.
+const dialogPresenter: ConfirmPresenter = {
   async ask({ summary }) {
     const options = {
       type: "question" as const,
@@ -71,6 +73,12 @@ const presenter: ConfirmPresenter = {
     return answer.response === 1;
   },
 };
+
+// The window is told when the box opens and closes, so the chat can show what is being asked. It
+// is only told: the answer still comes from the box alone.
+const presenter = announcingPresenter(dialogPresenter, (event) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(EVENTS.asking, event);
+});
 
 const launch: Launcher = (command, args) =>
   new Promise((resolve, reject) => {

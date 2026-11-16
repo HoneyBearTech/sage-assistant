@@ -1,4 +1,5 @@
 import { MAX_ACK_IDS, type PublicAppEntry, type PublicSettings, type SageApi } from "../shared/api.js";
+import { createAskingCards } from "./asking-cards.js";
 import { applyTheme, prefersReducedMotion, toTheme } from "./look.js";
 import { createOrb } from "./orb.js";
 import { createTypist } from "./typing.js";
@@ -35,6 +36,12 @@ export function startChatWindow(): void {
   const orb = createOrb(byId<HTMLDivElement>("orb"), byId<HTMLParagraphElement>("orb-state"));
   // The newest reply types itself out; a click or a key shows it at once.
   const typist = createTypist(prefersReducedMotion);
+  // While Sage's own box asks before an action: an amber card in the chat with the same question,
+  // then the answer. Only news; the box is answered in the box.
+  const asking = createAskingCards(messages);
+  sage.onAsking((event) => {
+    asking.handle(event);
+  });
 
   function addMessage(role: "user" | "assistant" | "notice", text: string, pending = false): HTMLLIElement {
     const item = document.createElement("li");
@@ -102,6 +109,7 @@ export function startChatWindow(): void {
     const generation = chatGeneration;
     orb.update({ thinking: false });
     typist.finish();
+    asking.clear();
     messages.replaceChildren();
     forgetHeldNotices();
     sendButton.disabled = true;

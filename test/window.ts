@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
-import type { PublicSettings, SageApi } from "../src/shared/api.js";
+import type { AskingEvent, PublicSettings, SageApi } from "../src/shared/api.js";
 import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 import { type FakeMedia, installFakeMedia, removeFakeMedia } from "./fake-media.js";
 import { settled } from "./helpers.js";
@@ -54,6 +54,7 @@ export async function startWindow(
     sound: false,
     ...options.settings,
   };
+  const askingListeners: ((event: AskingEvent) => void)[] = [];
   const api: SageApi = {
     send: (text) => {
       calls.send.push(text);
@@ -106,6 +107,9 @@ export async function startWindow(
       settings.setupDone = true;
       return { ok: true };
     },
+    onAsking: (listener) => {
+      askingListeners.push(listener);
+    },
     setSound: async (on) => {
       calls.sound.push(on);
       settings.sound = on;
@@ -125,5 +129,9 @@ export async function startWindow(
   await settled();
   const el = (id: string) => elements.get(id)!;
   const texts = () => el("messages").children.map((item) => item.textContent);
-  return { el, texts, calls, media };
+  /** The main process's news about its asking box, as the preload hands it to the window. */
+  const emitAsking = (event: AskingEvent) => {
+    for (const listener of askingListeners) listener(event);
+  };
+  return { el, texts, calls, media, emitAsking };
 }
