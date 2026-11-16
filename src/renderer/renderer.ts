@@ -89,6 +89,7 @@ byId<HTMLButtonElement>("new-chat").addEventListener("click", () => {
   chatGeneration++;
   const generation = chatGeneration;
   messages.replaceChildren();
+  forgetHeldNotices();
   sendButton.disabled = true;
   void sage
     .resetChat()
@@ -145,7 +146,7 @@ function show(view: "chat" | "settings" | "welcome"): void {
 /** Every way into Chat goes through here, so held notices are confirmed once they can be seen. */
 function openChat(): void {
   show("chat");
-  void confirmShown();
+  void collectNotices();
 }
 tabs.chat.addEventListener("click", () => openChat());
 tabs.settings.addEventListener("click", () => show("settings"));
@@ -173,12 +174,38 @@ function chatVisible(): boolean {
   return !views.chat.hidden && document.visibilityState !== "hidden";
 }
 
+/**
+ * New chat removes the lines, so notices still held lose theirs: the next collection adds them
+ * again (Sage hands them out until they are confirmed) as fresh hidden lines. Notices whose
+ * confirmation is already on its way were revealed before the chat was cleared, so they stay.
+ */
+function forgetHeldNotices(): void {
+  for (const id of [...held.keys()]) {
+    if (confirming.has(id)) continue;
+    held.delete(id);
+    shownNotices.delete(id);
+  }
+  // A confirmation may be going through its batches: make it stop and collect again, which adds
+  // the forgotten notices back before anything more is confirmed.
+  if (collecting) collectAgain = true;
+}
+
 async function confirmShown(): Promise<void> {
   if (!chatVisible()) return;
   const ids = [...held.keys()].filter((id) => !confirming.has(id));
   for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
-    const batch = ids.slice(start, start + MAX_ACK_IDS);
-    for (const id of batch) confirming.add(id);
+    // A newer request means this snapshot may be out of date; the collection loop confirms again.
+    if (collectAgain || !chatVisible()) return;
+    const batch = ids.slice(start, start + MAX_ACK_IDS).filter((id) => held.has(id));
+    for (const id of batch) {
+      confirming.add(id);
+      // Held lines stay hidden until now, so a notice that is withdrawn first is never seen.
+      const item = held.get(id);
+      if (item?.hidden) {
+        item.hidden = false;
+        item.scrollIntoView({ block: "end" });
+      }
+    }
     try {
       await sage.ackNotices(batch);
       for (const id of batch) held.delete(id);
@@ -191,7 +218,8 @@ async function confirmShown(): Promise<void> {
   }
 }
 
-async function collectNotices(): Promise<void> {
+/** Returns false if Sage couldn't be asked, so the held notices can't be trusted to be current. */
+async function collectOnce(): Promise<boolean> {
   try {
     const notices = await sage.takeNotices();
     const current = new Set(notices.map((notice) => notice.id));
@@ -204,21 +232,59 @@ async function collectNotices(): Promise<void> {
     }
     for (const notice of notices) {
       if (shownNotices.has(notice.id)) continue;
-      held.set(notice.id, addMessage("notice", notice.text));
+      const item = addMessage("notice", notice.text);
+      item.hidden = true;
+      held.set(notice.id, item);
       shownNotices.add(notice.id);
     }
+    return true;
   } catch {
     // The next poll tries again.
+    return false;
   }
-  await confirmShown();
 }
 
-document.addEventListener("visibilitychange", () => void confirmShown());
+let collecting: Promise<void> | undefined;
+let collectAgain = false;
+
+/**
+ * Collects, then confirms what is still held. Opening Chat and the window coming back into view
+ * collect first too: a notice whose reminder was deleted meanwhile is taken out before it can be
+ * confirmed. Only one collection runs at a time. A request that arrives while one is running makes
+ * exactly one more follow it (further requests join that one), and nothing is confirmed until the
+ * last has finished (including a request that arrives during a confirmation), so an older answer can
+ * never bring back or confirm a notice a newer one removed. After a failed collection nothing is
+ * confirmed: the held notices stay held, and hidden, until a later one succeeds.
+ */
+function collectNotices(): Promise<void> {
+  if (collecting) {
+    collectAgain = true;
+    return collecting;
+  }
+  collecting = (async () => {
+    do {
+      collectAgain = false;
+      const fresh = await collectOnce();
+      if (fresh && !collectAgain) await confirmShown();
+    } while (collectAgain);
+  })().finally(() => {
+    collecting = undefined;
+  });
+  return collecting;
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void collectNotices();
+});
 
 /** Started once the first view is chosen, so nothing is confirmed before it is on screen. */
 function startNotices(): void {
   void collectNotices();
-  setInterval(() => void collectNotices(), NOTICE_POLL_MS);
+  // A poll never queues another collection behind a running one: a slow answer would then be
+  // followed by one more every time, and nothing would ever be confirmed.
+  setInterval(() => {
+    if (!collecting) void collectNotices();
+  }, NOTICE_POLL_MS);
 }
 
 // --- Settings ---

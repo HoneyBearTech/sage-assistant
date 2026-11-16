@@ -29,8 +29,10 @@ later, and what Sage will not do.
   - [x] Save key must use the address on screen, or ask for Save settings first.
   - [x] A reminder shown in the window counts as shown only after the window confirms it.
   - [x] Deleting a reminder withdraws it from the window queue.
-- [ ] **Minor:** re-collect window notices before showing them when Chat opens. This stops a just-deleted
+- [x] **Minor:** re-collect window notices before showing them when Chat opens. This stops a just-deleted
       reminder from showing once (see the decisions log).
+      Done: opening Chat and the window coming back into view collect first, then confirm what is held;
+      one collection runs at a time, and a request made meanwhile gets one fresh collection after it.
 - [x] **Maintainer setup on GitHub:**
   - [x] add the checks ([the GitHub checks](github-checks.md));
   - [x] turn on private vulnerability reporting (SECURITY.md relies on it);

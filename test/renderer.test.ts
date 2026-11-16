@@ -346,6 +346,372 @@ test("a reminder deleted while its notice is held behind Settings never appears 
   assert.deepEqual(await sage.reminders.list(), []);
 });
 
+test("a reminder deleted while held behind Settings is gone when Chat opens, before the next collection", async (t) => {
+  const clock = new FakeClock(new Date("2026-11-15T09:00:00Z"));
+  const sage = createSage({
+    dataDir: await tempDir(t),
+    keyStore: new MemoryKeyStore(),
+    presenter: { ask: async () => true },
+    notify: () => false, // no desktop notifications: reminders go to the window
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+    localPort: REFUSED_PORT,
+    clock,
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  let taking: Promise<unknown> = Promise.resolve();
+  const acked: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => {
+      const result = handlers[CHANNELS.takeNotices](undefined) as Promise<Notice[]>;
+      taking = result;
+      return result;
+    },
+    ackNotices: async (ids) => {
+      acked.push(ids);
+      await handlers[CHANNELS.ackNotices]({ ids });
+    },
+  });
+
+  // The reminder comes due and is collected while Settings is open: held.
+  el("tab-settings").click();
+  const reminder = await sage.reminders.add("Water the plants", new Date("2026-11-15T09:01:00Z"));
+  clock.advance(120_000);
+  await sage.scheduler.tick();
+  t.mock.timers.tick(5_000);
+  await taking;
+  await settled();
+  assert.deepEqual(texts(), ["Sage reminder: Water the plants"]);
+
+  // Deleted; no collection runs before Chat opens (the timers aren't ticked).
+  assert.equal((await sage.registry.execute(toolCall("delete_reminder", { id: reminder.id }))).ran, true);
+  el("tab-chat").click();
+  await taking;
+  await settled();
+  assert.deepEqual(texts(), [], "removed when Chat opened");
+  assert.deepEqual(acked, [], "and never confirmed");
+});
+
+test("a collection still running when Chat opens is followed by a fresh one; a stale answer can't bring a notice back", async (t) => {
+  const stale = deferred<Notice[]>();
+  const answers: Promise<Notice[]>[] = [];
+  let calls = 0;
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => {
+      calls++;
+      return answers.shift() ?? Promise.resolve([]);
+    },
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  const held = { id: "n1", text: "Held" };
+
+  // Held behind Settings.
+  el("tab-settings").click();
+  answers.push(Promise.resolve([held]));
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Held"]);
+
+  // A collection starts before the delete (its answer still has the notice) and is slow.
+  answers.push(stale.promise);
+  t.mock.timers.tick(5_000);
+  await settled();
+  const before = calls;
+  // Chat opens, then a poll arrives too: both coalesce into exactly one more collection.
+  // That fresh collection no longer has the notice.
+  el("tab-chat").click();
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.equal(calls, before, "the fresh collection waits for the one in flight");
+  assert.deepEqual(acks, [], "nothing is confirmed meanwhile");
+  stale.resolve([held]);
+  await settled();
+  assert.equal(calls, before + 1, "exactly one fresh collection follows");
+  assert.deepEqual(texts(), [], "the stale answer didn't bring it back");
+  assert.deepEqual(acks, [], "and it was never confirmed");
+});
+
+test("the window becoming visible again collects before confirming", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  let shownWhenAcked: (string | null)[] = [];
+  let screen = (): (string | null)[] => [];
+  const { texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      shownWhenAcked = screen();
+      acks.push(ids);
+    },
+  });
+  screen = texts;
+
+  // Minimised: a notice is collected but held; then it is withdrawn while the window is hidden.
+  setWindowVisibility("hidden");
+  waiting.push({ id: "n1", text: "Held" });
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Held"]);
+  waiting.length = 0;
+  setWindowVisibility("visible");
+  await settled();
+  assert.deepEqual(texts(), [], "collected again first");
+  assert.deepEqual(acks, [], "so the withdrawn notice is never confirmed");
+
+  // One that is still there is shown, then confirmed.
+  setWindowVisibility("hidden");
+  waiting.push({ id: "n2", text: "Still here" });
+  t.mock.timers.tick(5_000);
+  await settled();
+  setWindowVisibility("visible");
+  await settled();
+  assert.deepEqual(acks, [["n2"]]);
+  assert.deepEqual(shownWhenAcked, ["Still here"]);
+});
+
+test("a held notice stays hidden until it is about to be confirmed, so a withdrawn one is never seen", async (t) => {
+  const answers: Promise<Notice[]>[] = [];
+  const hiddenWhenAcked: (boolean | undefined)[] = [];
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => answers.shift() ?? Promise.resolve([]),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+      hiddenWhenAcked.push(el("messages").children[0]?.hidden);
+    },
+  });
+  const lines = () => el("messages").children;
+
+  el("tab-settings").click();
+  answers.push(Promise.resolve([{ id: "n1", text: "Held" }]));
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.equal(lines()[0]?.hidden, true, "held lines are hidden");
+
+  // Chat opens; the fresh collection is still on its way, and the line must not be on screen.
+  const fresh = deferred<Notice[]>();
+  answers.push(fresh.promise);
+  el("tab-chat").click();
+  await settled();
+  assert.equal(lines()[0]?.hidden, true, "still hidden while the fresh collection is pending");
+  fresh.resolve([]);
+  await settled();
+  assert.deepEqual(texts(), [], "withdrawn without ever being shown");
+  assert.deepEqual(acks, []);
+
+  // A notice that is still there is shown just before it is confirmed.
+  answers.push(Promise.resolve([{ id: "n2", text: "Seen" }]));
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(acks, [["n2"]]);
+  assert.deepEqual(hiddenWhenAcked, [false]);
+});
+
+test("a failed collection confirms nothing; the notices stay held until one succeeds", async (t) => {
+  let answer: () => Promise<Notice[]> = async () => [];
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => answer(),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  el("tab-settings").click();
+  answer = async () => [{ id: "n1", text: "Held" }];
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Held"]);
+
+  // Sage can't be asked when Chat opens: the possibly stale notice is not confirmed.
+  answer = async () => {
+    throw new Error("no answer");
+  };
+  el("tab-chat").click();
+  await settled();
+  assert.deepEqual(acks, [], "not confirmed after a failed collection");
+  assert.equal(el("messages").children[0]?.hidden, true, "and not shown");
+
+  // The next collection works and the notice is gone: it was deleted meanwhile.
+  answer = async () => [];
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), []);
+  assert.deepEqual(acks, []);
+});
+
+test("a request made while a confirmation is on its way is not dropped, and later batches follow it", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  let takes = 0;
+  let gate: ReturnType<typeof deferred<void>> | undefined;
+  const { el } = await startWindow(t, async () => "", {
+    takeNotices: async () => {
+      takes++;
+      return structuredClone(waiting);
+    },
+    ackNotices: async (ids) => {
+      acks.push(ids);
+      await gate?.promise;
+    },
+  });
+  for (let i = 0; i < MAX_ACK_IDS + 3; i++) waiting.push({ id: `n${i}`, text: `R${i}` });
+  el("tab-settings").click();
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.equal(acks.length, 0);
+
+  // The first batch is being confirmed when the last notice is withdrawn and a poll arrives.
+  gate = deferred<void>();
+  el("tab-chat").click();
+  await settled();
+  assert.equal(acks.length, 1);
+  const before = takes;
+  const withdrawn = waiting.pop()!;
+  el("tab-chat").click(); // a new request while the confirmation is on its way
+  await settled();
+  gate.resolve();
+  await settled();
+  assert.ok(takes > before, "the request made during the confirmation was collected");
+  assert.deepEqual(
+    acks.map((batch) => batch.length),
+    [MAX_ACK_IDS, 2],
+  );
+  assert.ok(!acks.flat().includes(withdrawn.id), "no batch went on from the old snapshot");
+});
+
+test("every batch is checked for a visible Chat before it is confirmed", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  let gate: ReturnType<typeof deferred<void>> | undefined;
+  const { el } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+      await gate?.promise;
+    },
+  });
+  for (let i = 0; i < MAX_ACK_IDS + 3; i++) waiting.push({ id: `n${i}`, text: `R${i}` });
+  el("tab-settings").click();
+  t.mock.timers.tick(5_000);
+  await settled();
+
+  gate = deferred<void>();
+  el("tab-chat").click();
+  await settled();
+  assert.equal(acks.length, 1);
+  setWindowVisibility("hidden"); // minimised while the first batch is on its way
+  gate.resolve();
+  await settled();
+  assert.equal(acks.length, 1, "the second batch waits while nobody can see Chat");
+  gate = undefined;
+  setWindowVisibility("visible");
+  await settled();
+  assert.deepEqual(
+    acks.map((batch) => batch.length),
+    [MAX_ACK_IDS, 3],
+  );
+});
+
+test("slow collections with polls ticking in between still confirm and reveal the notice", async (t) => {
+  const notice = { id: "n1", text: "Slow" };
+  const startup = deferred<Notice[]>();
+  const spare = deferred<Notice[]>();
+  const answers = [startup, spare, deferred<Notice[]>()];
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => answers.shift()?.promise ?? Promise.resolve([notice]),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  // The startup collection is slow; polls come and go meanwhile and start nothing.
+  t.mock.timers.tick(5_000);
+  t.mock.timers.tick(5_000);
+  assert.equal(answers.length, 2, "only the startup collection has been asked for");
+  // Starting up asks twice (Chat opens, then the notices start); the second is slow too.
+  startup.resolve([notice]);
+  await settled();
+  t.mock.timers.tick(5_000);
+  assert.equal(answers.length, 1, "the poll didn't ask again");
+  spare.resolve([notice]);
+  await settled();
+  assert.deepEqual(acks, [["n1"]], "confirmed without waiting for another round");
+  assert.deepEqual(texts(), ["Slow"]);
+  assert.equal(el("messages").children[0]?.hidden, false);
+});
+
+test("New chat while a notice is held: it comes back in the new list, hidden, and is confirmed once", async (t) => {
+  const notice = { id: "n1", text: "Held" };
+  const answers: Promise<Notice[]>[] = [];
+  const acks: string[][] = [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: () => answers.shift() ?? Promise.resolve([]),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+    },
+  });
+  el("tab-settings").click();
+  answers.push(Promise.resolve([notice]));
+  t.mock.timers.tick(5_000);
+  await settled();
+  assert.deepEqual(texts(), ["Held"]);
+
+  // Chat opens with the refresh delayed; New chat clears the list meanwhile.
+  const refresh = deferred<Notice[]>();
+  answers.push(refresh.promise);
+  el("tab-chat").click();
+  await settled();
+  el("new-chat").click();
+  assert.deepEqual(texts(), []);
+  answers.push(Promise.resolve([notice])); // New chat asks for one more collection
+  refresh.resolve([notice]);
+  await settled();
+  assert.deepEqual(texts(), ["Held"], "added again to the new list");
+  assert.equal(el("messages").children[0]?.hidden, false, "shown before it was confirmed");
+  assert.deepEqual(acks, [["n1"]], "confirmed once");
+});
+
+test("New chat during a confirmation: a forgotten notice is not acked until it is back in the new list", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  const onScreen: (string | null)[][] = [];
+  let gate: ReturnType<typeof deferred<void>> | undefined;
+  let screen = (): (string | null)[] => [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+      onScreen.push(screen());
+      await gate?.promise;
+    },
+  });
+  screen = texts;
+  for (let i = 0; i < MAX_ACK_IDS + 1; i++) waiting.push({ id: `n${i}`, text: `R${i}` });
+  el("tab-settings").click();
+  t.mock.timers.tick(5_000);
+  await settled();
+
+  // The first batch is being confirmed when New chat clears the list.
+  gate = deferred<void>();
+  el("tab-chat").click();
+  await settled();
+  assert.equal(acks.length, 1);
+  el("new-chat").click();
+  gate.resolve();
+  gate = undefined;
+  await settled();
+
+  const last = `n${MAX_ACK_IDS}`;
+  const lastIndex = acks.findIndex((batch) => batch.includes(last));
+  assert.ok(lastIndex > 0, "the forgotten notice is confirmed in the end");
+  assert.ok(onScreen[lastIndex]?.includes(`R${MAX_ACK_IDS}`), "but only once it is shown in the new list");
+  assert.equal(acks.flat().filter((id) => id === last).length, 1, "and once");
+  assert.ok(texts().includes(`R${MAX_ACK_IDS}`));
+});
+
 test("only held notices are taken out of the chat; confirmed ones, or ones being confirmed, stay", async (t) => {
   const waiting: Notice[] = [];
   let ackGate: ReturnType<typeof deferred<void>> | undefined;
