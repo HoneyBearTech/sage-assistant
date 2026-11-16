@@ -373,3 +373,4 @@ themselves.
 - It needs Settings open while the confirm box is waiting. The box is modal, so this is probably
   unreachable in the real app.
 - Nothing is lost or exposed. Fix: re-collect notices before showing them when Chat opens.
+- Fixed by job notice-recollect: Chat opening and the window becoming visible now collect before confirming.

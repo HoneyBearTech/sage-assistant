@@ -6,6 +6,12 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A deleted reminder can no longer show once in the chat.** Opening Chat, or bringing the window back
+  into view, now collects Sage's notices again before confirming the ones held, so a notice whose
+  reminder was just deleted is removed instead of appearing.
+
 ## [0.1.0] - 2026-11-16
 
 ### Added
