@@ -12,7 +12,7 @@ import {
   type ToolCall,
   type ToolSpec,
 } from "./brain.js";
-import { type ServiceName, serviceName, unreadableMessage } from "./errors.js";
+import { failureMessage, type ServiceName, serviceName, unreadableMessage } from "./errors.js";
 import { requestService } from "./request.js";
 import { OPENAI_ORIGIN } from "./services.js";
 
@@ -52,6 +52,8 @@ const functionCallItem = z.object({
 });
 const responsesReply = z.object({
   status: z.string().nullish(),
+  // Only the code is read, and only compared; the message is never shown or kept.
+  error: z.looseObject({ code: z.unknown() }).nullish(),
   incomplete_details: z.object({ reason: z.string().nullish() }).nullish(),
   // Other item types (reasoning, a future kind) are kept for the replay but not read.
   output: z.array(z.looseObject({ type: z.string() })),
@@ -106,6 +108,16 @@ export class ResponsesBrain implements Brain {
     if (!reply.ok) return { ok: false, message: reply.message };
     const parsed = responsesReply.safeParse(reply.body);
     if (!parsed.success) return { ok: false, message: unreadableMessage(this.service) };
+    const { status } = parsed.data;
+    // A reply that arrived but says the service couldn't finish it: a plain message, from its error
+    // code only (a busy service, a rate limit, credit used up) or the general one.
+    if (status === "failed" || status === "cancelled") {
+      const code = parsed.data.error?.code;
+      const kinds = new Set(
+        typeof code === "string" && /^[A-Za-z0-9_.]{1,64}$/.test(code) ? [code.toLowerCase()] : [],
+      );
+      return { ok: false, message: failureMessage(this.service, null, kinds) };
+    }
     const reason = parsed.data.incomplete_details?.reason;
     if (parsed.data.status === "incomplete" && reason === "content_filter") {
       return { ok: false, message: REFUSAL_MESSAGE };

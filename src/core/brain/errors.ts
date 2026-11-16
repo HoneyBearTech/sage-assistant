@@ -62,8 +62,11 @@ const QUOTA_KINDS = new Set([
 const KEY_KINDS = new Set(["authentication_error", "invalid_api_key", "api_key_invalid", "permission_error"]);
 /** Error types and codes that mean the model doesn't exist (or no longer does). */
 const MODEL_KINDS = new Set(["model_not_found"]);
-/** HTTP statuses that mean the service is having trouble or is overloaded. */
+/** Error codes that mean a rate limit was reached. */
+const RATE_KINDS = new Set(["rate_limit_exceeded"]);
+/** HTTP statuses, and error codes, that mean the service is having trouble or is overloaded. */
 const BUSY_STATUSES = new Set([500, 502, 503, 504, 529]);
+const BUSY_KINDS = new Set(["server_error"]);
 
 /** The largest error body Sage looks at for its type fields. */
 const MAX_ERROR_BYTES = 64 * 1024;
@@ -121,8 +124,11 @@ export async function readErrorKinds(response: Response): Promise<Set<string>> {
 
 const has = (kinds: Set<string>, known: Set<string>) => [...kinds].some((kind) => known.has(kind));
 
-/** The message for an error reply, from its status and its known type fields only. */
-export function failureMessage(service: ServiceName, status: number, kinds: Set<string>): string {
+/**
+ * The message for an error reply, from its status and its known type fields only. `status` is null
+ * for a reply that arrived as a success but says the service couldn't finish (a failed response).
+ */
+export function failureMessage(service: ServiceName, status: number | null, kinds: Set<string>): string {
   if (status === 402 || has(kinds, QUOTA_KINDS)) {
     return `${service.subject} says your credit or quota is used up. Check your plan and spending limits on its website, then try again.`;
   }
@@ -134,12 +140,13 @@ export function failureMessage(service: ServiceName, status: number, kinds: Set<
       ? `${service.subject} didn't recognise the address or the model name. Check Settings.`
       : `${service.subject} doesn't know that model, or it was retired. Choose another in Settings (Load models shows the current ones).`;
   }
-  if (status === 429) {
+  if (status === 429 || has(kinds, RATE_KINDS)) {
     return `${service.subject} is busy, or you've reached its rate limit. Wait a minute and try again.`;
   }
-  if (BUSY_STATUSES.has(status)) {
+  if ((status !== null && BUSY_STATUSES.has(status)) || has(kinds, BUSY_KINDS)) {
     return `${service.subject} is busy or overloaded right now. Wait a minute and try again.`;
   }
+  if (status === null) return `${service.subject} couldn't finish its reply. Try again later.`;
   return `${service.subject} returned an error (HTTP ${status}). Try again later.`;
 }
 

@@ -305,3 +305,34 @@ test("errors, a missing key or model, an odd reply and a time-out get plain mess
   limit.abort(new DOMException("The operation timed out.", "TimeoutError"));
   assert.deepEqual(await pending, { ok: false, message: "OpenAI took too long to answer. Try again." });
 });
+
+test("a reply that says it failed or was cancelled gets a plain error, never an empty answer", async () => {
+  const cases: [unknown, RegExp][] = [
+    [
+      { status: "failed", error: { code: "server_error", message: `The model failed ${KEY}` }, output: [] },
+      /^OpenAI is busy or overloaded right now/,
+    ],
+    [
+      { status: "failed", error: { code: "rate_limit_exceeded", message: "slow down" }, output: [] },
+      /rate limit/,
+    ],
+    [
+      { status: "failed", error: { code: "insufficient_quota", message: "pay" }, output: [] },
+      /credit or quota is used up/,
+    ],
+    [
+      { status: "failed", error: { code: "vector_store_timeout", message: "x" }, output: [] },
+      /couldn't finish its reply/,
+    ],
+    [{ status: "failed", error: null, output: [] }, /^OpenAI couldn't finish its reply\. Try again later\.$/],
+    [{ status: "cancelled", output: [] }, /^OpenAI couldn't finish its reply\. Try again later\.$/],
+    [{ status: "failed", error: { code: "bad code with spaces" }, output: [] }, /couldn't finish its reply/],
+  ];
+  for (const [body, pattern] of cases) {
+    const { openai } = brain(() => jsonResponse(200, body));
+    const reply = await openai.chat([{ role: "user", content: "q" }], tools);
+    assert.ok(!reply.ok, JSON.stringify(body));
+    assert.match(reply.message, pattern);
+    assert.doesNotMatch(reply.message, /failed|slow|pay|fake|spaces/, "never the service's own words");
+  }
+});
