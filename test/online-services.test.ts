@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ServiceKeys } from "../src/core/keystore.js";
 import {
+  COOLDOWN_MS,
   cleanModelNames,
   MAX_MODELS,
   MODELS_URLS,
@@ -12,7 +13,16 @@ import {
 import { createSage } from "../src/core/sage.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS } from "../src/shared/api.js";
-import { captureLogs, fakeFetch, FakePresenter, jsonResponse, memoryKeyStores, tempDir } from "./helpers.js";
+import {
+  captureLogs,
+  deferred,
+  fakeFetch,
+  FakePresenter,
+  jsonResponse,
+  memoryKeyStores,
+  settled,
+  tempDir,
+} from "./helpers.js";
 
 // Load models, Test and Get a key: the window names a company; the addresses are fixed here.
 
@@ -34,10 +44,14 @@ async function services(handler: Parameters<typeof fakeFetch>[0], options: { wit
   const { logger, lines } = captureLogs();
   let answer: boolean | Error = true;
   let browser: Error | undefined;
+  // The clock moves on a minute with every reading unless a test holds it, so the cooldown between
+  // checks only applies where a test asks for it.
+  const clock = { now: 0, step: 60_000 };
   const online = new OnlineServices({
     keys,
     logger,
     fetch: fake.fetch,
+    now: () => (clock.now += clock.step),
     confirmOpenPage: async (question, detail) => {
       asked.push([question, detail]);
       if (answer instanceof Error) throw answer;
@@ -54,6 +68,7 @@ async function services(handler: Parameters<typeof fakeFetch>[0], options: { wit
     opened,
     asked,
     lines,
+    clock,
     answer: (value: boolean | Error) => {
       answer = value;
     },
@@ -242,6 +257,7 @@ test("the window's requests carry a company's id and nothing else", async (t) =>
   assert.deepEqual(await handlers[CHANNELS.openKeyPage]({ company: "gemini" }), { status: "opened" });
   assert.deepEqual(opened, ["https://aistudio.google.com/apikey"]);
   assert.deepEqual(asked, ["Open Google's key page in your web browser?"]);
+  const sent = fake.calls.length;
   const bad = [
     undefined,
     {},
@@ -266,7 +282,7 @@ test("the window's requests carry a company's id and nothing else", async (t) =>
       address: "",
     });
   }
-  assert.equal(fake.calls.length, 2, "only the two good requests reached a service");
+  assert.equal(fake.calls.length, sent, "no bad request reached a service");
   assert.ok(fake.calls.every((call) => call.url.startsWith("https://api.anthropic.com/")));
   assert.deepEqual(opened, ["https://aistudio.google.com/apikey"], "no page opened for a bad request");
   // Nothing a channel answers ever holds the key.
@@ -286,4 +302,74 @@ test("without the main process's box, no key page opens", async (t) => {
   });
   assert.deepEqual(await sage.services.openKeyPage("claude"), { status: "declined" });
   assert.deepEqual(opened, []);
+});
+
+test("one check at a time per company: a second Load models or Test shares the answer, and so does one right after", async () => {
+  const gate = deferred<Response>();
+  const { online, calls, clock } = await services((call) =>
+    call.url.startsWith("https://api.anthropic.com/")
+      ? gate.promise
+      : jsonResponse(200, { data: [{ id: "gpt-6-astra" }] }),
+  );
+  clock.step = 0;
+  const first = online.listModels("claude");
+  const second = online.listModels("claude");
+  const test = online.testKey("claude");
+  // Another company is checked on its own.
+  assert.deepEqual(await online.listModels("openai"), { ok: true, models: ["gpt-6-astra"] });
+  await settled();
+  assert.equal(calls.filter((call) => call.url.startsWith("https://api.anthropic.com/")).length, 1);
+  gate.resolve(jsonResponse(200, { data: [{ id: "claude-sonnet-5-5" }] }));
+  const expected = { ok: true, models: ["claude-sonnet-5-5"] };
+  assert.deepEqual(await first, expected);
+  assert.deepEqual(await second, expected);
+  assert.deepEqual(await test, { ok: true, message: "The key works: Claude answered." });
+  // Within a few seconds: the same answer, no new request.
+  clock.now += COOLDOWN_MS - 1;
+  assert.deepEqual(await online.listModels("claude"), expected);
+  assert.equal(calls.length, 2);
+  // After that, a new request.
+  clock.now += 1;
+  await online.listModels("claude");
+  assert.equal(calls.length, 3);
+  // A key saved or removed starts afresh at once.
+  online.forget("claude");
+  await online.testKey("claude");
+  assert.equal(calls.length, 4);
+  assert.ok(COOLDOWN_MS >= 2_000 && COOLDOWN_MS <= 10_000, "a few seconds");
+});
+
+test("without a saved key there is nothing to wait for: saving one and testing right away works", async (t) => {
+  const keyStores = memoryKeyStores();
+  const fake = fakeFetch(() => jsonResponse(200, { data: [{ id: "claude-sonnet-5-5" }] }));
+  const sage = createSage({
+    dataDir: await tempDir(t),
+    keyStores,
+    presenter: new FakePresenter(false),
+    notify: () => true,
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: () => {},
+    fetch: fake.fetch,
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  assert.deepEqual(await handlers[CHANNELS.testKey]({ company: "claude" }), {
+    ok: false,
+    message: "Save a Claude key first.",
+  });
+  await handlers[CHANNELS.setKey]({ brain: "claude", key: KEYS.claude, baseUrl: "" });
+  assert.deepEqual(await handlers[CHANNELS.testKey]({ company: "claude" }), {
+    ok: true,
+    message: "The key works: Claude answered.",
+  });
+  // Replaced right after: the next Test asks again, with the new key.
+  await handlers[CHANNELS.setKey]({ brain: "claude", key: "fake-claude-key-number-two", baseUrl: "" });
+  await handlers[CHANNELS.testKey]({ company: "claude" });
+  assert.equal(fake.calls.length, 2);
+  assert.equal(fake.calls[1]!.headers["x-api-key"], "fake-claude-key-number-two");
+  await handlers[CHANNELS.clearKey]({ brain: "claude" });
+  assert.deepEqual(await handlers[CHANNELS.listModels]({ company: "claude" }), {
+    ok: false,
+    message: "Save a Claude key first.",
+  });
 });

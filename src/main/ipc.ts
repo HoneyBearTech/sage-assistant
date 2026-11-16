@@ -179,6 +179,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
           await stopTurnIfActive(brain);
           // A company's key is bound to that company's fixed address, held in the main process.
           await sage.keyStore.setCompanyKey(brain, parsed.data.key);
+          sage.services.forget(brain);
           return { ok: true };
         }
         // Another online service's key belongs to the service whose address is saved now (or, if
@@ -201,6 +202,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       const brain = parsed.data.brain;
       await stopTurnIfActive(brain);
       await sage.keyStore.clear(brain);
+      if (brain !== "other") sage.services.forget(brain);
       return { ok: true };
     },
     // Each of these sends only a company's id; the addresses are fixed in the main process, and a

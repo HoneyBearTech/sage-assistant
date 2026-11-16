@@ -84,19 +84,48 @@ export interface OnlineServicesDeps {
   openExternal: (url: string) => Promise<void>;
   fetch?: FetchLike;
   timeoutMs?: number;
+  /** The clock, in milliseconds (tests set it). */
+  now?: () => number;
 }
+
+/** How long a model list (and so a Test) is reused after it arrived, so clicks can't pile up requests. */
+export const COOLDOWN_MS = 3_000;
 
 export class OnlineServices {
   private readonly fetch: FetchLike;
   private readonly timeoutMs: number;
+  private readonly now: () => number;
+  /** The request running for each company: a second Load models or Test shares it. */
+  private readonly running = new Map<Company, Promise<ModelListResult>>();
+  /** Each company's last answer from the service, and when it came. */
+  private readonly recent = new Map<Company, { at: number; result: ModelListResult }>();
 
   constructor(private readonly deps: OnlineServicesDeps) {
     this.fetch = deps.fetch ?? ((input, init) => fetch(input, init));
     this.timeoutMs = deps.timeoutMs ?? 20_000;
+    this.now = deps.now ?? (() => Date.now());
   }
 
-  /** The company's current model names, asked for with its own saved key. */
-  async listModels(company: Company): Promise<ModelListResult> {
+  /**
+   * The company's current model names, asked for with its own saved key. One request at a time per
+   * company: a call while one runs gets the same answer, and so does one within a few seconds of it.
+   */
+  listModels(company: Company): Promise<ModelListResult> {
+    const recent = this.recent.get(company);
+    if (recent && this.now() - recent.at < COOLDOWN_MS) return Promise.resolve(recent.result);
+    const running = this.running.get(company);
+    if (running) return running;
+    const request = this.askForModels(company).finally(() => this.running.delete(company));
+    this.running.set(company, request);
+    return request;
+  }
+
+  /** Forgets the last answer for a company, when its key was saved or removed. */
+  forget(company: Company): void {
+    this.recent.delete(company);
+  }
+
+  private async askForModels(company: Company): Promise<ModelListResult> {
     const service = serviceName(SERVICES[company].name);
     const url = MODELS_URLS[company];
     // The key for exactly this address: checked here, at the point of the request.
@@ -109,10 +138,14 @@ export class OnlineServices {
       service,
       this.timeoutMs,
     );
-    if (!reply.ok) return reply;
-    const names = namesFrom(company, reply.body);
-    if (!names) return { ok: false, message: unreadableMessage(service) };
-    return { ok: true, models: cleanModelNames(names.filter((name) => !name.includes(key))) };
+    const names = reply.ok ? namesFrom(company, reply.body) : null;
+    const result: ModelListResult = !reply.ok
+      ? { ok: false, message: reply.message }
+      : names
+        ? { ok: true, models: cleanModelNames(names.filter((name) => !name.includes(key))) }
+        : { ok: false, message: unreadableMessage(service) };
+    this.recent.set(company, { at: this.now(), result });
+    return result;
   }
 
   /** Test: one small request with the saved key (listing the models, which costs nothing). */
