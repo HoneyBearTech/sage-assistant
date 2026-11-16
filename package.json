@@ -49,10 +49,10 @@
   },
   "overrides": {
     "app-builder-lib": {
-      "minimatch@^10.2.5": "^11.0.8"
+      "minimatch@^10.2.5": "11.0.8"
     },
     "@electron/universal": {
-      "minimatch@^9.0.3": "^11.0.8"
+      "minimatch@^9.0.3": "11.0.8"
     }
   },
   "allowScripts": {
