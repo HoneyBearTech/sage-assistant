@@ -177,14 +177,23 @@ jobs:
             "release-files/SHA256SUMS.txt"
             "release-files/Sage-Setup-$VERSION.sigstore.json"
           )
-          if assets=$(gh release view "$TAG" --json assets --jq '.assets | length' 2>/dev/null); then
-            # The tag was made on the Releases page, which made the release too: add the files to it,
-            # but only if it has none yet.
+          if info=$(gh release view "$TAG" --json assets,isDraft --jq '[(.assets | length), .isDraft] | @tsv' 2>/dev/null); then
+            # The release exists already: either the tag was made on the Releases page, which made the
+            # release too, or an earlier run of this job made a draft and stopped before publishing it.
+            # Add the files to it, but only if it has none yet, then publish it if it is a draft.
+            read -r assets draft <<< "$info"
             if [ "$assets" != "0" ]; then
-              echo "The release $TAG already has files. Remove them on the Releases page, then re-run this job." >&2
+              if [ "$draft" = "true" ]; then
+                echo "The draft release $TAG already has files, so nothing was changed. On the Releases page, delete that draft (the tag stays), then re-run this job." >&2
+              else
+                echo "The release $TAG is published and already has files, so nothing was changed. If they are the installer, SHA256SUMS.txt and the provenance file, the release is done. Otherwise, on the Releases page, edit the release, delete its files, choose Update release, then re-run this job." >&2
+              fi
               exit 1
             fi
             gh release upload "$TAG" "${files[@]}"
+            if [ "$draft" = "true" ]; then
+              gh release edit "$TAG" --draft=false
+            fi
           else
             gh release create "$TAG" "${files[@]}" --verify-tag --title "Sage $VERSION" \
               --notes "What changed is in CHANGELOG.md. Before you run the installer, check it as docs/installing.md explains."
@@ -198,9 +207,13 @@ Notes on the workflow:
   `push-to-registry` is on, for container images, so the permission is left out.
 - The checksum file names only the installer. The provenance file is checked with `gh attestation verify`
   instead (below).
+- `gh release create` makes the release as a draft, uploads the files, then publishes it. If that run
+  stops part-way, a draft is left behind (only people with write access see drafts). Re-running the job
+  then finds it: an empty draft gets the three files and is published; a draft that already has files
+  stops the job, with a message to delete the draft and re-run.
 - The workflow can't be tried before it is added; the first tagged release is its first real run. If it
-  fails, nothing is published: fix the workflow in a pull request, delete the tag (and an empty release,
-  if the Releases page made one), and tag again.
+  fails, nothing is published: fix the workflow in a pull request, delete the tag (and any draft or empty
+  release the run or the Releases page left), and tag again.
 
 ## Making a release, step by step
 
