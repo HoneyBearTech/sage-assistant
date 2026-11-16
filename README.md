@@ -89,15 +89,16 @@ Sage sends no telemetry, analytics or crash reports, and has no account.
 ## Home and the daily brief
 
 Sage opens on **Home**: a large orb, a clock in your PC's own time format, a greeting for the time of
-day, and three panels. **Today** lists the reminders due today and any you missed, with their times;
-**Notes** shows the titles of your five most recently changed notes; **Status** shows the brain in use,
+day, and three panels. **Today** lists the reminders due today and up to five you missed (the newest),
+with their times, and says how many more were missed; **Notes** shows the titles of your five most recently changed notes; **Status** shows the brain in use,
 whether voice is ready, whether sound is on, and the next reminder. **Talk to Sage** opens the chat.
 
 **Brief me** gives you a short daily brief: the date, today's reminders (or the next one), missed
-ones, your latest notes, and a question to start with. Sage writes it itself, on your PC, from your
-reminders and note titles: the brief is never sent to the brain, online or local, so it works offline
-and costs nothing. It types itself out and is read aloud with your PC's own voice, unless **Read
-replies aloud** is set to *Never*. To get it without asking, turn on **Settings → Home → Brief me when
+ones (and how many more), your latest notes, and a question to start with. Sage writes it itself, on
+your PC, from your reminders and note titles: the brief is never sent to the brain, online or local, so
+it works offline and costs nothing. It types itself out and is read aloud with your PC's own voice,
+unless **Read replies aloud** is set to *Never*. **Stop speaking** in the Brief panel stops it; so do
+leaving Home, sending a message and holding Talk. To get it without asking, turn on **Settings → Home → Brief me when
 Sage first opens each day**: the first time Sage opens on a new day, Home shows the brief, and reads it
 aloud only when Read replies aloud is set to *Always*.
 

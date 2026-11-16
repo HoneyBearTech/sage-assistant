@@ -30,18 +30,23 @@ All notable changes to Sage are documented here. The format follows
 - **A Home screen, first in the tab bar (Home, Chat, Settings).** Sage now opens on Home (the Welcome
   screen still comes first until setup is done). Home has a large orb that shows the same state as the
   chat's, a clock in your PC's own time format (it changes on the minute), a greeting for the time of
-  day, and three panels: **Today** (reminders due today and missed ones, with their times; missed ones
-  are marked), **Notes** (the titles of your five most recently changed notes) and **Status** (the brain
+  day, and three panels: **Today** (reminders due today and up to five missed ones, the newest, with
+  their times; missed ones are marked, and "N more missed" counts the rest, so old missed reminders
+  never hide what is still to come today), **Notes** (the titles of your five most recently changed notes) and **Status** (the brain
   in use, whether voice is ready, whether sound is on, and the next reminder). Empty panels say so
   plainly. **Talk to Sage** opens Chat with the message box ready.
 - **A daily brief.** **Brief me** on Home puts together a short brief from the same summary, in fixed
   words: the greeting and the date, today's reminders (or that nothing is due, and the next one), missed
-  ones, your latest note titles, then "What would you like to start with?". It is made on your PC and
-  never sent to the brain, so it works offline and costs nothing with an online brain. It types itself
-  out like a reply and is read aloud unless Read replies aloud is set to *Never*.
+  ones ("and N more" when some were left out), your latest note titles, then "What would you like to
+  start with?". It is made on your PC and never sent to the brain, so it works offline and costs
+  nothing with an online brain. It types itself out like a reply and is read aloud unless Read replies
+  aloud is set to *Never*. The Brief panel has its own **Stop speaking** button while it is read aloud;
+  leaving Home, hiding the window, sending a message or holding Talk also stops it, and a brief that
+  arrives after you have left Home is dropped.
 - **Settings → Home → Brief me when Sage first opens each day** (off by default). When it is on, the
   first time Sage's window opens on a new day, Home shows the brief; it is read aloud only when Read
-  replies aloud is set to *Always*. Settings files from 0.1.1 and from the online brains change load
+  replies aloud is set to *Always*. Moving the PC's clock back a day doesn't bring a second brief.
+  Settings files from 0.1.1 and from the online brains change load
   unchanged, with it off.
 - **More online brains, with your own keys.** Settings → Brain is now a list: *On this computer* (still
   the default), *Claude* (an Anthropic key), *OpenAI* (an OpenAI key), *Gemini* (a Google AI Studio key)

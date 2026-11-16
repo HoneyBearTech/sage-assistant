@@ -285,28 +285,42 @@ few notes. Ask Sage in Chat, for example "Remind me at 17:00 to call Sam".
       *Good afternoon* from 12:00, *Good evening* from 18:00).
 - [ ] Watch the clock across a minute: it changes once, on the minute, with no seconds ticking.
 - [ ] **Today** lists today's reminders with their times; a missed one is amber and marked *MISSED*.
+      With more than five missed reminders, only the five newest are listed, then an amber row such as
+      *2 MORE MISSED*, and today's reminders still to come are all still there (check this on a fresh
+      test account, or in the preview page's sample data).
       **Notes** shows the titles of your five newest notes. **Status** shows the brain (*On this computer*
       or the company's name), whether voice is ready, whether sound is on, and the next reminder. Click
       **Sound** in the top bar: Status follows.
 - [ ] Wait for a reminder to fire while Home is open: within a minute it is no longer the next one in
-      Status. Delete all reminders and notes in Chat, then open Home: *Nothing due today*, *No notes yet*,
-      and the next reminder is *None*.
+      Status.
+- [ ] Empty states: on a fresh test account (or in the preview page, Home → *Empty*) Home shows
+      *Nothing due today*, *No notes yet* and the next reminder as *None*. Don't delete real reminders
+      or notes for this; on your own profile, skip this line.
 - [ ] **Talk to Sage**: Chat opens with the cursor in the message box; type and press Enter.
 - [ ] **Brief me** with Read replies aloud on *After voice messages*: the Brief panel appears and the
       brief types itself out ("Good morning. It's …", today's reminders, missed ones, your latest notes,
       "What would you like to start with?"), and is read aloud; the large orb says *SPEAKING*. The chat
       shows nothing new, and with an online brain nothing is sent (the brief works with the network
       unplugged). Repeat with *Always* (read aloud) and *Never* (not read aloud).
+- [ ] While the brief is read aloud, a **Stop speaking** button shows in the Brief panel: press it (with
+      the mouse, then once more with Tab and Enter): the speech stops and the button goes. It never
+      shows while a reply is read. Brief me again and click **Chat** while it speaks: the speech stops.
+      Brief me again and minimise Sage: it stops too.
+- [ ] With missed reminders that Sage left out (see above), the brief says "You missed: …; and N more."
 - [ ] Settings → Home → **Brief me when Sage first opens each day** on, *Save settings*. Set Read replies
       aloud to *Always* and save. Close Sage, then set the PC's date to tomorrow (Settings → Time &
       language → Date & time, automatic time off) and start Sage: Home shows the brief and reads it
       aloud. Close and start Sage again: no brief. Set *After voice messages*, set the date one more day
-      ahead and start Sage: the brief shows but isn't read aloud. Turn the setting off, move the date
-      ahead again: no brief. Set the date and time back to automatic.
+      ahead and start Sage: the brief shows but isn't read aloud. Set the date back one day and start
+      Sage: no brief; set it forward again to the day of the last brief: still no brief. Turn the setting
+      off, move the date ahead again: no brief. Set the date and time back to automatic.
+- [ ] Change the time zone (Settings → Time & language → Date & time, set time zone automatically off)
+      while Home is open: within a minute the clock shows the new zone's time, as the taskbar clock
+      does. Set the time zone back.
 - [ ] Animation effects off (Accessibility → Visual effects) and restart Sage: on Home the orb stands
       still, the clock still changes on the minute, and **Brief me** shows the brief at once.
 - [ ] Keyboard only: Tab reaches the **Home**, **Chat** and **Settings** tabs, **Sound**, **Talk to
-      Sage** and **Brief me**, each with a visible focus ring; Enter or Space works on each. Narrator
+      Sage**, **Brief me** and, while the brief is read, **Stop speaking**, each with a visible focus ring; Enter or Space works on each. Narrator
       reads each panel's name and its rows.
 
 ## The window

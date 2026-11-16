@@ -425,8 +425,9 @@ morning brief could speak when nobody expects it.
 
 - **One read-only request, bounded.** `homeSummary` (`sage:home`) takes an empty object and nothing
   else (a strict schema; anything else is refused before anything is read), and its sender is checked
-  like every other request. It returns only: at most 10 reminders (id, text cut to 200 characters, due
-  time, missed or not), due on the PC's own day or missed and not yet shown; the next reminder after
+  like every other request. It returns only: reminders (id, text cut to 200 characters, due time,
+  missed or not), at most 10 due on the PC's own day and at most 5 missed and not yet shown, with a
+  count of the missed ones left out (capped apart, so missed ones can't hide today's); the next reminder after
   today when nothing more is to come today; at most 5 note titles, cut to 80 characters, never a note's
   text; and three status values (the brain's kind, whether the speech file is there, the sound switch).
   It only reads the stores and the settings: no file is written or touched. *Evidence:*
@@ -445,12 +446,16 @@ morning brief could speak when nobody expects it.
 - **The once-a-day mark changes one field.** `claimMorningBrief` (`sage:home-brief-claim`) also takes
   only an empty object. It writes nothing while the morning brief is off or already shown today;
   otherwise it saves only `lastBrief`, the day, under the settings lock, so two claims at once give one
-  brief. A Settings save keeps the stored day whatever the window sends, and a value that can't be read
-  counts as never instead of making the settings file unreadable. *Evidence:* `test/home.test.ts`,
-  `test/settings.test.ts`.
+  brief. The saved day never moves backwards (a clock moved back doesn't bring a second brief; a day
+  more than two days ahead is taken as a broken clock). A Settings save keeps the stored day whatever
+  the window sends, and a value that can't be read counts as never instead of making the settings file
+  unreadable. *Evidence:* `test/home.test.ts`, `test/settings.test.ts`, `test/ipc.test.ts`.
 - **It speaks only when asked, or when set to.** **Brief me** reads the brief aloud unless Read replies
   aloud is *Never*. The morning brief is off by default, and is read aloud only when Read replies aloud
-  is *Always*. *Evidence:* `test/home-text.test.ts`, `test/renderer-home.test.ts`.
+  is *Always*. A brief is dropped if it is no longer the newest asked for, Home was left or the window
+  hidden by the time its answer arrives; leaving Home, hiding the window, sending a message or holding
+  Talk stops it being read, and the Brief panel has its own **Stop speaking** button while it is.
+  *Evidence:* `test/home-text.test.ts`, `test/renderer-home.test.ts`.
 
 ### The window itself
 

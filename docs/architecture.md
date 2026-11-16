@@ -58,7 +58,7 @@ used.
 | Window voice | `src/renderer/voice-controls.ts`, `voice.ts`, `voice-text.ts` | Hold to talk (Ctrl+Space or the Talk button), recording with the standard recorder, turning it into 16 kHz mono sound, the download offer, and spoken replies with the window's own speech and the PC's installed voices. `main.ts` is the entry the build bundles into `renderer.js`; it calls `startChatWindow()` from `renderer.ts`, which finds the elements and wires them up. |
 | Runner client | `src/core/brain/runner.ts` | The local model runner's other requests on the same fixed `127.0.0.1` address as chat: the model list (`/api/tags`), a model download (`/api/pull`, progress read line by line, each line capped at 64 KB and checked, at most 1,000 layers, stopped after 2 minutes without real progress) and a model's details (`/api/show`, whether it can use tools). No redirects, short time limits for the quick requests, replies size-capped; the runner's own text is never shown or logged. |
 | Setup | `src/core/setup.ts` | First-run setup: the runner's status for the saved local model and Sage's two models, one download at a time of one of those two (only after the main process's box says Download, stopped when Sage quits), saving it as the local model once it is there, the skills check, opening the install guide's one fixed address after asking, and marking setup done. |
-| Home | `src/core/home.ts` | Home's summary for the window, read-only and bounded: the reminders due on the PC's own day or missed and not yet shown (at most 10, text cut to 200 characters), the next reminder after today when nothing more is to come today, the titles of the five most recently changed notes (cut to 80 characters, never the text), the brain, whether the speech file is there and the sound switch. Also the morning brief's once-a-day mark (`claimMorningBrief`), saved as `lastBrief` in the settings under the settings lock. |
+| Home | `src/core/home.ts` | Home's summary for the window, read-only and bounded: the reminders due on the PC's own day (at most 10, the ones still to come first) and the missed ones not yet shown (at most 5, the newest, with a count of the rest), text cut to 200 characters, the next reminder after today when nothing more is to come today, the titles of the five most recently changed notes (cut to 80 characters, never the text), the brain, whether the speech file is there and the sound switch. Also the morning brief's once-a-day mark (`claimMorningBrief`), saved as `lastBrief` in the settings under the settings lock; the saved day never moves backwards. |
 | Window home | `src/renderer/home.ts`, `home-text.ts` | Home: the clock (the PC's own time format, changed on the minute), the greeting (morning 05:00 to 11:59, afternoon 12:00 to 17:59, evening otherwise), the Today, Notes and Status panels, **Talk to Sage**, and the daily brief, built in `home-text.ts` from the summary in fixed words, typed out with `typing.ts` and read aloud through voice's speaker. |
 | Window welcome | `src/renderer/welcome.ts`, `welcome-text.ts` | The Welcome screen's steps and texts: where Sage thinks, the runner, a model (with progress polled every half second) and Done. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
@@ -163,8 +163,11 @@ outside the app: no fonts, images, video or sound files.
 ## How Home and the brief work
 
 1. **The summary.** `homeSummary` takes an empty object and nothing else, and returns only what Home
-   shows (`src/core/home.ts`): at most 10 reminders (id, text cut to 200 characters, due time, missed),
-   due on the PC's own day (shown or not) or missed (due and not shown yet), soonest first; the next
+   shows (`src/core/home.ts`): reminders (id, text cut to 200 characters, due time, missed), soonest
+   first: at most 10 due on the PC's own day (still to come or already shown, the ones still to come
+   kept first) and, capped on their own, at most 5 missed ones (due and not shown yet, the newest),
+   with `missedMore` counting the missed ones left out, so old missed reminders never hide what is
+   still to come; the next
    reminder after today, only when nothing more is to come today; at most 5 note titles, cut to 80
    characters, newest first, never a note's text; and the brain, whether the speech file is there and
    the sound switch. It only reads the stores and the settings; it writes nothing.
@@ -172,16 +175,28 @@ outside the app: no fonts, images, video or sound files.
    (`briefText` in `src/renderer/home-text.ts`) in fixed words: "Good morning. It's Monday 16
    November.", today's reminders with their times ("Today: Dentist at 14:30; …") or "Nothing is due
    today." with the next one, the missed ones ("You missed: …"), the latest note titles ("Your latest
-   notes: …") and "What would you like to start with?". It is never sent to the brain and never added
-   to the conversation. It is shown in the Brief panel, typed out like a reply (`typing.ts`, with its
-   skip and reduced-motion rules), and read aloud through voice's speaker (the PC's own voices) unless
-   Read replies aloud is *Never*; never while the microphone is open.
+   notes: …") and "What would you like to start with?"; "and N more" ends the missed list when some
+   were left out. It is never sent to the brain and never added to the conversation. It is shown in
+   the Brief panel, typed out like a reply (`typing.ts`, with its skip and reduced-motion rules), and
+   read aloud through voice's speaker (the PC's own voices) unless Read replies aloud is *Never*;
+   never while the microphone is open. Each brief asked for has a number: after the summary arrives
+   (and after the morning claim) it goes on only if it is still the newest, Home is still shown and the
+   window is visible. Leaving Home or hiding the window drops a brief on its way, stops the brief being
+   read (a reply being read goes on) and shows its text in full; sending a message or holding Talk
+   also stops it. While the brief is read, the Brief panel has its own **Stop speaking** button (Chat's
+   is hidden with Chat); voice's controls know whether what is read is the brief.
 3. **The morning brief.** With **Brief me when Sage first opens each day** on (`morningBrief`, off by
    default), each time Home is shown, or the window comes back into view on Home, the window asks
    `claimMorningBrief`. The main process answers true only the first time on a new day (the PC's own
    day), and saves that day as `lastBrief` in the settings under the settings lock, so a reload or a
-   restart the same day gets false. A Settings save keeps the saved day. The window then shows the brief;
-   it is read aloud only when Read replies aloud is *Always*.
+   restart the same day gets false. The saved day never moves backwards: a saved day later than today
+   (the clock was moved back) waits, unless it is more than two days ahead, which is taken as a broken
+   clock (today is claimed and saved). A Settings save keeps the saved day. The window then shows the
+   brief; it is read aloud only when Read replies aloud is *Always*.
+4. **The clock.** A fresh time formatter is made for each time shown, so a change of the PC's time
+   zone shows at the next minute. The minute timer runs only while Home is on screen: it stops when
+   Home is left or the window hidden, and restarts, with the clock redrawn and the panels loaded, when
+   the window is shown again on Home.
 
 ## How voice works
 
