@@ -870,11 +870,16 @@ legend::before {
   color: var(--accent);
 }
 
-/* The window is hidden or minimised. */
+/*
+ * The window is hidden or minimised: everything in the orb stops, in every state. The state rules
+ * above are more specific and their animation shorthand sets the play state back to running, so the
+ * pause has to be !important to win.
+ */
 .orb.paused,
 .orb.paused::before,
 .orb.paused * {
-  animation-play-state: paused;
+  /* biome-ignore lint/complexity/noImportantStyles: must beat the more specific state rules' animation shorthand. */
+  animation-play-state: paused !important;
 }
 
 @keyframes orb-breathe {

@@ -118,3 +118,32 @@ test("the orb's animation pauses while the window is hidden", async (t) => {
   setWindowVisibility("visible");
   assert.equal(el("orb").classList.contains("paused"), false);
 });
+
+test("the pause wins over every state's animation: core, rings, ripples and the glow", async () => {
+  const css = await readFile(new URL("../src/renderer/styles.css", import.meta.url), "utf8");
+  const pause = css.match(/\.orb\.paused,\s*\.orb\.paused::before,\s*\.orb\.paused \* \{([^}]*)\}/);
+  assert.ok(pause, "the pause covers the orb, its glow and everything inside it");
+  // The state rules are more specific and their animation shorthand resets the play state to
+  // running, so only an !important pause beats them.
+  assert.match(pause[1]!, /animation-play-state: paused !important;/);
+  const pauseAt = css.indexOf(pause[0]);
+  // Every animated part of every state is the orb's glow or something inside the orb, and comes
+  // before the pause.
+  const animated = [...css.matchAll(/([^{}]+)\{[^}]*\banimation(?:-name)?:\s*(?!none)[^;]+;/g)].filter((m) =>
+    m[1]!.includes(".orb"),
+  );
+  assert.ok(animated.length >= 6);
+  for (const match of animated) {
+    for (const selector of match[1]!.split(",").map((part) => part.trim())) {
+      if (!selector.startsWith(".orb[data-state=")) continue;
+      assert.match(selector, /^\.orb\[data-state="\w+"\](::before| \.orb-[\w-]+)$/, selector);
+      assert.ok(match.index! < pauseAt, `${selector} comes before the pause`);
+    }
+  }
+  for (const part of ["core", "ticks", "ticks-major", "arcs", "inner", "ripple"]) {
+    assert.ok(
+      animated.some((match) => match[1]!.includes(`.orb-${part}`)),
+      `.orb-${part} is animated somewhere`,
+    );
+  }
+});
