@@ -93,8 +93,15 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 ## Installed app
 
 Run this section after a change to the installer settings (`electron-builder.json`), the fuses, or the
-release workflow, and before any release. It takes about 10 minutes. Use a source copy that has been
-started at least once and has a note (from "Notes and reminders" above), and close it first.
+release workflow, and before any release. It takes about 10 minutes. Electron's security switches
+(fuses) are set by the installer build, so this section also checks the app still starts with them.
+
+Before you start: close Sage if it's open. Make sure the source copy has at least one saved note (the
+earlier sections delete the Shopping note and replace `notes.json`, so if needed, start the source copy,
+add a quick note, then close Sage).
+
+`npm ci` installs the exact versions of everything needed to build (run it in the source folder if you
+haven't since the last update). The first `npm run dist` downloads a few hundred MB, so it takes longer.
 
 - [ ] In PowerShell, in the source folder, `npm run dist` ends without errors and writes
       `out\Sage-Setup-<version>.exe` (the version in `package.json`), and no `.blockmap` file next to it.
@@ -109,9 +116,9 @@ started at least once and has a note (from "Notes and reminders" above), and clo
 - [ ] "Remind me to stretch in two minutes": a Windows notification titled "Sage reminder" says
       "stretch". In Settings → System → Notifications, the sender is listed as **Sage**.
 - [ ] Starting Sage again from the Start menu while it is open brings the window forward.
-- [ ] Raise the version in `package.json` (for example to `0.1.1`, without committing it), run
-      `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
+- [ ] Close Sage. Open `package.json` in Notepad, change `"version": "0.1.0"` to `"version": "0.1.1"`
+      and save (don't commit it). Run `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
       and the note is still there. Then put `package.json` back with `git checkout package.json`.
-- [ ] Uninstall Sage in Settings → Apps → Installed apps: the shortcuts are gone, and
+- [ ] Close Sage. Uninstall it in Settings → Apps → Installed apps (Windows 10: Apps & features): the shortcuts are gone, and
       `%APPDATA%\sage-assistant` still holds `notes.json` and `settings.json`. `npm start` from the source
       folder still opens Sage with the note.

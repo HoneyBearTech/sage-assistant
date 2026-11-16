@@ -12,10 +12,25 @@ is three files on the repository's [Releases page](https://github.com/HoneyBearT
 The installer isn't code-signed yet, so Windows SmartScreen warns about it (see
 [installing.md](installing.md#installing-on-windows)). Signing is on the [roadmap](roadmap.md).
 
-## The release workflow
+## In plain English
+
+The release workflow is a small program that GitHub runs for you. In short:
+
+- GitHub builds the installer on its own Windows computer, from the code on `main`, not on anyone's PC.
+- It writes a fingerprint of the file (the checksum) and a signed receipt of how it was built (the
+  provenance), so anyone can check the download wasn't changed or swapped.
+- It reuses no old build files, and it holds no saved passwords or keys.
+- It publishes the release only when the build and all the tests succeed. If anything fails, nothing is
+  published.
+
+You set it up once (step 1 under [Making a release](#making-a-release-step-by-step)), then each release
+is a version pull request and a tag. The rest of this page is the exact steps, and then the technical
+details for anyone who wants to check the workflow.
+
+## Technical details: the release workflow
 
 The workflow below builds those three files on a GitHub Windows runner whenever a version tag such as
-`v0.2.0` is pushed. The team doesn't add or change workflows, so the owner adds it once, as
+`v0.1.0` is pushed. The team doesn't add or change workflows, so the owner adds it once, as
 `.github/workflows/release.yml`, through a pull request like any other change.
 
 What it does, in order:
@@ -220,38 +235,68 @@ Notes on the workflow:
 ## Making a release, step by step
 
 1. **Add the release workflow, once.** If `.github/workflows/release.yml` isn't on `main` yet, add it
-   from the [block above](#the-release-workflow) through a pull request first. Without it, pushing a tag
-   does nothing.
+   first; without it, pushing a tag does nothing. On the repository's page on GitHub:
+   1. Choose **Add file → Create new file**.
+   2. In the name box type `.github/workflows/release.yml` (typing each `/` makes a folder).
+   3. Copy the lines inside the [code box above](#technical-details-the-release-workflow), from
+      `name: Release` down to the last line, and paste them into the big text area. Don't copy the
+      three-backtick lines (the ```` ``` ```` fence lines) at the top and bottom of the box.
+   4. Choose **Commit changes…**, write a short message such as "Add release workflow", pick **Create a
+      new branch for this commit and start a pull request**, and choose **Propose changes**, then
+      **Create pull request**.
+   5. Wait for the checks to pass, then choose **Merge pull request**.
 2. **Pick the version.** Releases follow [Semantic Versioning](https://semver.org/): `1.2.3` means
-   major.minor.patch. A fix only is a patch (`0.1.1`), new features are a minor version (`0.2.0`).
-3. **Open a release pull request** from a new branch:
-   - set the version in `package.json` and `package-lock.json` together with
-     `npm version 0.2.0 --no-git-tag-version`;
-   - in `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.2.0] - 2026-12-01` (the version and today's
-     date) and add a new, empty `## [Unreleased]` above it;
-   - commit with `git commit -s`, push the branch and open the pull request. Merge it once every check
-     passes.
-4. **Optionally try the installer first** on a Windows PC: `npm run dist` on the merged `main`, install
-   `out/Sage-Setup-0.2.0.exe` and run the "Installed app" section of the
-   [Windows checklist](windows-checklist.md).
-5. **Create and push the tag** on the merged commit, either way:
-   - **with git**, from an up-to-date `main`:
+   major.minor.patch. The first release is `0.1.0`. After that, a fix only is a patch (`0.1.1`) and new
+   features are a minor version (`0.2.0`).
+3. **Get the version files ready.**
+   - **First release (0.1.0):** `package.json` already says `0.1.0`, so skip `npm version`. Only edit
+     `CHANGELOG.md`: put the entries under `## [Unreleased]` below a new heading `## [0.1.0] - 2026-12-01`
+     (the version and today's date), and leave a new, empty `## [Unreleased]` above it.
+   - **A later release (for example 0.2.0):** set the version in `package.json` and `package-lock.json`
+     together with `npm version 0.2.0 --no-git-tag-version`, and update `CHANGELOG.md` the same way,
+     with the heading `## [0.2.0] - 2026-12-01`.
+4. **Open the version pull request** from a new branch. For the first release use the same commands with
+   `0.1.0` (only `CHANGELOG.md` has changes, so add just that file). For a later release such as 0.2.0:
 
-     ```sh
-     git switch main
-     git pull
-     git tag -a v0.2.0 -m "Sage 0.2.0"
-     git push origin v0.2.0
-     ```
+   ```sh
+   git switch main
+   git pull
+   git switch -c release-0.2.0
+   # now make the edits from step 3
+   git add package.json package-lock.json CHANGELOG.md
+   git commit -s -m "Release 0.2.0"
+   git push -u origin release-0.2.0
+   ```
 
-   - **on GitHub**: on the Releases page choose **Draft a new release**, type `v0.2.0` under **Choose a
-     tag** and pick **Create new tag: v0.2.0 on publish**, keep the target `main`, set the title
-     `Sage 0.2.0`, attach no files, and choose **Publish release**. The workflow adds the three files to
-     that release a few minutes later.
-6. **Watch the run** under **Actions → Release**. When it is green, the release has the installer,
+   Then open the pull request on GitHub (it shows a **Compare & pull request** button for the new
+   branch), and merge it once every check passes.
+5. **Optionally try the installer first** on a Windows PC: `npm run dist` on the merged `main`, install
+   `out/Sage-Setup-0.1.0.exe` (use the version you are releasing) and run the "Installed app" section of
+   the [Windows checklist](windows-checklist.md).
+6. **Create and push the tag** on the merged commit. The tag commands are recommended: with them nothing
+   shows on the Releases page until all three files are ready. For the first release:
+
+   ```sh
+   git switch main
+   git pull
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+   For a later release, use its version in both tag lines (`v0.2.0`). The other route is the Releases
+   page: the button is **Create a new release** when there are no releases yet, and **Draft a new
+   release** after that. Type the tag (`v0.1.0`) under **Choose a tag**, pick **Create new tag: v0.1.0
+   on publish**, keep the target `main`, set the title `Sage 0.1.0`, attach no files and choose
+   **Publish release**. This route publishes a release with no files for the few minutes until the build
+   finishes, so prefer the tag commands.
+7. **Watch the run** under **Actions → Release**. When it is green, the release has the installer,
    `SHA256SUMS.txt` and the provenance file, and the attestation is listed under the repository's
    **Attestations**. Download the installer and check it as below. The provenance record proves where
    and how the installer was built, not that the code in it is trustworthy.
+
+**Optional, later: a tag rule.** To let only you create release tags, on GitHub go to **Settings → Rules →
+Rulesets → New ruleset → New tag ruleset**, target tags matching `v*`, and restrict creation to the
+owner. It's optional, and the team doesn't change repository settings.
 
 ## Checking a downloaded installer
 
@@ -261,7 +306,7 @@ Download the installer and `SHA256SUMS.txt` from the same release into one folde
 
 ```powershell
 cd $HOME\Downloads
-Get-FileHash .\Sage-Setup-0.2.0.exe -Algorithm SHA256
+Get-FileHash .\Sage-Setup-0.1.0.exe -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
@@ -269,7 +314,7 @@ The long `Hash` value must be the same as the one in `SHA256SUMS.txt` (capital o
 matter). Or let PowerShell compare them; it prints `True` when they match:
 
 ```powershell
-(Get-FileHash .\Sage-Setup-0.2.0.exe -Algorithm SHA256).Hash -eq (-split (Get-Content .\SHA256SUMS.txt))[0]
+(Get-FileHash .\Sage-Setup-0.1.0.exe -Algorithm SHA256).Hash -eq (-split (Get-Content .\SHA256SUMS.txt))[0]
 ```
 
 If they don't match, don't run the installer: download it again, and report it if it still differs.
@@ -278,9 +323,9 @@ If they don't match, don't run the installer: download it again, and report it i
 not on someone's PC. It needs the [GitHub CLI](https://cli.github.com/), signed in with `gh auth login`:
 
 ```powershell
-gh attestation verify .\Sage-Setup-0.2.0.exe --repo HoneyBearTech/sage-assistant --signer-workflow HoneyBearTech/sage-assistant/.github/workflows/release.yml
+gh attestation verify .\Sage-Setup-0.1.0.exe --repo HoneyBearTech/sage-assistant --signer-workflow HoneyBearTech/sage-assistant/.github/workflows/release.yml
 ```
 
 It ends with a line saying the verification succeeded, and names the workflow and commit that built the
 file. To check against the provenance file from the release instead of GitHub's attestations list, add
-`--bundle .\Sage-Setup-0.2.0.sigstore.json`.
+`--bundle .\Sage-Setup-0.1.0.sigstore.json`.
