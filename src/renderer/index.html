@@ -39,10 +39,15 @@
 
       <section id="step-place" class="step">
         <h2 id="step-place-heading" tabindex="-1">Where should Sage think?</h2>
-        <p class="hint">On this computer, nothing you type leaves the PC. An online service is set up in Settings.</p>
+        <p class="hint">
+          On this computer, nothing you type leaves the PC. Online, Sage can use Claude, OpenAI, Gemini or
+          another service with your own key: what you type goes to that company, which charges per use (Gemini
+          has a free tier for some models). Sage can't cap what you spend, so set a limit on the company's own
+          website. You choose one, and save its key, in Settings.
+        </p>
         <div class="row">
           <button type="button" id="place-local" class="primary">On this computer (recommended, private)</button>
-          <button type="button" id="place-online">An online service</button>
+          <button type="button" id="place-online">An online service (Claude, OpenAI, Gemini or another)</button>
         </div>
       </section>
 
@@ -162,26 +167,94 @@
       <form id="settings-form" class="settings">
         <fieldset>
           <legend>Brain</legend>
-          <p class="hint">Where Sage does its thinking. "On this computer" keeps everything local.</p>
+          <p class="hint">
+            Where Sage does its thinking. "On this computer" keeps your messages on this PC. An online brain
+            uses your own key, and Sage still asks you first before it opens or deletes anything. What a company
+            keeps, and for how long, is set by its own data policies; check them on its website.
+          </p>
           <label class="choice">
-            <input type="radio" name="brain" value="local" /> On this computer (Ollama)
+            <input type="radio" name="brain" value="local" aria-describedby="brain-note-local" /> On this
+            computer (Ollama)
           </label>
+          <p id="brain-note-local" class="choice-note">
+            Free and private: nothing you type leaves this PC, apart from web searches you ask for.
+          </p>
           <label class="choice">
-            <input type="radio" name="brain" value="online" /> An online model service
+            <input type="radio" name="brain" value="claude" aria-describedby="brain-note-claude" /> Claude
+            (your Anthropic key)
           </label>
-          <label for="local-model">Local model</label>
-          <input id="local-model" type="text" maxlength="200" />
-          <label for="online-url">Online service address</label>
-          <input id="online-url" type="url" maxlength="500" placeholder="https://api.example.com" />
-          <label for="online-model">Online model name</label>
-          <input id="online-model" type="text" maxlength="200" />
-          <label for="online-key">Online service key</label>
-          <div class="row">
-            <input id="online-key" type="password" maxlength="1000" autocomplete="off" placeholder="Paste a new key" />
-            <button type="button" id="save-key">Save key</button>
-            <button type="button" id="clear-key">Remove key</button>
+          <p id="brain-note-claude" class="choice-note">
+            Paid per use, to Anthropic. The key is kept in your system's protected storage. What you type and the
+            results of Sage's skills go to Anthropic.
+          </p>
+          <label class="choice">
+            <input type="radio" name="brain" value="openai" aria-describedby="brain-note-openai" /> OpenAI
+            (your OpenAI key)
+          </label>
+          <p id="brain-note-openai" class="choice-note">
+            Paid per use, to OpenAI. The key is kept in your system's protected storage. What you type and the
+            results of Sage's skills go to OpenAI.
+          </p>
+          <label class="choice">
+            <input type="radio" name="brain" value="gemini" aria-describedby="brain-note-gemini" /> Gemini
+            (your Google AI Studio key)
+          </label>
+          <p id="brain-note-gemini" class="choice-note">
+            Free tier for some models, then paid per use, to Google. The key is kept in your system's protected
+            storage. What you type and the results of Sage's skills go to Google.
+          </p>
+          <label class="choice">
+            <input type="radio" name="brain" value="other" aria-describedby="brain-note-other" /> Another
+            online service (its address and key)
+          </label>
+          <p id="brain-note-other" class="choice-note">
+            Any service that speaks the chat-completions format, at its own prices. The key is kept in your
+            system's protected storage. What you type and the results of Sage's skills go to that service.
+          </p>
+          <p id="brain-notice" class="brain-notice" role="status"></p>
+
+          <div id="brain-local" class="brain-panel">
+            <label for="local-model">Local model</label>
+            <input id="local-model" type="text" maxlength="200" />
           </div>
-          <p id="key-status" class="hint"></p>
+
+          <div id="brain-other" class="brain-panel" hidden>
+            <label for="online-url">Online service address</label>
+            <input id="online-url" type="url" maxlength="500" placeholder="https://api.example.com" />
+            <label for="online-model">Online model name</label>
+            <input id="online-model" type="text" maxlength="200" />
+          </div>
+
+          <div id="brain-service" class="brain-panel" hidden>
+            <label id="service-model-label" for="service-model">Model</label>
+            <div class="row">
+              <input id="service-model" type="text" maxlength="200" />
+              <button type="button" id="load-models">Load models</button>
+            </div>
+            <label id="model-list-label" for="model-list" hidden>Models the service offers now</label>
+            <select id="model-list" hidden></select>
+            <p id="models-status" class="hint" role="status"></p>
+          </div>
+
+          <div id="brain-key" class="brain-panel" hidden>
+            <label id="online-key-label" for="online-key">Key</label>
+            <div class="row">
+              <input id="online-key" type="password" maxlength="1000" autocomplete="off" placeholder="Paste a new key" />
+              <button type="button" id="save-key">Save key</button>
+              <button type="button" id="clear-key">Remove key</button>
+              <button type="button" id="test-key">Test</button>
+            </div>
+            <p id="key-status" class="hint"></p>
+            <p id="key-result" class="hint" role="status"></p>
+            <div id="get-key-row" class="row">
+              <button type="button" id="get-key">Get a key</button>
+              <span class="hint">Opens the company's key page in your web browser, after Sage asks.</span>
+            </div>
+            <p class="hint">
+              Sage can't cap what you spend. Set a spending limit on the company's own website.
+            </p>
+          </div>
+
           <div class="row">
             <button type="button" id="setup-again">Set up Sage</button>
             <span class="hint">Check the local model runner, or download one of Sage's models.</span>

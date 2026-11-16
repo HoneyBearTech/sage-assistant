@@ -172,8 +172,9 @@ test("maps error statuses to plain messages that never include the key or the re
     401: /didn't accept the key/,
     403: /didn't accept the key/,
     404: /didn't recognise/,
-    429: /busy or your quota/,
-    500: /HTTP 500/,
+    429: /busy, or you've reached its rate limit/,
+    500: /busy or overloaded/,
+    418: /HTTP 418/,
   };
   for (const [code, pattern] of Object.entries(expected)) {
     status = Number(code);

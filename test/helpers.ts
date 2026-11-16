@@ -3,8 +3,15 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Brain, BrainReply, ChatMessage, ToolCall, ToolSpec } from "../src/core/brain/brain.js";
-import type { Encryptor, KeyStore, SavedKey } from "../src/core/keystore.js";
+import type {
+  Brain,
+  BrainReply,
+  ChatMessage,
+  ChatOptions,
+  ToolCall,
+  ToolSpec,
+} from "../src/core/brain/brain.js";
+import type { Encryptor, KeyStore, KeyStores, SavedKey } from "../src/core/keystore.js";
 import { createLogger, type Logger, SecretRedactor } from "../src/core/log.js";
 import type { Clock } from "../src/core/scheduler.js";
 import type { Timers } from "../src/core/voice/download.js";
@@ -124,6 +131,16 @@ export class MemoryKeyStore implements KeyStore {
   }
 }
 
+/** One fake key store per online brain, as Sage gets them from the main process. */
+export function memoryKeyStores(): KeyStores & Record<keyof KeyStores, MemoryKeyStore> {
+  return {
+    claude: new MemoryKeyStore(),
+    openai: new MemoryKeyStore(),
+    gemini: new MemoryKeyStore(),
+    other: new MemoryKeyStore(),
+  };
+}
+
 /** Stands in for the operating system's encryption. Its output never contains the input. */
 export const fakeEncryptor = (available = true): Encryptor => ({
   isAvailable: () => available,
@@ -166,11 +183,21 @@ export class FakeClock implements Clock {
 /** A brain that replays scripted replies and records what it was sent. */
 export class ScriptedBrain implements Brain {
   readonly kind = "local";
-  readonly calls: { messages: ChatMessage[]; tools: ToolSpec[] }[] = [];
+  readonly calls: {
+    messages: ChatMessage[];
+    tools: ToolSpec[];
+    allowTools: boolean;
+    signal?: AbortSignal;
+  }[] = [];
   private index = 0;
   constructor(private readonly replies: (BrainReply | ((messages: ChatMessage[]) => BrainReply))[]) {}
-  async chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply> {
-    this.calls.push({ messages: structuredClone(messages), tools });
+  async chat(messages: ChatMessage[], tools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
+    this.calls.push({
+      messages: structuredClone(messages),
+      tools,
+      allowTools: options.allowTools !== false,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     const next = this.replies[Math.min(this.index++, this.replies.length - 1)];
     if (!next) return { ok: true, content: "", toolCalls: [] };
     return typeof next === "function" ? next(messages) : next;
@@ -222,4 +249,39 @@ export class ManualTimers implements Timers {
     this.pending.clear();
     for (const timer of due) timer.callback();
   }
+}
+
+/** One request a brain made through `fakeFetch`. */
+export interface FetchCall {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string;
+  redirect: RequestInit["redirect"];
+}
+
+/**
+ * A stand-in for fetch that never touches the network: records each request and answers with
+ * `handler`'s response (or throws what it throws). For the ready-made services, whose fixed
+ * addresses can't point at a fake server on 127.0.0.1.
+ */
+export function fakeFetch(handler: (call: FetchCall, init: RequestInit) => Response | Promise<Response>) {
+  const calls: FetchCall[] = [];
+  const fetch = async (url: string, init: RequestInit): Promise<Response> => {
+    const call: FetchCall = {
+      url,
+      method: init.method ?? "GET",
+      headers: { ...(init.headers as Record<string, string>) },
+      body: typeof init.body === "string" ? init.body : "",
+      redirect: init.redirect,
+    };
+    calls.push(call);
+    return handler(call, init);
+  };
+  return { fetch, calls };
+}
+
+/** A JSON response, as a service would send it. */
+export function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }

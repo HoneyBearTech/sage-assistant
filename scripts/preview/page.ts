@@ -10,7 +10,13 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 const settings: PublicSettings = {
   brain: "local",
   local: { model: "qwen3:4b" },
-  online: { baseUrl: "", model: "", hasKey: false },
+  online: { baseUrl: "", model: "" },
+  services: {
+    claude: { model: "claude-sonnet-5-5" },
+    openai: { model: "gpt-6-astra" },
+    gemini: { model: "gemini-3.8-flash" },
+  },
+  keys: { claude: true, openai: false, gemini: false, other: false },
   apps: [{ name: "Notepad", path: "C:\\Windows\\notepad.exe", args: [] }],
   folders: ["D:\\Shared\\Documents"],
   speakReplies: "never",
@@ -71,6 +77,17 @@ const sage: SageApi = {
   },
   setKey: async () => ({ ok: false, message: "The preview has no key store." }),
   clearKey: async () => ({ ok: true }),
+  listModels: async (company) => ({
+    ok: true,
+    models:
+      company === "claude"
+        ? ["claude-haiku-5-5", "claude-opus-5-5", "claude-sonnet-5-5"]
+        : company === "openai"
+          ? ["gpt-6-astra", "gpt-6-luna"]
+          : ["gemini-3.6-flash", "gemini-3.8-flash"],
+  }),
+  testKey: async () => ({ ok: false, message: "The preview has no key store, so there is no key to test." }),
+  openKeyPage: async () => ({ status: "declined" }),
   chooseFolder: async () => null,
   chooseApp: async () => null,
   takeNotices: async () => [{ id: "n1", text: "Sage reminder: Water the plants (due 09:00)." }],

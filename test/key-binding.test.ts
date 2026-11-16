@@ -6,8 +6,8 @@ import { ServiceKeys } from "../src/core/keystore.js";
 import { brainFor, createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
-import { CHANNELS } from "../src/shared/api.js";
-import { fakeServer, FakePresenter, json, MemoryKeyStore, tempDir } from "./helpers.js";
+import { CHANNELS, privacyLine } from "../src/shared/api.js";
+import { fakeServer, FakePresenter, json, memoryKeyStores, tempDir } from "./helpers.js";
 
 // A key belongs to the service it was entered for. A turn that started against service A must
 // never send service B's key to A, even if the user switches to B and saves B's key mid-turn.
@@ -29,7 +29,7 @@ function toolCallReply() {
 }
 
 function online(baseUrl: string) {
-  return { ...defaultSettings(), brain: "online", online: { baseUrl, model: "m" } };
+  return { ...defaultSettings(), brain: "other", online: { baseUrl, model: "m" } };
 }
 
 test("switching services mid-turn: the old service never receives the new service's key", async (t) => {
@@ -51,7 +51,7 @@ test("switching services mid-turn: the old service never receives the new servic
   );
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",
@@ -60,8 +60,13 @@ test("switching services mid-turn: the old service never receives the new servic
   });
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
 
-  assert.deepEqual(await handlers[CHANNELS.saveSettings](online(serviceA.url)), { ok: true });
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY_A, baseUrl: serviceA.url }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.saveSettings](online(serviceA.url)), {
+    ok: true,
+    message: privacyLine("other"),
+  });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ brain: "other", key: KEY_A, baseUrl: serviceA.url }), {
+    ok: true,
+  });
 
   // Service A holds its reply while the user moves to service B and saves B's key.
   const reply = handlers[CHANNELS.send]({ text: "what notes do I have?" });
@@ -72,7 +77,9 @@ test("switching services mid-turn: the old service never receives the new servic
   };
   assert.equal(moved.ok, true);
   assert.match(moved.message ?? "", /saved key was removed/);
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY_B, baseUrl: serviceB.url }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ brain: "other", key: KEY_B, baseUrl: serviceB.url }), {
+    ok: true,
+  });
 
   // Now A answers with a tool call; the old turn must stop instead of going back to A.
   json(paused!, 200, toolCallReply());
@@ -90,14 +97,14 @@ test("switching services mid-turn: the old service never receives the new servic
 
 test("a turn's brain only ever gets the key of its own service", async (t) => {
   const serviceA = await fakeServer(t, (_req, res) => json(res, 200, toolCallReply()));
-  const keys = new ServiceKeys(new MemoryKeyStore());
-  await keys.set(KEY_A, new URL(serviceA.url).origin);
+  const keys = new ServiceKeys(memoryKeyStores());
+  await keys.setOtherKey(KEY_A, new URL(serviceA.url).origin);
   const brainA = brainFor(online(serviceA.url) as never, keys, {});
   assert.ok((await brainA.chat([], [])).ok);
   assert.equal(serviceA.requests[0]!.headers.authorization, `Bearer ${KEY_A}`);
 
   // The key now belongs to another service: the same brain sends nothing to A at all.
-  await keys.set(KEY_B, "https://b.example");
+  await keys.setOtherKey(KEY_B, "https://b.example");
   const again = await brainA.chat([], []);
   assert.equal(again.ok, false);
   assert.match(!again.ok ? again.message : "", /key/);

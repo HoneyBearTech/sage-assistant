@@ -10,18 +10,21 @@ import { BAD_RECORDING, createIpcHandlers, SAVE_SETTINGS_FIRST, toPublicSettings
 import {
   CHANNELS,
   MAX_ACK_IDS,
+  privacyLine,
   MAX_VOICE_SAMPLES,
   type Notice,
   type TranscribeResult,
 } from "../src/shared/api.js";
-import { FakeClock, FakePresenter, MemoryKeyStore, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
+import { FakeClock, FakePresenter, memoryKeyStores, REFUSED_PORT, tempDir, toolCall } from "./helpers.js";
 
 async function setup(t: Parameters<typeof tempDir>[0]) {
   const dir = await tempDir(t);
-  const keyStore = new MemoryKeyStore();
+  const keyStores = memoryKeyStores();
+  // Another online service's key: the one key Sage had before the list of brains.
+  const keyStore = keyStores.other;
   const sage = createSage({
     dataDir: dir,
-    keyStore,
+    keyStores,
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",
@@ -33,7 +36,7 @@ async function setup(t: Parameters<typeof tempDir>[0]) {
     chooseFolder: async () => "/picked/folder",
     chooseApp: async () => null,
   });
-  return { sage, handlers, keyStore };
+  return { sage, handlers, keyStore, keyStores };
 }
 
 test("every channel has a handler", async (t) => {
@@ -61,42 +64,49 @@ test("a failing turn returns a friendly message instead of throwing", async (t) 
 test("settings go out without the key, and come back validated", async (t) => {
   const { handlers, keyStore } = await setup(t);
   const before = (await handlers[CHANNELS.getSettings](undefined)) as any;
-  assert.equal(before.online.hasKey, false);
+  assert.equal(before.keys.other, false);
   assert.equal(before.brain, "local");
 
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" }), {
-    ok: true,
-  });
+  assert.deepEqual(
+    await handlers[CHANNELS.setKey]({ brain: "other", key: "fake-value-for-tests", baseUrl: "" }),
+    {
+      ok: true,
+    },
+  );
   assert.deepEqual(await keyStore.get(), { key: "fake-value-for-tests", origin: null });
   const after = (await handlers[CHANNELS.getSettings](undefined)) as any;
-  assert.equal(after.online.hasKey, true);
+  assert.equal(after.keys.other, true);
   assert.ok(!JSON.stringify(after).includes("fake-value-for-tests"));
 
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "", baseUrl: "" }), {
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ brain: "other", key: "", baseUrl: "" }), {
     ok: false,
     message: "That doesn't look like a key.",
   });
   // The address on screen is required, and must be a short string.
   for (const payload of [
-    { key: "fake-value-for-tests" },
-    { key: "fake-value-for-tests", baseUrl: 5 },
-    { key: "fake-value-for-tests", baseUrl: "x".repeat(501) },
+    { brain: "other", key: "fake-value-for-tests" },
+    { brain: "other", key: "fake-value-for-tests", baseUrl: 5 },
+    { brain: "other", key: "fake-value-for-tests", baseUrl: "x".repeat(501) },
+    { key: "fake-value-for-tests", baseUrl: "" },
+    { brain: "online", key: "fake-value-for-tests", baseUrl: "" },
+    { brain: "local", key: "fake-value-for-tests", baseUrl: "" },
+    { brain: "other", key: "fake-value-for-tests", baseUrl: "", origin: "https://evil.example" },
   ]) {
     assert.deepEqual(await handlers[CHANNELS.setKey](payload), {
       ok: false,
       message: "That doesn't look like a key.",
     });
   }
-  const short = (await handlers[CHANNELS.setKey]({ key: "short", baseUrl: "" })) as any;
+  const short = (await handlers[CHANNELS.setKey]({ brain: "other", key: "short", baseUrl: "" })) as any;
   assert.equal(short.ok, false);
-  assert.deepEqual(await handlers[CHANNELS.clearKey](undefined), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.clearKey]({ brain: "other" }), { ok: true });
   assert.equal(await keyStore.get(), null);
 
   const bad = (await handlers[CHANNELS.saveSettings]({ brain: "elsewhere" })) as any;
   assert.equal(bad.ok, false);
-  const good = await handlers[CHANNELS.saveSettings]({ ...before, brain: "online", folders: ["/docs"] });
-  assert.deepEqual(good, { ok: true });
-  assert.equal(((await handlers[CHANNELS.getSettings](undefined)) as any).brain, "online");
+  const good = await handlers[CHANNELS.saveSettings]({ ...before, brain: "other", folders: ["/docs"] });
+  assert.deepEqual(good, { ok: true, message: privacyLine("other") });
+  assert.equal(((await handlers[CHANNELS.getSettings](undefined)) as any).brain, "other");
   assert.equal(await handlers[CHANNELS.chooseFolder](undefined), "/picked/folder");
   assert.equal(await handlers[CHANNELS.chooseApp](undefined), null);
 });
@@ -108,7 +118,7 @@ test("changing the online service's address removes the saved key and says so", 
     handlers[CHANNELS.saveSettings]({ ...base, online: { baseUrl, model } });
 
   // A key set before the first address is saved is kept: there was no earlier service.
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" });
+  await handlers[CHANNELS.setKey]({ brain: "other", key: "fake-value-for-tests", baseUrl: "" });
   assert.deepEqual(await save("https://service.example/v1"), { ok: true });
   assert.equal(await keyStore.has(), true);
   // The same service with a different path, trailing slash or model keeps the key.
@@ -123,16 +133,24 @@ test("changing the online service's address removes the saved key and says so", 
   // With no key saved there is nothing to remove and no message.
   assert.deepEqual(await save("https://third.example/v1"), { ok: true });
   // A different port is a different service; so is clearing the address.
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "https://third.example/v1" });
+  await handlers[CHANNELS.setKey]({
+    brain: "other",
+    key: "fake-value-for-tests",
+    baseUrl: "https://third.example/v1",
+  });
   assert.equal(await keyStore.has(), true);
   assert.equal(((await save("https://third.example:8443/v1")) as any).ok, true);
   assert.equal(await keyStore.has(), false);
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "https://third.example:8443" });
+  await handlers[CHANNELS.setKey]({
+    brain: "other",
+    key: "fake-value-for-tests",
+    baseUrl: "https://third.example:8443",
+  });
   assert.equal(await keyStore.has(), true);
   await save("");
   assert.equal(await keyStore.has(), false);
   // A refused save changes nothing.
-  await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" });
+  await handlers[CHANNELS.setKey]({ brain: "other", key: "fake-value-for-tests", baseUrl: "" });
   assert.equal(await keyStore.has(), true);
   assert.equal(((await handlers[CHANNELS.saveSettings]({ brain: "elsewhere" })) as any).ok, false);
   assert.equal(await keyStore.has(), true);
@@ -143,7 +161,8 @@ test("Save key only saves for the address that is saved, not one typed but not y
   const base = (await handlers[CHANNELS.getSettings](undefined)) as any;
   const save = (baseUrl: string) =>
     handlers[CHANNELS.saveSettings]({ ...base, online: { baseUrl, model: "m" } });
-  const setKey = (baseUrl: string) => handlers[CHANNELS.setKey]({ key: "fake-key-for-service-b", baseUrl });
+  const setKey = (baseUrl: string) =>
+    handlers[CHANNELS.setKey]({ brain: "other", key: "fake-key-for-service-b", baseUrl });
   const refused = { ok: false, message: SAVE_SETTINGS_FIRST };
 
   // Service A is saved; the user types service B's address and B's key and presses Save key.
@@ -163,16 +182,23 @@ test("Save key only saves for the address that is saved, not one typed but not y
 test("Save key with no address saved and none typed keeps the key for the first address saved", async (t) => {
   const { handlers, keyStore } = await setup(t);
   assert.deepEqual(
-    await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "https://a.example" }),
+    await handlers[CHANNELS.setKey]({
+      brain: "other",
+      key: "fake-value-for-tests",
+      baseUrl: "https://a.example",
+    }),
     {
       ok: false,
       message: SAVE_SETTINGS_FIRST,
     },
   );
   assert.equal(await keyStore.get(), null);
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: "fake-value-for-tests", baseUrl: "" }), {
-    ok: true,
-  });
+  assert.deepEqual(
+    await handlers[CHANNELS.setKey]({ brain: "other", key: "fake-value-for-tests", baseUrl: "" }),
+    {
+      ok: true,
+    },
+  );
   assert.deepEqual(await keyStore.get(), { key: "fake-value-for-tests", origin: null });
 });
 
@@ -204,7 +230,7 @@ test("deleting a reminder withdraws its notice from the window queue", async (t)
   const presenter = new FakePresenter(true);
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter,
     notify: () => false,
     openPath: async () => "",
@@ -265,7 +291,7 @@ test("an unreadable settings, notes or reminders file is kept aside and the wind
   }
   const sage = createSage({
     dataDir: dir,
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",
@@ -330,14 +356,18 @@ test("the sound switch saves only itself, and a Settings save keeps it", async (
 
 test("toPublicSettings copies only the public fields", () => {
   const settings = { ...defaultSettings(), apps: [{ name: "A", path: "/a", args: ["x"] }] };
-  const out = toPublicSettings(settings, true);
-  assert.deepEqual(Object.keys(out.online).sort(), ["baseUrl", "hasKey", "model"]);
+  const out = toPublicSettings(settings, { claude: true, openai: false, gemini: true, other: false });
+  assert.deepEqual(Object.keys(out.online).sort(), ["baseUrl", "model"]);
+  assert.deepEqual(out.keys, { claude: true, openai: false, gemini: true, other: false });
+  assert.deepEqual(out.services, defaultSettings().services);
   assert.deepEqual(Object.keys(out).sort(), [
     "apps",
     "brain",
     "folders",
+    "keys",
     "local",
     "online",
+    "services",
     "setupDone",
     "sound",
     "speakReplies",
@@ -355,7 +385,7 @@ test("voice status and the download go through the main process, which asks firs
   const asked: number[] = [];
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",

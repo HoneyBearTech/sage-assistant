@@ -21,7 +21,7 @@ import {
   FakePresenter,
   fakeServer,
   json,
-  MemoryKeyStore,
+  memoryKeyStores,
   type Recorded,
   REFUSED_PORT,
   settled,
@@ -171,7 +171,7 @@ test("after Download the runner downloads the model; only then is it saved as th
   });
   await settings.save({
     ...defaultSettings(),
-    brain: "online",
+    brain: "other",
     online: { baseUrl: "https://api.example.com", model: "m" },
     folders: ["/docs"],
     speakReplies: "never",
@@ -326,7 +326,7 @@ test("finishing or skipping saves only that setup is done", async (t) => {
   const { setup, settings } = await setupWith(t, "none");
   const saved = {
     ...defaultSettings(),
-    brain: "online" as const,
+    brain: "other" as const,
     folders: ["/docs"],
     speakReplies: "always" as const,
   };
@@ -349,7 +349,7 @@ async function ipcWith(t: Parameters<typeof tempDir>[0], models: string[] = []) 
   const opened: string[] = [];
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",
@@ -441,7 +441,7 @@ test("saving the Settings screen keeps 'set up' as it is, whatever the window se
 test("without the main process's parts, nothing is asked, downloaded or opened", async (t) => {
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(false),
     notify: () => true,
     openPath: async () => "",
@@ -544,7 +544,7 @@ test("before the save starts, Cancel saves nothing; once it has started, Cancel 
   });
   const online = {
     ...defaultSettings(),
-    brain: "online" as const,
+    brain: "other" as const,
     online: { baseUrl: "https://api.example.com", model: "m" },
   };
   await settings.save(online);
@@ -566,7 +566,7 @@ test("once the save has started it finishes; Skip waits for it, then marks setup
   });
   const online = {
     ...defaultSettings(),
-    brain: "online" as const,
+    brain: "other" as const,
     online: { baseUrl: "https://api.example.com", model: "m" },
   };
   await settings.save(online);

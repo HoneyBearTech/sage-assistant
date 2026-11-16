@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { SAGE_MODELS } from "../shared/api.js";
+import { BRAINS, SAGE_MODELS } from "../shared/api.js";
+import { SERVICES } from "./brain/services.js";
 import { type CorruptFileHandler, readJson, writeJsonAtomic } from "./json-file.js";
 import type { Logger } from "./log.js";
 import { Serial } from "./serial.js";
@@ -23,13 +24,22 @@ export const appEntrySchema = z.object({
 });
 export type AppEntry = z.infer<typeof appEntrySchema>;
 
+function serviceModel(model: string) {
+  return z.object({ model: z.string().trim().max(200).default(model) }).default({ model });
+}
+
 /**
- * Everything in settings.json. There is deliberately no field for the online key: it lives in
+ * Everything in settings.json. There is deliberately no field for any key: they live in
  * the key store, encrypted. Unknown fields (a key pasted in by hand, say) are dropped on save.
  */
 export const settingsSchema = z.object({
   version: z.literal(1).default(1),
-  brain: z.enum(["local", "online"]).default("local"),
+  /**
+   * Where Sage thinks: on this computer, a ready-made online service, or another online service.
+   * Before there was a list, the one online choice was saved as "online": it loads as "other", with
+   * the same address, model and key. Added without a new version.
+   */
+  brain: z.preprocess((value) => (value === "online" ? "other" : value), z.enum(BRAINS)).default("local"),
   local: z
     .object({ model: z.string().trim().min(1).max(200).default(DEFAULT_LOCAL_MODEL) })
     .default({ model: DEFAULT_LOCAL_MODEL }),
@@ -39,6 +49,21 @@ export const settingsSchema = z.object({
       model: z.string().trim().max(200).default(""),
     })
     .default({ baseUrl: "", model: "" }),
+  /**
+   * The model of each ready-made online service (their addresses are fixed in the code). Added
+   * without a new version: a settings file saved before it existed loads with the defaults.
+   */
+  services: z
+    .object({
+      claude: serviceModel(SERVICES.claude.defaultModel),
+      openai: serviceModel(SERVICES.openai.defaultModel),
+      gemini: serviceModel(SERVICES.gemini.defaultModel),
+    })
+    .default(() => ({
+      claude: { model: SERVICES.claude.defaultModel },
+      openai: { model: SERVICES.openai.defaultModel },
+      gemini: { model: SERVICES.gemini.defaultModel },
+    })),
   apps: z
     .array(appEntrySchema)
     .max(100)

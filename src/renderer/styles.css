@@ -1089,3 +1089,29 @@ progress {
     clip-path: none;
   }
 }
+
+/* --- Settings: the brain list --- */
+
+/* Each brain's one-line note, under its choice. */
+.choice-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin: -4px 0 4px 26px;
+}
+
+/* What an online brain sends where, shown when one is picked: amber, like Sage's asking card. */
+.brain-notice {
+  color: var(--amber);
+  font-size: 13px;
+  margin: 0;
+}
+
+.brain-notice:empty {
+  display: none;
+}
+
+.brain-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

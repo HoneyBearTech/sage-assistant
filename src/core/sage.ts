@@ -2,13 +2,17 @@ import { join } from "node:path";
 import { Assistant } from "./assistant.js";
 import type { Brain, FetchLike } from "./brain/brain.js";
 import { LocalBrain } from "./brain/local.js";
-import { OnlineBrain, serviceOrigin } from "./brain/online.js";
+import { MessagesBrain } from "./brain/anthropic.js";
+import { GeminiBrain } from "./brain/gemini.js";
+import { OnlineBrain } from "./brain/online.js";
+import { ResponsesBrain } from "./brain/responses.js";
 import { RunnerClient } from "./brain/runner.js";
 import type { Launcher } from "./apps.js";
-import { type KeyStore, ServiceKeys } from "./keystore.js";
+import { type KeyStores, ServiceKeys } from "./keystore.js";
 import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
 import { NoticeBoard } from "./notices.js";
 import { NotesStore } from "./notes.js";
+import { OnlineServices } from "./online-services.js";
 import { RemindersStore } from "./reminders.js";
 import { type Clock, type Notifier, ReminderScheduler, systemClock } from "./scheduler.js";
 import { DuckDuckGoProvider } from "./search/duckduckgo.js";
@@ -27,7 +31,8 @@ import { Voice } from "./voice/voice.js";
 export interface SageDeps {
   /** Sage's own folder: Electron's app.getPath("userData"). */
   dataDir: string;
-  keyStore: KeyStore;
+  /** One key store per online brain (each company's, and another online service's). */
+  keyStores: KeyStores;
   presenter: ConfirmPresenter;
   notify: Notifier;
   openPath: PathOpener;
@@ -45,15 +50,19 @@ export interface SageDeps {
   setup?: SetupParts;
 }
 
-/** The main process's two boxes for the Welcome screen, and the web browser. */
+/**
+ * The main process's boxes for the Welcome screen and the key pages, and the web browser. A box
+ * before a key page opens: `confirmOpenPage`, the same kind of box as the install guide's.
+ */
 export type SetupParts = Pick<
   SetupDeps,
   "confirmPull" | "confirmOpenGuide" | "openExternal" | "timers" | "stallMs"
->;
+> & { confirmOpenPage?: (question: string, detail: string) => Promise<boolean> };
 
 const NO_SETUP: SetupParts = {
   confirmPull: async () => false,
   confirmOpenGuide: async () => false,
+  confirmOpenPage: async () => false,
   openExternal: async () => {
     throw new Error("No web browser here.");
   },
@@ -92,6 +101,8 @@ export interface Sage {
   voice: Voice;
   /** The Welcome screen's requests: the local model runner, a model download, the install guide. */
   setup: Setup;
+  /** Settings' requests for a ready-made service: Load models, Test, Get a key. */
+  services: OnlineServices;
 }
 
 export function createSage(deps: SageDeps): Sage {
@@ -102,7 +113,7 @@ export function createSage(deps: SageDeps): Sage {
 
   // Every key that passes through Sage is registered with the redactor, so even an unexpected
   // log line or action-log entry can't contain it.
-  const keyStore = new ServiceKeys(deps.keyStore, (key) => redactor.add(key));
+  const keyStore = new ServiceKeys(deps.keyStores, (key) => redactor.add(key));
 
   const notices = new NoticeBoard();
   // An unreadable data file is moved aside, never deleted; the user is told once, in the window.
@@ -170,7 +181,17 @@ export function createSage(deps: SageDeps): Sage {
     ...deps.setup,
   });
 
+  const setupParts = { ...NO_SETUP, ...deps.setup };
+  const services = new OnlineServices({
+    keys: keyStore,
+    logger,
+    confirmOpenPage: setupParts.confirmOpenPage ?? (async () => false),
+    openExternal: setupParts.openExternal,
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
+
   return {
+    services,
     assistant,
     settings,
     keyStore,
@@ -188,29 +209,53 @@ export function createSage(deps: SageDeps): Sage {
 }
 
 /**
- * The brain for one turn. An online brain is tied to the service it was made for: every request
- * in the turn asks for the key of that service only, so a key saved for another service (after
- * the settings changed mid-turn) is never sent to this one.
+ * The brain for one turn. An online brain is tied to the service it was made for: every request in
+ * the turn asks for the key of that brain only, for the exact address the request goes to. A
+ * company's key goes only to its fixed address; another online service's key only to the address it
+ * was saved for, so a key saved for another service (after the settings changed mid-turn) is never
+ * sent to this one.
  */
 export function brainFor(
   settings: Settings,
-  keyStore: Pick<ServiceKeys, "keyFor">,
+  keyStore: Pick<ServiceKeys, "keyForRequest">,
   deps: Pick<SageDeps, "fetch" | "localPort">,
   redact?: (text: string) => string,
 ): Brain {
-  if (settings.brain === "online") {
-    const origin = serviceOrigin(settings.online.baseUrl);
-    return new OnlineBrain({
-      baseUrl: settings.online.baseUrl,
-      model: settings.online.model,
-      getKey: async () => (origin ? keyStore.keyFor(origin) : null),
-      ...(redact ? { redact } : {}),
-      ...(deps.fetch ? { fetch: deps.fetch } : {}),
-    });
-  }
-  return new LocalBrain({
-    model: settings.local.model,
-    ...(deps.localPort ? { port: deps.localPort } : {}),
+  const common = {
+    ...(redact ? { redact } : {}),
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
-  });
+  };
+  switch (settings.brain) {
+    case "claude":
+      return new MessagesBrain({
+        model: settings.services.claude.model,
+        getKey: (url) => keyStore.keyForRequest("claude", url),
+        ...common,
+      });
+    case "openai":
+      return new ResponsesBrain({
+        model: settings.services.openai.model,
+        getKey: (url) => keyStore.keyForRequest("openai", url),
+        ...common,
+      });
+    case "gemini":
+      return new GeminiBrain({
+        model: settings.services.gemini.model,
+        getKey: (url) => keyStore.keyForRequest("gemini", url),
+        ...common,
+      });
+    case "other":
+      return new OnlineBrain({
+        baseUrl: settings.online.baseUrl,
+        model: settings.online.model,
+        getKey: (url) => keyStore.keyForRequest("other", url),
+        ...common,
+      });
+    default:
+      return new LocalBrain({
+        model: settings.local.model,
+        ...(deps.localPort ? { port: deps.localPort } : {}),
+        ...(deps.fetch ? { fetch: deps.fetch } : {}),
+      });
+  }
 }

@@ -73,7 +73,7 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 
 ## The online key
 
-- [ ] In Settings, choose the online brain, enter an address and model, paste a test key, and choose
+- [ ] In Settings, choose **Another online service**, enter an address and model, paste a test key, and choose
       **Save key** before **Save settings**: the status says "Key not saved: Save settings first, then
       save the key." and no `online-key.bin` exists. Choose **Save settings**, paste the key again and
       choose **Save key**: the key field empties and the status says a key is saved.
@@ -87,6 +87,43 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 - [ ] Change the address to a different service and choose **Save settings**: the status says the key
       was removed, and `online-key.bin` is gone.
 - [ ] Choose **Remove key**: `online-key.bin` is gone.
+- [ ] Switch back to "On this computer" and save.
+
+## Online brains: Claude, OpenAI and Gemini
+
+Needs a real key for at least one of the three (set a low spending limit on the company's site first).
+
+- [ ] Settings → Brain lists *On this computer*, *Claude*, *OpenAI*, *Gemini* and *Another online
+      service*, each with its one-line note; Tab and the arrow keys move through them, and the screen
+      reader reads each note.
+- [ ] Choose each of Claude, OpenAI and Gemini in turn: the line about what is sent to which company
+      appears, the model box shows that company's model, and the key status is that company's own.
+- [ ] Choose **Get a key**: Sage's box asks first (**Not now** is the default). **Not now** opens nothing;
+      **Open** opens the company's key page in the web browser.
+- [ ] Paste the key, choose **Save key**: the field empties and the status says a key is saved. A file
+      `claude-key.bin`, `openai-key.bin` or `gemini-key.bin` appears, unreadable in Notepad, and the key
+      can't be found in it or in `settings.json` with Ctrl+F.
+- [ ] Choose **Test**: "The key works: … answered."
+- [ ] Choose **Load models**: a list appears; picking one fills the model box, which can still be typed
+      in. Choose **Save settings**: the line about what is sent to which company shows.
+- [ ] Ask a question in Chat: the answer comes from that service.
+- [ ] Ask "open <an app from your list>": Sage's box asks first, exactly as with the local brain, and
+      **Don't allow** stops it.
+- [ ] Ask Sage to add a note, then to list notes: both work, and the answer uses the list.
+- [ ] With each of the three, ask "What notes and reminders do I have?" (two skills in one message):
+      the answer uses both lists, with no error (the service's thinking went back unchanged).
+- [ ] Paste a key, then pick another brain before **Save key**: the key box is empty.
+- [ ] Ask something, and while Sage is answering save a different model name: the answer stops with
+      "The brain settings changed…".
+- [ ] Save a second company's key: both files exist. **Remove key** for one: only its file is gone and
+      the other brain still answers.
+- [ ] Save a wrong key (change one character) and choose **Test**, then ask something: both say the key
+      wasn't accepted, in a plain sentence, without the service's own text.
+- [ ] Type a model name that doesn't exist and ask something: Sage says the company doesn't know that
+      model.
+- [ ] Turn off the network and ask something: "Sage can't reach … Check your internet connection."
+- [ ] A settings file from 0.1.1 with an online service (copy one in before starting): Sage shows
+      *Another online service* with the same address and model, and its saved key still works.
 - [ ] Switch back to "On this computer" and save.
 
 ## First-run setup
@@ -134,11 +171,12 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
       with the runner afterwards if you don't want to keep the 1.4 GB.)
 - [ ] **Skip.** **Settings → Set up Sage**, then **Skip setup**: the chat opens and nothing in Settings
       changed. Close Sage and start it again: it opens on the chat.
-- [ ] **An online service.** **Settings → Set up Sage** → **An online service**: Settings opens with "An
-      online model service" picked (not saved) and a line saying what to fill in. Choose "On this
-      computer" again and **Save settings**. Restart Sage: it opens on the chat.
+- [ ] **An online service.** **Settings → Set up Sage** → **An online service (Claude, OpenAI, Gemini or
+      another)**: Settings opens with the brain unchanged, the focus on *Claude*, and a line saying to
+      choose one, save, then save its key. Leave "On this computer" picked and choose **Save settings**.
+      Restart Sage: it opens on the chat.
 - [ ] **From the online service back to local.** If you have an online service set up (see "The online
-      key" above), save it with "An online model service", then **Settings → Set up Sage** → **On this
+      key" above), save it with "Another online service", then **Settings → Set up Sage** → **On this
       computer** → **Next** → **Standard** → **Use this model**: it says the Standard model is ready, and
       after **Next** and **Start chatting** the header shows "Brain: on this computer (qwen3:4b)". In Settings, the
       online address and model are still there, and the key is still saved.

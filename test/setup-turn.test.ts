@@ -5,8 +5,8 @@ import { SETTINGS_CHANGED_REPLY } from "../src/core/assistant.js";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
-import { CHANNELS } from "../src/shared/api.js";
-import { deferred, FakePresenter, fakeServer, json, MemoryKeyStore, tempDir } from "./helpers.js";
+import { CHANNELS, privacyLine } from "../src/shared/api.js";
+import { deferred, FakePresenter, fakeServer, json, memoryKeyStores, tempDir } from "./helpers.js";
 
 // A model download from the Welcome screen switches the brain to local. A turn that started
 // against the online service stops, as it does when Settings changes the brain: the old service's
@@ -29,7 +29,7 @@ test("switching to local through setup stops a turn running on the online servic
   });
   const sage = createSage({
     dataDir: await tempDir(t),
-    keyStore: new MemoryKeyStore(),
+    keyStores: memoryKeyStores(),
     presenter: new FakePresenter(true),
     notify: () => true,
     openPath: async () => "",
@@ -39,8 +39,14 @@ test("switching to local through setup stops a turn running on the online servic
   });
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
   const online = { ...defaultSettings(), brain: "online", online: { baseUrl: service.url, model: "m" } };
-  assert.deepEqual(await handlers[CHANNELS.saveSettings](online), { ok: true });
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: KEY, baseUrl: service.url }), { ok: true });
+  // The settings file from before the list of brains said "online": it is another online service.
+  assert.deepEqual(await handlers[CHANNELS.saveSettings](online), {
+    ok: true,
+    message: privacyLine("other"),
+  });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ brain: "other", key: KEY, baseUrl: service.url }), {
+    ok: true,
+  });
 
   const reply = handlers[CHANNELS.send]({ text: "what notes do I have?" });
   await arrived.promise;

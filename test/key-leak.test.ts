@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { EncryptedFileKeyStore } from "../src/core/keystore.js";
+import { encryptedKeyStores } from "../src/core/keystore.js";
 import { createSage } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
@@ -106,7 +106,7 @@ test("the online key never appears in any file, log line, reply or the chat hist
   const presenter = new FakePresenter(true);
   const sage = createSage({
     dataDir: dir,
-    keyStore: new EncryptedFileKeyStore(join(dir, "online-key.bin"), fakeEncryptor()),
+    keyStores: encryptedKeyStores(dir, fakeEncryptor()),
     presenter,
     notify: () => true,
     openPath: async () => "",
@@ -122,21 +122,23 @@ test("the online key never appears in any file, log line, reply or the chat hist
   });
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
 
-  assert.deepEqual(await handlers[CHANNELS.setKey]({ key: SENTINEL, baseUrl: "" }), { ok: true });
+  assert.deepEqual(await handlers[CHANNELS.setKey]({ brain: "other", key: SENTINEL, baseUrl: "" }), {
+    ok: true,
+  });
   const saved = await handlers[CHANNELS.saveSettings]({
     ...defaultSettings(),
     brain: "online",
     online: { baseUrl: service.url, model: "test-model", apiKey: SENTINEL },
     folders: [docs],
   });
-  assert.deepEqual(saved, { ok: true });
+  assert.equal((saved as { ok: boolean }).ok, true);
 
   const replies: unknown[] = [];
   replies.push(await handlers[CHANNELS.send]({ text: "do things" }));
   replies.push(await handlers[CHANNELS.send]({ text: "again" }));
   replies.push(await handlers[CHANNELS.send]({ text: "and again" }));
   const publicSettings = await handlers[CHANNELS.getSettings](undefined);
-  assert.equal((publicSettings as any).online.hasKey, true);
+  assert.equal((publicSettings as any).keys.other, true);
 
   // Make sure the flows really ran (otherwise the scan proves nothing).
   assert.ok(round >= 4);
@@ -171,4 +173,121 @@ test("the online key never appears in any file, log line, reply or the chat hist
     logLines.some((line) => line.includes("[redacted]")),
     "the redactor was exercised",
   );
+});
+
+test("the companies' keys never appear in any file, log line, reply, the chat or the window", async (t) => {
+  const dir = await tempDir(t);
+  const logLines: string[] = [];
+  const CLAUDE = "SENTINEL-CLAUDE-must-never-appear-0123456789";
+  const GEMINI = "SENTINEL-GEMINI-must-never-appear-0123456789";
+  const OPENAI = "SENTINEL-OPENAI-must-never-appear-0123456789";
+  let round = 0;
+  // Fake services at the companies' fixed addresses that echo their key back in every way they can.
+  const fetch = async (url: string, init: RequestInit): Promise<Response> => {
+    const headers = init.headers as Record<string, string>;
+    const reply = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    if (url.startsWith("https://api.anthropic.com/v1/models")) {
+      assert.equal(headers["x-api-key"], CLAUDE);
+      return reply(200, { data: [{ id: CLAUDE }, { id: "claude-sonnet-5-5" }] });
+    }
+    if (url.startsWith("https://api.anthropic.com/")) {
+      assert.equal(headers["x-api-key"], CLAUDE);
+      round++;
+      if (round === 1) {
+        return reply(200, {
+          content: [
+            { type: "text", text: `echo ${CLAUDE}` },
+            {
+              type: "tool_use",
+              id: "t1",
+              name: "add_note",
+              input: { title: CLAUDE, text: `the key is ${CLAUDE}` },
+            },
+          ],
+        });
+      }
+      if (round === 2) return reply(200, { content: [{ type: "text", text: `Done. Key: ${CLAUDE}` }] });
+      return reply(401, { type: "error", error: { type: "authentication_error", message: `bad ${CLAUDE}` } });
+    }
+    if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+      assert.equal(headers["x-goog-api-key"], GEMINI);
+      assert.ok(!url.includes(GEMINI));
+      return reply(200, {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: `gemini says ${GEMINI}` },
+                {
+                  functionCall: {
+                    name: "add_reminder",
+                    args: { text: GEMINI, due: new Date(Date.now() + 86_400_000).toISOString() },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+    }
+    assert.equal(headers.authorization, `Bearer ${OPENAI}`);
+    return reply(429, { error: { type: "insufficient_quota", code: "insufficient_quota", message: OPENAI } });
+  };
+  const sage = createSage({
+    dataDir: dir,
+    keyStores: encryptedKeyStores(dir, fakeEncryptor()),
+    presenter: new FakePresenter(true),
+    notify: () => true,
+    openPath: async () => "",
+    launch: async () => {},
+    logSink: (_level, line) => logLines.push(line),
+    fetch,
+  });
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  const answers: unknown[] = [];
+  answers.push(await handlers[CHANNELS.setKey]({ brain: "claude", key: CLAUDE, baseUrl: "" }));
+  answers.push(await handlers[CHANNELS.setKey]({ brain: "gemini", key: GEMINI, baseUrl: "" }));
+  answers.push(await handlers[CHANNELS.setKey]({ brain: "openai", key: OPENAI, baseUrl: "" }));
+  answers.push(await handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "claude" }));
+  answers.push(await handlers[CHANNELS.send]({ text: "note it" }));
+  answers.push(await handlers[CHANNELS.send]({ text: "again" }));
+  answers.push(await handlers[CHANNELS.listModels]({ company: "claude" }));
+  answers.push(await handlers[CHANNELS.testKey]({ company: "claude" }));
+  answers.push(await handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "gemini" }));
+  answers.push(await handlers[CHANNELS.send]({ text: "remind me" }));
+  answers.push(await handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "openai" }));
+  answers.push(await handlers[CHANNELS.send]({ text: "hello" }));
+  answers.push(await handlers[CHANNELS.testKey]({ company: "openai" }));
+  answers.push(await handlers[CHANNELS.getSettings](undefined));
+
+  // The flows really ran.
+  assert.ok(round >= 2);
+  const [note] = await sage.notes.list();
+  assert.equal(note?.text, "the key is [redacted]");
+  assert.ok((await sage.reminders.list()).some((reminder) => reminder.text === "[redacted]"));
+  assert.deepEqual((answers.at(-1) as { keys: unknown }).keys, {
+    claude: true,
+    openai: true,
+    gemini: true,
+    other: false,
+  });
+  assert.match(String(answers[11]), /credit or quota is used up/);
+  sage.logger.error(`an accidental log line with ${CLAUDE} and ${GEMINI} and ${OPENAI}`);
+
+  const files = await filesUnder(dir);
+  for (const sentinel of [CLAUDE, GEMINI, OPENAI]) {
+    const encodings = [
+      sentinel,
+      Buffer.from(sentinel).toString("base64"),
+      Buffer.from(sentinel).toString("hex"),
+    ];
+    for (const file of files) {
+      const content = await readFile(file, "latin1");
+      for (const form of encodings) assert.ok(!content.includes(form), `${file} contains a key`);
+    }
+    for (const text of [...logLines, JSON.stringify(answers), JSON.stringify(sage.assistant.transcript)]) {
+      assert.ok(!text.includes(sentinel), `leaked: ${text.slice(0, 200)}`);
+    }
+  }
 });

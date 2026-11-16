@@ -22,7 +22,38 @@ export const CHANNELS = {
   openInstallGuide: "sage:setup-open-guide",
   finishSetup: "sage:setup-finish",
   setSound: "sage:sound-set",
+  listModels: "sage:service-models",
+  testKey: "sage:service-test-key",
+  openKeyPage: "sage:service-key-page",
 } as const;
+
+/** The online services with a ready-made choice, each reached with the user's own key. */
+export const COMPANIES = ["claude", "openai", "gemini"] as const;
+export type Company = (typeof COMPANIES)[number];
+
+/** Every online brain: the three ready-made ones and "other" (an address and a key of the user's choice). */
+export const ONLINE_BRAINS = [...COMPANIES, "other"] as const;
+export type OnlineBrainChoice = (typeof ONLINE_BRAINS)[number];
+
+/** Where Sage thinks: on this computer (the default), or one of the online brains. */
+export const BRAINS = ["local", ...ONLINE_BRAINS] as const;
+export type BrainChoice = (typeof BRAINS)[number];
+
+/** What the window shows for each online brain: no addresses, only names. */
+export const BRAIN_LABELS: Record<OnlineBrainChoice, { name: string; company: string }> = {
+  claude: { name: "Claude", company: "Anthropic" },
+  openai: { name: "OpenAI", company: "OpenAI" },
+  gemini: { name: "Gemini", company: "Google" },
+  other: { name: "Another online service", company: "that service" },
+};
+
+/** The one line shown the first time an online brain is picked or saved: what goes where. */
+export function privacyLine(brain: OnlineBrainChoice): string {
+  const label = BRAIN_LABELS[brain];
+  return brain === "other"
+    ? "With another online service, what you type and the results of Sage's skills (for example a list of files it found) are sent to that service."
+    : `With ${label.name}, what you type and the results of Sage's skills (for example a list of files it found) are sent to ${label.company}.`;
+}
 
 /**
  * What the main process tells the window by itself, one way. The window can't answer these, and no
@@ -83,11 +114,19 @@ export interface PublicAppEntry {
   args: string[];
 }
 
-/** Settings as the window sees them. The key itself is never sent; only whether one is saved. */
+/**
+ * Settings as the window sees them. Keys themselves are never sent; only whether each online brain
+ * has one saved (`keys`).
+ */
 export interface PublicSettings {
-  brain: "local" | "online";
+  brain: BrainChoice;
   local: { model: string };
-  online: { baseUrl: string; model: string; hasKey: boolean };
+  /** Another online service: its address and model. */
+  online: { baseUrl: string; model: string };
+  /** The model of each ready-made online service. */
+  services: Record<Company, { model: string }>;
+  /** Whether a key is saved for each online brain. */
+  keys: Record<OnlineBrainChoice, boolean>;
   apps: PublicAppEntry[];
   folders: string[];
   /** Read replies aloud: after voice messages, always, or never. */
@@ -100,9 +139,10 @@ export interface PublicSettings {
   sound: boolean;
 }
 
-export type SettingsInput = Omit<PublicSettings, "online" | "setupDone" | "sound"> & {
-  online: { baseUrl: string; model: string };
-};
+export type SettingsInput = Omit<PublicSettings, "keys" | "setupDone" | "sound">;
+
+/** Load models: the names the service lists today, or why it couldn't be asked. */
+export type ModelListResult = { ok: true; models: string[] } | { ok: false; message: string };
 
 /** `message` on success is something the user should know, such as a key that was removed. */
 export type Result = { ok: true; message?: string } | { ok: false; message: string };
@@ -182,9 +222,20 @@ export interface SageApi {
   resetChat(): Promise<void>;
   getSettings(): Promise<PublicSettings>;
   saveSettings(settings: SettingsInput): Promise<Result>;
-  /** `baseUrl` is the address on screen; the key is saved only if it is the saved address. */
-  setKey(key: string, baseUrl: string): Promise<Result>;
-  clearKey(): Promise<Result>;
+  /**
+   * Saves the key for one online brain. For "other", `baseUrl` is the address on screen; the key is
+   * saved only if it is the saved address. A ready-made service's key is bound to that company's
+   * fixed address, held in the main process.
+   */
+  setKey(brain: OnlineBrainChoice, key: string, baseUrl: string): Promise<Result>;
+  /** Removes one online brain's key; the others stay. */
+  clearKey(brain: OnlineBrainChoice): Promise<Result>;
+  /** Asks the company for its current model list, with its saved key. Only the id is sent. */
+  listModels(company: Company): Promise<ModelListResult>;
+  /** Checks the company's saved key with one small request that costs nothing (listing models). */
+  testKey(company: Company): Promise<Result>;
+  /** The main process asks first, then opens the company's key page (a fixed address it holds). */
+  openKeyPage(company: Company): Promise<GuideResult>;
   chooseFolder(): Promise<string | null>;
   chooseApp(): Promise<string | null>;
   /**

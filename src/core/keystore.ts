@@ -1,5 +1,8 @@
 import { readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
+import type { Company, OnlineBrainChoice } from "../shared/api.js";
+import { requestOrigin, SERVICES } from "./brain/services.js";
 import { writeFileAtomic } from "./json-file.js";
 import { Serial } from "./serial.js";
 
@@ -13,7 +16,7 @@ export interface SavedKey {
   origin: string | null;
 }
 
-/** Where the online service key is kept. The app uses an encrypted file; tests use a fake. */
+/** Where one online brain's key is kept. The app uses an encrypted file each; tests use a fake. */
 export interface KeyStore {
   has(): Promise<boolean>;
   get(): Promise<SavedKey | null>;
@@ -56,38 +59,92 @@ export class KeyStoreError extends Error {}
 /** What happened to the saved key when the online address was saved. */
 export type KeyAfterSave = "none" | "kept" | "bound" | "removed";
 
+/** One key per online brain: each company's, and another online service's. */
+export type KeySlot = OnlineBrainChoice;
+export type KeyStores = Readonly<Record<KeySlot, KeyStore>>;
+
 /**
- * The key as the rest of Sage uses it. Each key belongs to one service, and is handed out only for
- * that service; key operations run one at a time, so a read can't land between two writes.
+ * Where each key is kept in Sage's folder. "other" keeps the file from before there was a list of
+ * brains, so the key saved by Sage 0.1.1 still works.
+ */
+export const KEY_FILES: Readonly<Record<KeySlot, string>> = {
+  other: "online-key.bin",
+  claude: "claude-key.bin",
+  openai: "openai-key.bin",
+  gemini: "gemini-key.bin",
+};
+
+export function encryptedKeyStores(dataDir: string, encryptor: Encryptor): KeyStores {
+  const store = (slot: KeySlot) => new EncryptedFileKeyStore(join(dataDir, KEY_FILES[slot]), encryptor);
+  return { other: store("other"), claude: store("claude"), openai: store("openai"), gemini: store("gemini") };
+}
+
+/** The origin a company's key is bound to: fixed, never taken from settings or the window. */
+export function companyOrigin(slot: KeySlot): string | null {
+  return slot === "other" ? null : SERVICES[slot].origin;
+}
+
+/**
+ * The keys as the rest of Sage uses them. Each key belongs to one service, and is handed out only
+ * for a request to that service: a company's key only for its own fixed address, another online
+ * service's key only for the address it was entered for. Keys are kept apart, so switching brains
+ * never mixes them, and removing one leaves the others. Key operations run one at a time, so a read
+ * can't land between two writes.
  */
 export class ServiceKeys {
   private readonly serial = new Serial();
 
   constructor(
-    private readonly store: KeyStore,
+    private readonly stores: KeyStores,
     /** Told about every key Sage handles, so the log redactor can remove it. */
     private readonly seen: (key: string) => void = () => {},
   ) {}
 
-  has(): Promise<boolean> {
-    return this.serial.run(() => this.store.has());
+  has(slot: KeySlot): Promise<boolean> {
+    return this.serial.run(() => this.stores[slot].has());
   }
 
-  /** Saves a key for the service at `origin` (null when no address is saved yet). */
-  async set(key: string, origin: string | null): Promise<void> {
+  /** Whether each online brain has a key saved: all the window may learn about keys. */
+  hasKeys(): Promise<Record<KeySlot, boolean>> {
+    return this.serial.run(async () => ({
+      claude: await this.stores.claude.has(),
+      openai: await this.stores.openai.has(),
+      gemini: await this.stores.gemini.has(),
+      other: await this.stores.other.has(),
+    }));
+  }
+
+  /** Saves a company's key, bound to that company's fixed address. */
+  async setCompanyKey(company: Company, key: string): Promise<void> {
     const clean = validateKey(key);
     this.seen(clean);
-    await this.serial.run(() => this.store.set(clean, origin));
+    await this.serial.run(() => this.stores[company].set(clean, SERVICES[company].origin));
   }
 
-  clear(): Promise<void> {
-    return this.serial.run(() => this.store.clear());
+  /** Saves another online service's key for the service at `origin` (null when no address is saved yet). */
+  async setOtherKey(key: string, origin: string | null): Promise<void> {
+    const clean = validateKey(key);
+    this.seen(clean);
+    await this.serial.run(() => this.stores.other.set(clean, origin));
   }
 
-  /** The key, but only if it belongs to the service at `origin`; otherwise null. */
-  keyFor(origin: string): Promise<string | null> {
+  /** Removes one brain's key; the others stay. */
+  clear(slot: KeySlot): Promise<void> {
+    return this.serial.run(() => this.stores[slot].clear());
+  }
+
+  /**
+   * The key for a request about to be sent to `url`, or null. Checked at the point of the request:
+   * the address must be https (or http to this computer), a company's key goes only to that
+   * company's fixed origin, and any key only to the origin it was saved for.
+   */
+  keyForRequest(slot: KeySlot, url: string): Promise<string | null> {
     return this.serial.run(async () => {
-      const saved = await this.store.get();
+      const origin = requestOrigin(url);
+      if (!origin) return null;
+      const fixed = companyOrigin(slot);
+      if (fixed !== null && origin !== fixed) return null;
+      const saved = await this.stores[slot].get();
       if (!saved) return null;
       this.seen(saved.key);
       return saved.origin === origin ? saved.key : null;
@@ -95,22 +152,23 @@ export class ServiceKeys {
   }
 
   /**
-   * Called after the online address is saved, with the new address's origin. A key saved before
-   * any address belongs to the first one saved; a key for another service is removed, so it can
-   * never be sent to the new one.
+   * Called after another online service's address is saved, with the new address's origin. A key
+   * saved before any address belongs to the first one saved; a key for another service is removed,
+   * so it can never be sent to the new one. The companies' keys aren't touched.
    */
   afterAddressSaved(origin: string | null): Promise<KeyAfterSave> {
+    const store = this.stores.other;
     return this.serial.run(async () => {
-      const saved = await this.store.get();
+      const saved = await store.get();
       if (!saved) return "none";
       this.seen(saved.key);
       if (saved.origin === origin) return "kept";
       if (saved.origin === null) {
         if (origin === null) return "kept";
-        await this.store.set(saved.key, origin);
+        await store.set(saved.key, origin);
         return "bound";
       }
-      await this.store.clear();
+      await store.clear();
       return "removed";
     });
   }
@@ -123,6 +181,13 @@ export function validateKey(key: string): string {
     throw new KeyStoreError("That doesn't look like a key: it should be 8 to 500 characters.");
   }
   if (/\s/.test(trimmed)) throw new KeyStoreError("A key can't contain spaces or line breaks.");
+  // Keys are plain letters, digits and ordinary symbols (all three companies' are); anything else
+  // was pasted by mistake, and couldn't be sent in a request header anyway.
+  if (!/^[\x21-\x7e]+$/.test(trimmed)) {
+    throw new KeyStoreError(
+      "That doesn't look like a key: it can only contain letters, digits and ordinary symbols such as - and _.",
+    );
+  }
   return trimmed;
 }
 

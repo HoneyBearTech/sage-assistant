@@ -111,7 +111,7 @@ export function installFakeDom(ids: readonly string[], sage: unknown): Map<strin
   for (const id of ids) elements.set(id, new FakeElement(id));
   const form = elements.get("settings-form");
   if (form) {
-    form.radios = ["local", "online"].map((value) => {
+    form.radios = ["local", "claude", "openai", "gemini", "other"].map((value) => {
       const radio = new FakeElement("input");
       radio.value = value;
       return radio;

@@ -6,8 +6,9 @@
 > **Allow**: Sage does what the box says, and a deleted note can't be brought back.
 >
 > **An online brain sees what you type.** With the local brain (Ollama) your messages stay on your
-> computer. With an online model service, every message and every tool result in the conversation is
-> sent to that service.
+> computer. With an online brain (Claude, OpenAI, Gemini or another service), every message and every
+> tool result in the conversation is sent to that company. Online brains cost money per use, and Sage
+> can't cap what you spend: set a limit on the company's own website.
 
 ## Getting started
 

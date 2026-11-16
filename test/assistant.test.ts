@@ -10,10 +10,13 @@ import {
 import { ActionLog } from "../src/core/skills/action-log.js";
 import { ApprovalGate } from "../src/core/skills/gate.js";
 import { defineSkill, SkillRegistry } from "../src/core/skills/registry.js";
+import type { BrainReply } from "../src/core/brain/brain.js";
 import {
   captureLogs,
+  deferred,
   FakePresenter,
   ScriptedBrain,
+  settled,
   tempDir,
   textReply,
   toolCall,
@@ -136,8 +139,31 @@ test("tool calls per message are capped", async (t) => {
   assert.equal(await assistant.send("go"), "ok");
   assert.equal(ran.length, MAX_TOOL_CALLS_PER_TURN);
   const last = brain.calls[1]!;
-  assert.deepEqual(last.tools, [], "no more tools offered once the cap is reached");
+  assert.equal(last.allowTools, false, "no more skills once the cap is reached");
+  assert.deepEqual(last.tools, brain.calls[0]!.tools, "the same tools list for every request of a message");
+  assert.equal(brain.calls[0]!.allowTools, true);
   assert.equal(last.messages.filter((m) => m.role === "tool" && m.content.startsWith("Not run")).length, 3);
+});
+
+test("the request list only grows within a message, and a service's own reply goes back as it came", async (t) => {
+  const replay = {
+    format: "messages" as const,
+    items: [{ type: "thinking", thinking: "", signature: "c2ln" }],
+  };
+  const brain = new ScriptedBrain([
+    { ok: true, content: "", toolCalls: [toolCall("fetch_page", {})], replay },
+    toolReply(toolCall("fetch_page", {})),
+    textReply("done"),
+  ]);
+  const { assistant } = await setup(t, brain);
+  assert.equal(await assistant.send("go"), "done");
+  const [first, second, third] = brain.calls;
+  // Every request starts with exactly the previous one: nothing earlier is changed or dropped.
+  assert.deepEqual(second!.messages.slice(0, first!.messages.length), first!.messages);
+  assert.deepEqual(third!.messages.slice(0, second!.messages.length), second!.messages);
+  const assistantTurn = second!.messages.find((m) => m.role === "assistant");
+  assert.deepEqual(assistantTurn && "replay" in assistantTurn ? assistantTurn.replay : undefined, replay);
+  assert.equal(JSON.stringify(assistant.transcript).includes("c2ln"), false, "never in the chat history");
 });
 
 test("a model that keeps calling tools is stopped after a few rounds", async (t) => {
@@ -166,4 +192,33 @@ test("history is trimmed to the most recent messages", async (t) => {
   for (let i = 0; i < HISTORY_LIMIT; i++) await assistant.send(`message ${i}`);
   assert.equal(assistant.transcript.length, HISTORY_LIMIT);
   assert.equal(assistant.transcript.at(-2)!.content, `message ${HISTORY_LIMIT - 1}`);
+});
+
+test("each turn gives the brain a signal that fires when the turn is stopped or the chat cleared", async (t) => {
+  for (const stop of ["stopTurn", "reset"] as const) {
+    const held = deferred<BrainReply>();
+    const brain = new ScriptedBrain([() => textReply("unused")]);
+    brain.chat = async (messages, tools, options = {}) => {
+      brain.calls.push({
+        messages,
+        tools,
+        allowTools: options.allowTools !== false,
+        signal: options.signal!,
+      });
+      return held.promise;
+    };
+    const { assistant } = await setup(t, brain);
+    const turn = assistant.send("hello");
+    while (brain.calls.length === 0) await settled();
+    const signal = brain.calls[0]!.signal!;
+    assert.equal(signal.aborted, false);
+    assistant[stop]();
+    assert.equal(signal.aborted, true, stop);
+    held.resolve(textReply("too late"));
+    await turn;
+    // The next turn gets a new signal of its own.
+    brain.chat = ScriptedBrain.prototype.chat.bind(brain);
+    await assistant.send("again");
+    assert.equal(brain.calls.at(-1)!.signal!.aborted, false);
+  }
 });

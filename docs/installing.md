@@ -4,7 +4,7 @@ There are two ways to get Sage:
 
 - **On Windows, the installer** from the GitHub Releases page: see
   [Installing on Windows](#installing-on-windows). You still need the local model runner for the local
-  brain (step 1 below), or an online model service.
+  brain (step 1 below), or an online brain (Claude, OpenAI, Gemini or another service).
 - **From the source code**, on Windows and Linux: steps 1 to 4 below.
 
 Both share the same data folder, so notes, reminders, settings and the key you made in a copy run from
@@ -33,7 +33,7 @@ source are there in the installed app too.
 4. It installs for your Windows account only, without asking for admin rights, adds **Sage** to the Start
    menu and the desktop, and starts Sage.
 5. **Install the local model runner**, as in [step 1 below](#local-model-runner), unless you use only
-   an online model service. Sage's Welcome screen then downloads a model for you (see
+   an online brain. Sage's Welcome screen then downloads a model for you (see
    [The Welcome screen](#the-welcome-screen)).
 6. **Set it up** as in [step 4](#4-set-it-up).
 
@@ -131,9 +131,9 @@ PowerShell or a terminal, `cd sage-assistant`, and run `npm start`.
 
 The first time Sage starts, it opens a **Welcome screen** instead of the chat. It goes step by step:
 
-1. **Where should Sage think?** **On this computer** (recommended, private) or **An online service**.
-   The online choice opens Settings, where you enter the service's address, model and key (see
-   [The online brain](#the-online-brain-optional)), then choose **Save settings**. Setup counts as done
+1. **Where should Sage think?** **On this computer** (recommended, private) or **An online service
+   (Claude, OpenAI, Gemini or another)**. The online choice opens Settings, where you pick the brain and
+   save its key (see [The online brain](#the-online-brain-optional)), then choose **Save settings**. Setup counts as done
    from that choice, so if you close Sage before saving, use **Settings → Set up Sage** to start again.
 2. **The local model runner.** Sage checks whether the runner is running. If it can't reach it (not
    installed yet, or not started; Sage can't tell which), it shows short install steps and **Open the
@@ -175,9 +175,26 @@ Open **Settings** in Sage's window:
 
 ### The online brain (optional)
 
-If you'd rather use an online model service that offers the chat-completions format:
+Online brains are paid per use with your own key (Google has a free tier for some Gemini models).
+**Sage can't cap what you spend**, so set a spending limit on the company's own website first.
 
-1. In Settings, choose **An online model service**.
+**Claude, OpenAI or Gemini:**
+
+1. In Settings, under **Brain**, choose **Claude**, **OpenAI** or **Gemini**, and choose **Save settings**.
+   Sage says in one line what it will send to which company.
+2. Choose **Get a key**. Sage asks in its own box, then opens the company's key page in your web
+   browser (Anthropic Console, the OpenAI platform or Google AI Studio). Create a key there.
+3. Paste it into the key box and choose **Save key**, then **Test**: "The key works" means you're done.
+4. The model box starts with a sensible default. **Load models** shows the company's current models to
+   pick from, or type a name, then **Save settings**.
+
+Each company's key is saved on its own, encrypted with your system's protection, and is only ever sent
+to that company's own address. Switching between brains keeps every key; **Remove key** deletes only
+the key of the brain picked.
+
+**Another online service** that offers the chat-completions format:
+
+1. In Settings, choose **Another online service**.
 2. Enter the service's address (for example `https://api.example.com`; Sage adds `/v1/chat/completions`)
    and the model name the service gives you.
 3. Choose **Save settings**.
@@ -195,7 +212,8 @@ box is empty belongs to the first address you save. If Sage is answering while y
 ask again.
 
 With an online brain, everything you type, and what Sage reads for you during the conversation (search
-results, notes), is sent to that service.
+results, notes), is sent to that company: Anthropic for Claude, OpenAI for OpenAI, Google for Gemini,
+or the service at the address you entered.
 
 ## Voice and the microphone
 

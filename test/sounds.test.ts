@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createSounds, TONES, type ToneContext } from "../src/renderer/sounds.js";
 import { deferred, settled } from "./helpers.js";
-import { startWindow } from "./window.js";
+import { NO_KEYS, SAMPLE_SERVICES, startWindow } from "./window.js";
 
 // The window's sound effects (src/renderer/sounds.ts): made with oscillators, off by default, and no
 // audio at all until a sound is wanted while sound is on.
@@ -217,7 +217,9 @@ test("a settings read that started before the Sound switch was used doesn't undo
       return {
         brain: "local",
         local: { model: "small-model" },
-        online: { baseUrl: "", model: "", hasKey: false },
+        online: { baseUrl: "", model: "" },
+        services: SAMPLE_SERVICES,
+        keys: NO_KEYS,
         apps: [],
         folders: [],
         speakReplies: "voice",

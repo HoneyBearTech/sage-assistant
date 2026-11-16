@@ -200,13 +200,23 @@ test("nothing in the app sends telemetry or analytics", async () => {
     "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/d1e6c30921780b8508d04b492dfb3ce8a51605d4/";
   const allowed = new Set([
     ...["encoder_model.ort", "decoder_model_merged.ort", "tokens.txt"].map((name) => `${speechModel}${name}`),
-    // The one page Sage can open in the web browser, after asking: its own install guide.
+    // The pages Sage can open in the web browser, after asking: its own install guide, and each
+    // company's key page.
     "https://github.com/HoneyBearTech/sage-assistant/blob/main/docs/installing.md#local-model-runner",
+    "https://console.anthropic.com/settings/keys",
+    "https://platform.openai.com/api-keys",
+    "https://aistudio.google.com/apikey",
+    // The three ready-made services' fixed origins (their keys go only there).
+    "https://api.anthropic.com",
+    "https://api.openai.com",
+    "https://generativelanguage.googleapis.com",
   ]);
+  const services = /^https:\/\/(api\.anthropic\.com|api\.openai\.com|generativelanguage\.googleapis\.com)\//;
   const urls = [...all.matchAll(/https?:\/\/[^\s"'`)]+/g)].map((m) => m[0]);
   for (const url of urls) {
     assert.ok(
       allowed.has(url) ||
+        services.test(url) ||
         /^https:\/\/html\.duckduckgo\.com\/html\/$|^http:\/\/\$\{LOCAL_HOST\}|^https:\/\/api\.example\.com|^https:\/\/duckduckgo\.com$/.test(
           url,
         ),
@@ -249,15 +259,35 @@ test("the speech helper never logs, writes files or opens a connection", async (
   }
 });
 
-test("Sage opens one web address, its install guide, and only after asking", async () => {
+test("Sage opens only its install guide and the companies' key pages, fixed addresses, after asking", async () => {
   const calls: string[] = [];
   for (const entry of await readdir(join(root, "src"), { recursive: true, withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
     const text = await readFile(join(entry.parentPath, entry.name), "utf8");
     for (const match of text.matchAll(/openExternal\(([^)]*)\)/g)) calls.push(`${entry.name}: ${match[1]}`);
   }
-  // main.ts hands Electron's openExternal to Setup, which calls it with the fixed address only.
-  assert.deepEqual(calls.sort(), ["main.ts: url", "setup.ts: INSTALL_GUIDE_URL"]);
+  // main.ts hands Electron's openExternal to Setup and the online services, which call it with
+  // fixed addresses only.
+  assert.deepEqual(calls.sort(), [
+    "main.ts: url",
+    "online-services.ts: SERVICES[company].keyPage",
+    "setup.ts: INSTALL_GUIDE_URL",
+  ]);
+  const services = await readFile(join(root, "src", "core", "online-services.ts"), "utf8");
+  const page = services.slice(services.indexOf("async openKeyPage("));
+  assert.ok(
+    page.indexOf("confirmOpenPage(") < page.indexOf("openExternal(SERVICES[company].keyPage)"),
+    "asked before opening a key page",
+  );
+  // The key pages are constants in the main process, not settings or anything from the window.
+  const table = await readFile(join(root, "src", "core", "brain", "services.ts"), "utf8");
+  for (const address of [
+    'keyPage: "https://console.anthropic.com/settings/keys"',
+    'keyPage: "https://platform.openai.com/api-keys"',
+    'keyPage: "https://aistudio.google.com/apikey"',
+  ]) {
+    assert.ok(table.includes(address), address);
+  }
   const setup = await readFile(join(root, "src", "core", "setup.ts"), "utf8");
   const opening = setup.slice(setup.indexOf("async openInstallGuide("), setup.indexOf("async finish("));
   assert.ok(
@@ -267,6 +297,11 @@ test("Sage opens one web address, its install guide, and only after asking", asy
   // The window's request carries nothing that could become an address.
   const preload = await readFile(join(root, "src", "preload", "preload.ts"), "utf8");
   assert.match(preload, /openInstallGuide: \(\) => ipcRenderer\.invoke\(CHANNELS\.openInstallGuide\),/);
+  // A key page is asked for by the company's id alone.
+  assert.match(
+    preload,
+    /openKeyPage: \(company\) => ipcRenderer\.invoke\(CHANNELS\.openKeyPage, \{ company \}\),/,
+  );
 });
 
 test("the app icon is a 512 by 512 PNG and electron-builder names it", async () => {

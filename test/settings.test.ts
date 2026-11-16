@@ -10,7 +10,7 @@ import {
   validateKey,
 } from "../src/core/keystore.js";
 import { DEFAULT_LOCAL_MODEL, defaultSettings, SettingsStore } from "../src/core/settings.js";
-import { captureLogs, fakeEncryptor, MemoryKeyStore, tempDir } from "./helpers.js";
+import { captureLogs, fakeEncryptor, memoryKeyStores, tempDir } from "./helpers.js";
 
 test("first run gives the local brain and empty lists", async (t) => {
   const dir = await tempDir(t);
@@ -27,15 +27,21 @@ test("saving validates, and drops anything that isn't a setting, such as a key",
   const store = new SettingsStore(dir, captureLogs().logger);
   const result = await store.save({
     ...defaultSettings(),
-    brain: "online",
+    brain: "claude",
     apiKey: "should-not-be-saved",
     online: { baseUrl: "https://api.example.com", model: "m", key: "also-not-saved" },
+    services: {
+      claude: { model: "c", key: "not-this-either" },
+      openai: { model: "o" },
+      gemini: { model: "g" },
+    },
   });
   assert.ok(result.ok);
   const text = await readFile(join(dir, "settings.json"), "utf8");
   assert.ok(!text.includes("should-not-be-saved"));
   assert.ok(!text.includes("also-not-saved"));
-  assert.equal((await store.load()).brain, "online");
+  assert.ok(!text.includes("not-this-either"));
+  assert.equal((await store.load()).brain, "claude");
 });
 
 test("a settings file saved before voice loads unchanged, with Read replies aloud at its default", async (t) => {
@@ -55,6 +61,8 @@ test("a settings file saved before voice loads unchanged, with Read replies alou
   const loaded = await new SettingsStore(dir, logger).load();
   assert.deepEqual(loaded, {
     ...before,
+    brain: "other",
+    services: defaultSettings().services,
     speakReplies: "voice",
     setupDone: false,
     theme: "dark",
@@ -82,7 +90,13 @@ test("a settings file saved before first-run setup loads unchanged, and shows th
   await writeFile(join(dir, "settings.json"), text);
   const { logger, lines } = captureLogs();
   const store = new SettingsStore(dir, logger);
-  assert.deepEqual(await store.load(), { ...before, setupDone: false, theme: "dark", sound: false });
+  assert.deepEqual(await store.load(), {
+    ...before,
+    services: defaultSettings().services,
+    setupDone: false,
+    theme: "dark",
+    sound: false,
+  });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
   assert.equal(defaultSettings().setupDone, false);
@@ -108,7 +122,12 @@ test("a settings file saved by Sage 0.1.1 loads unchanged, with the dark look an
   await writeFile(join(dir, "settings.json"), text);
   const { logger, lines } = captureLogs();
   const store = new SettingsStore(dir, logger);
-  assert.deepEqual(await store.load(), { ...before, theme: "dark", sound: false });
+  assert.deepEqual(await store.load(), {
+    ...before,
+    services: defaultSettings().services,
+    theme: "dark",
+    sound: false,
+  });
   assert.deepEqual(lines, [], "not treated as unreadable");
   assert.equal(await readFile(join(dir, "settings.json"), "utf8"), text, "the file isn't touched by loading");
   assert.equal(defaultSettings().theme, "dark");
@@ -225,31 +244,35 @@ test("without system encryption the key is refused, never stored in the clear", 
   assert.equal(decodeSavedKey('{"version":2,"key":"k","origin":null}'), null);
 });
 
-test("a key is handed out only for the service it belongs to", async () => {
+test("another online service's key is handed out only for the service it belongs to", async () => {
   const seen: string[] = [];
-  const keys = new ServiceKeys(new MemoryKeyStore(), (key) => seen.push(key));
+  const stores = memoryKeyStores();
+  const keys = new ServiceKeys(stores, (key) => seen.push(key));
+  const at = (origin: string) => `${origin}/v1/chat/completions`;
   assert.equal(await keys.afterAddressSaved("https://a.example"), "none");
-  await keys.set("key-for-service-a", "https://a.example");
-  assert.equal(await keys.keyFor("https://a.example"), "key-for-service-a");
-  assert.equal(await keys.keyFor("https://b.example"), null);
-  assert.equal(await keys.keyFor("https://a.example:8443"), null);
+  await keys.setOtherKey("key-for-service-a", "https://a.example");
+  assert.equal(await keys.keyForRequest("other", at("https://a.example")), "key-for-service-a");
+  assert.equal(await keys.keyForRequest("other", at("https://b.example")), null);
+  assert.equal(await keys.keyForRequest("other", at("https://a.example:8443")), null);
+  assert.equal(await keys.keyForRequest("other", "http://a.example/v1"), null, "never over plain http");
+  assert.equal(await keys.keyForRequest("other", "not an address"), null);
   assert.equal(await keys.afterAddressSaved("https://a.example"), "kept");
   assert.equal(await keys.afterAddressSaved("https://b.example"), "removed");
-  assert.equal(await keys.has(), false);
+  assert.equal(await keys.has("other"), false);
   // A key saved before any address belongs to the first address saved, and to nothing before that.
-  await keys.set("key-saved-first", null);
-  assert.equal(await keys.keyFor("https://a.example"), null);
+  await keys.setOtherKey("key-saved-first", null);
+  assert.equal(await keys.keyForRequest("other", at("https://a.example")), null);
   assert.equal(await keys.afterAddressSaved(null), "kept");
   assert.equal(await keys.afterAddressSaved("https://b.example"), "bound");
-  assert.equal(await keys.keyFor("https://b.example"), "key-saved-first");
+  assert.equal(await keys.keyForRequest("other", at("https://b.example")), "key-saved-first");
   assert.ok(
     seen.includes("key-for-service-a") && seen.includes("key-saved-first"),
     "the redactor knows both",
   );
-  await assert.rejects(keys.set("short", null), /8 to 500/);
+  await assert.rejects(keys.setOtherKey("short", null), /8 to 500/);
   assert.ok(!seen.includes("short"), "a refused key isn't registered");
-  await keys.clear();
-  assert.equal(await keys.keyFor("https://b.example"), null);
+  await keys.clear("other");
+  assert.equal(await keys.keyForRequest("other", at("https://b.example")), null);
 });
 
 test("keys are checked, and Linux's plain-text fallback doesn't count as protection", () => {

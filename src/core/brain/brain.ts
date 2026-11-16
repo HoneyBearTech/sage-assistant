@@ -6,12 +6,28 @@ export interface ToolCall {
   name: string;
   /** The arguments exactly as the model sent them. Validated by the skill's schema before use. */
   args: unknown;
+  /**
+   * The id the service gave this call, if it gave one. It goes back only to the same brain, with
+   * this call's result, so the service can match them; it is never used for approval (Sage's own
+   * `id` is). The local and chat-completions brains never set it.
+   */
+  serviceId?: string;
+}
+
+/**
+ * A service's own reply, kept exactly as it arrived so the same brain can send it back unchanged
+ * on the next request of the same message (thinking blocks, signatures and all). It lives only in
+ * the current message's request list: never shown, logged, saved or put in the chat history.
+ */
+export interface Replay {
+  format: "messages" | "generate" | "responses";
+  items: unknown[];
 }
 
 export type ChatMessage =
   | { role: "system"; content: string }
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
+  | { role: "assistant"; content: string; toolCalls?: ToolCall[]; replay?: Replay }
   | { role: "tool"; toolCallId: string; name: string; content: string };
 
 export interface ToolSpec {
@@ -22,12 +38,39 @@ export interface ToolSpec {
 }
 
 export type BrainReply =
-  | { ok: true; content: string; toolCalls: ToolCall[] }
+  | { ok: true; content: string; toolCalls: ToolCall[]; replay?: Replay }
   | { ok: false; message: string };
+
+export interface ChatOptions {
+  /**
+   * False once the skill limit for the message is reached: the brain must not let the model ask for
+   * a skill (an online service that checks its earlier replies against the request is sent the same
+   * tools with tool use switched off; the others are sent none). True by default.
+   */
+  allowTools?: boolean;
+  /**
+   * Fires when the message's turn is stopped (New chat, or the brain, its model or its key changed).
+   * A brain checks it before every request it sends, a retry included, and the request in flight is
+   * cancelled with it; after that, nothing more is sent.
+   */
+  signal?: AbortSignal;
+}
+
+/** What a brain returns once its turn was stopped; the assistant never shows it. */
+export const STOPPED_MESSAGE = "(Stopped.)";
 
 export interface Brain {
   readonly kind: "local" | "online";
-  chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply>;
+  /** One request. `tools` is the same list for every request of a message. */
+  chat(messages: ChatMessage[], tools: ToolSpec[], options?: ChatOptions): Promise<BrainReply>;
+}
+
+/**
+ * The signal for one request: its own time limit, plus the turn's signal if there is one. Both
+ * cancel the request.
+ */
+export function requestSignal(timeout: AbortSignal, turn: AbortSignal | undefined): AbortSignal {
+  return turn ? AbortSignal.any([timeout, turn]) : timeout;
 }
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;

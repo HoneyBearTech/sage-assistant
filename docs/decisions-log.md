@@ -2,6 +2,54 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - brains-api
+
+**Context:** the owner asked for Sage to use the big online model services as well as local models,
+including through subscriptions. After the research ([docs/reports/2026-11-16-online-brains.md](reports/2026-11-16-online-brains.md))
+he chose API keys for Claude, OpenAI and Gemini, and a subscription sign-in only for GitHub Copilot (a later
+job).
+
+**Decisions:**
+- **No consumer subscription sign-in** for Claude, OpenAI or Google: Anthropic's and Google's terms forbid
+  other apps from using it, and OpenAI's don't allow it anywhere the team could find.
+- **One key per company, bound to its fixed address and checked at the moment of every request**
+  (`ServiceKeys.keyForRequest`), not only when saved. Redirects are refused. Another online service keeps
+  0.1.1's rules and key file, so 0.1.1 settings carry over unchanged.
+- **Each service in its own format, no new packages.** Claude: the Messages format. Gemini: Google's own
+  format rather than its chat-completions-style address, because newer Gemini models need their "thought
+  signatures" sent back, which Google documents only for its own format. OpenAI: the Responses format
+  (changed during review), because OpenAI's documentation says its recommended model can call tools only
+  there.
+- **A service's reply goes back unchanged within a message** (thinking blocks, signatures, encrypted
+  reasoning), with the same system text and skills list for every request of the message; after the skill
+  limit, tool use is switched off rather than the list changed. Newer Claude accounts refuse a request whose
+  earlier turns changed. Earlier messages keep only the final text. If a thinking signature is refused,
+  Sage strips the thinking once, retries, and keeps it out for the rest of the message.
+- **Stopping a turn** (New chat, or a change of brain, model or key) cancels every later request of that
+  turn, the retry included, and each request reads its key fresh.
+- **Errors are mapped from the status and known type fields** (plus a few fixed phrases searched for and
+  never shown); a service's own error text is never shown, logged or saved.
+- **Privacy wording promises only what Sage controls:** what goes to which company, that Sage asks OpenAI
+  not to keep the conversation, and that each company keeps requests under its own policies.
+- **The research report was cut to a public summary** that names only the services Sage talks to now or
+  plans to, and the plan paraphrases the owner's request (security review).
+
+**Review:** QA passed every plan step. The Security Officer found no way for a key to leak; its should-fix
+items (one model check per company at a time, printable-ASCII keys, a stale model check after a key change)
+were fixed. The Auditor found, over two rounds: a pasted key that followed a brain switch, OpenAI's default
+model needing the Responses format, Gemini calls without arguments rejected, Claude's thinking blocks
+dropped during skill use, real credit and daily-quota errors missed, turns not stopped on a model or key
+change, Gemini call ids dropped, cut-off replies shown as answers, a non-deterministic test, a retry sent
+after a turn was stopped, an over-strong storage promise, refused thinking coming back, and failed OpenAI
+replies shown as empty answers. All were fixed with tests. A second security review wasn't available this
+month. Nothing was tried against the real services (no keys on the team's machine); the Windows checklist
+covers that.
+
+**Open after two fix rounds:** a Test or Load models result still on its way when that company's key
+changes can be shown in Settings (Auditor, should-fix, display only). It is on the roadmap as a minor item.
+
+**Rejected findings:** none.
+
 ## 2026-11-16 - hud-look
 
 **Context:** the owner asked for Sage's interface, visuals and experience to closely follow
