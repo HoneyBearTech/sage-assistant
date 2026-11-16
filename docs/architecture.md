@@ -17,6 +17,7 @@ used.
 |  (src/renderer)     (src/preload)  | SkillRegistry + ApprovalGate + action log      |    |
 |                                    | Notes, reminders, scheduler, settings, keys    |    |
 |                                    | Voice: speech file, its download, recordings   |    |
+|                                    | Setup: the runner's status, a model download   |    |
 |                                    +-----------------------------------------------+    |
 |                                       |         |          |         |         |          |
 |                                       |         |          |         |   Speech helper    |
@@ -32,11 +33,11 @@ used.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat and the settings screen. Runs sandboxed with no Node access; inserts text only with `textContent`. |
-| Preload | `src/preload/preload.ts` | Exposes `window.sage` with fourteen typed methods through `contextBridge`; nothing else. |
+| Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat, the settings screen and, on first start, the Welcome screen. Runs sandboxed with no Node access; inserts text only with `textContent`. |
+| Preload | `src/preload/preload.ts` | Exposes `window.sage` with twenty typed methods through `contextBridge`; nothing else. |
 | IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service, saves a new key only when the address on screen is the saved one, and stops a turn in progress when the brain or the service changes. |
 | Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits up to 5 seconds for the system to confirm it. Reports whether it was confirmed; it never reports a guess. |
-| Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog, notifications, `shell.openPath`, the app launcher and the encrypted key store. Checks the sender of every IPC call. |
+| Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog, the Welcome screen's two boxes (before a model download and before opening the install guide), notifications, `shell.openPath`, `shell.openExternal` (used only for the install guide's fixed address), the app launcher and the encrypted key store. Checks the sender of every IPC call. |
 | Window security | `src/main/security.ts` | The window options, the CSP and the URL and permission rules, as pure functions the tests check. |
 | Assistant | `src/core/assistant.ts` | Sends the conversation and the skill list to the brain, runs the tool calls it returns through the registry, and stops after six tool calls or six rounds per message (three each for `add_note` and `add_reminder`). **New chat** abandons a turn in progress: it runs no further tool calls and writes nothing to the history. |
 | Brain | `src/core/brain/` | `LocalBrain` (Ollama's `/api/chat` on `127.0.0.1:11434`) and `OnlineBrain` (`<base>/v1/chat/completions`). Settings pick one for each message. |
@@ -49,6 +50,9 @@ used.
 | Voice | `src/core/voice/` | `model.ts`: the speech model's three files (pinned address, exact size, SHA-256). `download.ts`: the download (https only, at most five forwards, size cap, fingerprint check, 30-second stall limit, moved into place only when all match, leftovers deleted). `transcriber.ts`: starts the speech helper, one recording at a time, 60-second limit, a fresh helper after a crash. `helper-protocol.ts`: the validated messages between the two, and the helper's own logic. `voice.ts`: ties them together; the download only after the main process's own box says Download, and the files' fingerprints checked again once per run before first use. |
 | Speech helper | `src/helper/voice-helper.ts` | Built as `dist/voice-helper.cjs` and run as Electron's utility process. The only code that loads the speech engine (`sherpa-onnx-node`); gets sound, sends back text. |
 | Window voice | `src/renderer/voice-controls.ts`, `voice.ts`, `voice-text.ts` | Hold to talk (Ctrl+Space or the Talk button), recording with the standard recorder, turning it into 16 kHz mono sound, the download offer, and spoken replies with the window's own speech and the PC's installed voices. `renderer.ts` only finds the elements. |
+| Runner client | `src/core/brain/runner.ts` | The local model runner's other requests on the same fixed `127.0.0.1` address as chat: the model list (`/api/tags`), a model download (`/api/pull`, progress read line by line, each line capped at 64 KB and checked, stopped after 2 minutes without a new line) and a model's details (`/api/show`, whether it can use tools). No redirects, short time limits for the quick requests, replies size-capped; the runner's own text is never shown or logged. |
+| Setup | `src/core/setup.ts` | First-run setup: the runner's status for the saved local model and Sage's two models, one download at a time of one of those two (only after the main process's box says Download, stopped when Sage quits), saving it as the local model once it is there, the skills check, opening the install guide's one fixed address after asking, and marking setup done. |
+| Window welcome | `src/renderer/welcome.ts`, `welcome-text.ts` | The Welcome screen's steps and texts: where Sage thinks, the runner, a model (with progress polled every half second) and Done. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
 
 ## Skills
@@ -127,6 +131,36 @@ stall (30 seconds with no reply or no new bytes) deletes `.partial`, and so does
 each run, before the first recording goes to the helper, `Voice` reads the three files again and checks
 their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the download is offered again.
 
+## How first-run setup works
+
+1. On start, the window loads the settings before it shows anything. If `setupDone` is false (a first
+   start, or a settings file from before this setting existed), it shows the **Welcome screen**;
+   otherwise Chat. Reminders and other notices are collected only from then on, and confirmed only while
+   Chat is visible, so they wait while the Welcome screen is open. Ctrl+Space works only on Chat.
+2. **Where should Sage think?** *On this computer* goes on to the runner. *An online service* marks setup
+   as done and opens Settings, where the address, model and key are saved as before.
+3. **The local model runner.** The main process asks the runner for its model list on `127.0.0.1:11434`
+   and answers *not reachable* (not installed or not started: Sage can't tell them apart without running
+   programs), *an answer Sage couldn't read*, *running without the saved model* or *ready*, and which of
+   Sage's two models it has. **Open the install guide** asks in the main process's box first, then opens
+   one fixed address, the "local model runner" section of `docs/installing.md` on GitHub, with
+   `shell.openExternal`. Nothing the window sends is used; if no browser opens, the address is shown to
+   copy.
+4. **A model.** The window sends only `standard` or `smaller`; the main process maps them to `qwen3:4b`
+   and `qwen3:1.7b`. A model the runner already has needs no download. Otherwise the main process asks
+   in its own box (the size, and that it needs an internet connection and free disk space and that the
+   runner downloads and checks the files), then asks the runner to download it (`/api/pull`, streamed).
+   The window asks for the progress every half second. Cancel, Sage quitting, an error line or 2 minutes
+   without a new line stop it, each with Sage's own message. Only once the model is there is it saved as
+   the local model (with the brain set to local), and the runner is asked whether the model can use tools.
+5. **Done** says which model Sage uses and how to talk to it; **Start chatting** marks setup as done.
+   **Skip setup** does the same at any step, and stops a download in progress. **Set up Sage** in Settings
+   opens the Welcome screen again.
+
+`setupDone` is changed only by the Welcome screen's own request; a Settings save keeps the stored value.
+Each of the Welcome screen's requests loads the settings, changes only its own fields and saves them
+under the settings lock, so nothing else in the file changes.
+
 ## Where data is kept
 
 Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Windows and
@@ -134,7 +168,7 @@ Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Win
 
 | File | Written by | Contents |
 | --- | --- | --- |
-| `settings.json` | `SettingsStore` | Brain switch, model names, online address, app list, approved folders. No secrets: the schema has no field for one and drops unknown fields. |
+| `settings.json` | `SettingsStore` | Brain switch, model names, online address, app list, approved folders, Read replies aloud, and whether setup is done. No secrets: the schema has no field for one and drops unknown fields. |
 | `online-key.bin` | `EncryptedFileKeyStore` | The online key, encrypted with Electron `safeStorage` (DPAPI on Windows, the desktop keyring on Linux). |
 | `notes.json` | `NotesStore` | Notes (id, title, text, times). |
 | `reminders.json` | `RemindersStore` | Reminders (id, text, due time, when it fired). |
@@ -162,13 +196,15 @@ Recordings and their words are never written to disk or logged.
 | Speech engine | sherpa-onnx-node 2.0.1 (Apache-2.0) | Offline speech recognition, ready-built for Windows and Linux, with no install scripts. Sage's only run-time dependency, and its only native code. Loaded only in the speech helper. |
 | Speech model | Moonshine tiny, English (MIT) | Small and fast; downloaded once, after asking. |
 
-There are no vendor SDKs: both brains, the search and the speech file download use `fetch`. Spoken
+There are no vendor SDKs: both brains, the runner client, the search and the speech file download use
+`fetch`. Spoken
 replies use the window's built-in speech, with no package.
 
 ## Packaging
 
 - `npm run build` writes everything the app needs into `dist/`: `main.cjs`, `preload.cjs`,
-  `voice-helper.cjs` and `renderer/` (`index.html`, `styles.css`, `renderer.js`). `package.json`'s `main`
+  `voice-helper.cjs` and `renderer/` (`index.html`, `styles.css`, `renderer.js`, which includes the
+  Welcome screen). `package.json`'s `main`
   points at `dist/main.cjs`. zod is bundled into the bundles, so it is a dev dependency.
 - **The one run-time dependency** is the speech engine, `sherpa-onnx-node`, marked external in
   `scripts/build.ts` so the helper loads it from `node_modules`. npm installs only the ready-built package

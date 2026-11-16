@@ -8,6 +8,23 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **First-run setup: a Welcome screen.** The first time Sage starts, a Welcome screen in its window sets
+  it up step by step: where Sage thinks (on this computer, or an online service, which opens Settings);
+  whether the local model runner is running, with **Check again**, short install steps and **Open the
+  install guide**; a model, **Standard** (`qwen3:4b`, about 2.5 GB) or **Smaller** (`qwen3:1.7b`, about
+  1.4 GB), with already-downloaded models marked; and Done. **Skip setup** is always there, and
+  **Settings → Set up Sage** opens the screen again. Settings files from earlier versions load unchanged
+  and show the Welcome screen once; skipping or finishing changes nothing else.
+- **A model download through the local model runner**, only after you agree in Sage's own box
+  ("Download the Standard model (about 2.5 GB)?"), with progress, **Cancel** and **Try again**. The runner
+  downloads the model and checks its files; Sage shows only its own messages (offline, not enough disk
+  space, model not found, or another error), stops a download that makes no progress for 2 minutes, and
+  saves the model as the local model only once it is there. Afterwards Sage asks the runner whether the
+  model can use its skills and says so if not.
+- **Sage's first link out:** **Open the install guide** asks first ("Open Sage's install guide in your
+  web browser?"), then opens one fixed address, the local model runner section of Sage's own install
+  guide on GitHub. If no browser opens, Sage shows the address to copy. Nothing else can be opened.
+
 - **Voice: hold to talk.** Hold Ctrl+Space while Sage's window is focused, or press and hold the new
   **Hold to talk** button, and speak (up to 30 seconds). Sage works out what you said on your PC, with the
   sherpa-onnx speech engine and the Moonshine tiny English model, and puts the words in the message box
@@ -80,3 +97,10 @@ All notable changes to Sage are documented here. The format follows
 - **Project files and checks**: licence, security policy, contribution guide, governance, code of conduct,
   support policy, issue and pull request templates, and `npm run verify` (lint and format, typecheck, tests
   with an 80% coverage floor, a public-repo checker and a secret scan).
+
+### Changed
+
+- When the local model runner can't be reached, or the model isn't downloaded, the chat message points
+  to **Settings → Set up Sage** instead of a command to type.
+- The talk key (Ctrl+Space) works only while the chat is shown, and Sage's window starts with the chat
+  hidden until it knows whether to show the Welcome screen.

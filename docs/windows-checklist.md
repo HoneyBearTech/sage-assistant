@@ -2,8 +2,9 @@
 
 Short manual checks for a Windows 10 or 11 PC, for the parts the automated tests can't reach (the real
 window, the native confirmation box, notifications, the key encryption, the microphone and the voices).
-Run them after a change to the window, the skills, the key store or voice, and before any release. It
-takes about 15 minutes, the [Voice](#voice) section about 10 more, and the
+Run them after a change to the window, the skills, the key store, voice or first-run setup, and before
+any release. It takes about 15 minutes, the [First-run setup](#first-run-setup) section about 20 more
+(it downloads a model), the [Voice](#voice) section about 10 more, and the
 [Installed app](#installed-app) section about 10 more.
 
 Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (see
@@ -12,7 +13,10 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
 ## Start
 
 - [ ] `npm run verify` passes in PowerShell.
-- [ ] `npm start` opens Sage's window, titled "Sage", with no errors in the terminal.
+- [ ] `npm start` opens Sage's window, titled "Sage", with no errors in the terminal. The first time
+      after updating to a version with first-run setup, the Welcome screen opens instead of the chat
+      (once): choose **Skip setup**. The chat opens, and your apps, folders and online settings are
+      unchanged in Settings.
 - [ ] Starting a second copy (`npm start` in another PowerShell window) brings the first window forward
       instead of opening another.
 - [ ] The header shows "Brain: on this computer (qwen3:4b)".
@@ -84,6 +88,56 @@ Before you start: Ollama is installed and `ollama pull qwen3:4b` has finished (s
       was removed, and `online-key.bin` is gone.
 - [ ] Choose **Remove key**: `online-key.bin` is gone.
 - [ ] Switch back to "On this computer" and save.
+
+## First-run setup
+
+Run this section after a change to the Welcome screen, the runner client or the setup code, and before
+any release. You need the network for the download (the Smaller model is about 1.4 GB). To see the
+Welcome screen again at any time, choose **Settings → Set up Sage**.
+
+- [ ] **No runner.** Quit the local model runner (its icon by the clock → Quit). Choose **Settings → Set
+      up Sage**: the Welcome screen opens with no tabs, the focus on "Where should Sage think?", and
+      **Skip setup** at the top. Choose **On this computer**: it says Sage can't reach the local model
+      runner (not installed yet, or not running), with install steps, **Open the install guide**, and
+      **Check again**. **Next** is greyed out.
+- [ ] **The install guide box.** Choose **Open the install guide**: Sage's own box asks *"Open Sage's
+      install guide in your web browser?"*, with **Not now** selected. Choose **Not now**: nothing opens,
+      and the screen says so. Choose it again, then **Open**: the web browser opens the "local model
+      runner" part of `docs/installing.md` on GitHub, and nothing else opens.
+- [ ] **Runner stopped, then started.** Start the runner again and choose **Check again**: it says the
+      local model runner is running, and **Next** works.
+- [ ] **Runner without the model.** Choose **Next**: the Standard model shows "Already downloaded." (from
+      the setup at the top of this checklist) and its button says **Use this model**. Choose **Smaller**:
+      the button says **Download**.
+- [ ] **The download box.** Choose **Download**: Sage's box asks *"Download the Smaller model (about 1.4
+      GB)?"*, says it needs an internet connection and free disk space and that the local model runner
+      downloads and checks the files, with **Not now** selected. **Not now**: it says the model wasn't
+      downloaded, and nothing downloads.
+- [ ] **Cancel.** **Download**, then **Download** in the box: a progress bar and "Downloading… N of M MB"
+      appear within a second, with **Cancel**. Choose **Cancel**: it says "Cancelled." and offers **Try
+      again**. Settings → Local model is unchanged. (Whether the runner keeps the part it already has is
+      up to the runner; note what you see.)
+- [ ] **Offline.** **Try again**, then **Download**; once it is downloading, turn the network off. Within
+      about 2 minutes Sage stops it with a plain message (that this PC may be offline, or "The download
+      made no progress for 2 minutes…"), never the runner's own wording, and offers **Try again**. Turn
+      the network back on.
+- [ ] **A real download.** **Try again**, then **Download**: the progress goes up to the full size, then
+      it says "The Smaller model is ready." with **Next**, and no warning about skills. Choose **Next**:
+      "Sage is ready" says Sage will think with the Smaller model (qwen3:1.7b) and how to talk to it.
+      Choose **Start chatting**: the chat opens, the header shows "Brain: on this computer (qwen3:1.7b)",
+      and a message gets a reply.
+- [ ] **Already there.** **Settings → Set up Sage** → **On this computer** → **Next** → **Standard** →
+      **Use this model**: no box and no download; it says the Standard model is ready. **Start chatting**:
+      the header shows qwen3:4b again.
+- [ ] **Skip.** **Settings → Set up Sage**, then **Skip setup**: the chat opens and nothing in Settings
+      changed. Close Sage and start it again: it opens on the chat.
+- [ ] **An online service.** **Settings → Set up Sage** → **An online service**: Settings opens with "An
+      online model service" picked (not saved) and a line saying what to fill in. Choose "On this
+      computer" again and **Save settings**. Restart Sage: it opens on the chat.
+- [ ] **Notices and the talk key.** Add a reminder for one minute from now, then **Settings → Set up
+      Sage** and wait on the Welcome screen until it is due (with notifications off in Windows, it goes to
+      the window): when you choose **Skip setup**, the reminder is in the chat. On the Welcome screen,
+      Ctrl+Space does nothing.
 
 ## Voice
 

@@ -32,8 +32,9 @@ source are there in the installed app too.
    only for a file from the Releases page whose checksum matched.
 4. It installs for your Windows account only, without asking for admin rights, adds **Sage** to the Start
    menu and the desktop, and starts Sage.
-5. **Install the local model runner and a model**, as in [step 1 below](#local-model-runner), unless
-   you use only an online model service.
+5. **Install the local model runner**, as in [step 1 below](#local-model-runner), unless you use only
+   an online model service. Sage's Welcome screen then downloads a model for you (see
+   [The Welcome screen](#the-welcome-screen)).
 6. **Set it up** as in [step 4](#4-set-it-up).
 
 **Updating:** download the newer installer from the Releases page, check it the same way, and run it.
@@ -76,7 +77,9 @@ starts Ollama in the background (look for its icon by the clock).
 **Linux:** follow the instructions on [ollama.com/download](https://ollama.com/download) for your
 distribution. Their install script sets Ollama up as a service; read it before you run it.
 
-Then download a model that can use tools. In PowerShell or a terminal:
+**The model.** The first time Sage starts, its [Welcome screen](#the-welcome-screen) checks that the
+runner is running and has it download one of Sage's two models, so you don't need a terminal. To
+download it yourself instead, in PowerShell or a terminal:
 
 ```sh
 ollama pull qwen3:4b
@@ -123,6 +126,34 @@ the command window open while you use Sage: closing it closes Sage. To start Sag
 PowerShell or a terminal, `cd sage-assistant`, and run `npm start`.
 
 ## 4. Set it up
+
+### The Welcome screen
+
+The first time Sage starts, it opens a **Welcome screen** instead of the chat. It goes step by step:
+
+1. **Where should Sage think?** **On this computer** (recommended, private) or **An online service**.
+   The online choice opens Settings, where you enter the service's address, model and key (see
+   [The online brain](#the-online-brain-optional)).
+2. **The local model runner.** Sage checks whether the runner is running. If it can't reach it (not
+   installed yet, or not started; Sage can't tell which), it shows short install steps and **Open the
+   install guide**. Sage first asks in its own box, then opens the
+   [local model runner](#local-model-runner) part of this guide in your web browser; if no browser
+   opens, it shows the address to copy. When the runner is running, choose **Check again**.
+3. **A model.** **Standard** (`qwen3:4b`, about 2.5 GB, Sage's default) or **Smaller, for PCs with less
+   memory** (`qwen3:1.7b`, about 1.4 GB, faster but makes more mistakes). A model already downloaded is
+   marked, and needs no download. **Download** asks first in Sage's own box, with the size; it needs an
+   internet connection and free disk space. The local model runner downloads the model and checks its
+   files (Sage doesn't download or check it itself, unlike the speech file). You see the progress, and
+   can **Cancel** at any time; a download that makes no progress for 2 minutes is stopped. Once it is
+   there, Sage uses it as the local model, and checks with the runner that the model can use Sage's
+   skills.
+4. **Done.** **Start chatting** opens the chat.
+
+**Skip setup** is always there. Skipping or finishing changes nothing else (apps, folders, the online
+service and its key stay as they are), and the Welcome screen doesn't come back by itself. To see it
+again, choose **Settings → Set up Sage**.
+
+### Settings
 
 Open **Settings** in Sage's window:
 
@@ -238,6 +269,10 @@ the local model runner (its models are in its own folder).
 | --- | --- |
 | "Sage can't reach the local model runner. Start it, or open Settings → Set up Sage for help, then try again." | Start the local model runner. On Windows, open it from the Start menu; on Linux, check its service, or start it from a terminal (see [step 1](#local-model-runner)). **Settings → Set up Sage** checks it for you. |
 | "The local model "…" isn't downloaded yet." | Open **Settings → Set up Sage** and download one of Sage's two models; or download the model with the local model runner's own command (see [step 1](#local-model-runner)), or change Settings → Local model to one the runner has. |
+| "The download made no progress for 2 minutes, so Sage stopped it." | Check that the PC is online, then choose **Try again**. |
+| "There isn't enough free disk space for the model." | Free up some space (the Standard model needs about 2.5 GB, the Smaller one about 1.4 GB), then choose **Try again**. |
+| "The local model runner couldn't find that model." | Update the local model runner, then choose **Try again**. |
+| "Sage couldn't open your web browser." | Copy the address it shows into your web browser. |
 | "The online service didn't accept the key." | Save the key again in Settings, and check it with the service. |
 | "Search is unavailable right now." | The search page didn't answer or blocked the request. Try again later. |
 | "Sage can't use the microphone because it's blocked." | Allow it in Windows's microphone settings; see [Voice and the microphone](#voice-and-the-microphone). |

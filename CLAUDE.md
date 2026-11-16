@@ -42,7 +42,8 @@ strike them through with a reason.
 
 | Path | What it is |
 | --- | --- |
-| `src/core/brain/` | The `Brain` interface, `LocalBrain` (fixed to `127.0.0.1:11434`, `/api/chat`) and `OnlineBrain` (`<base>/v1/chat/completions`). Replies validated with zod. |
+| `src/core/brain/` | The `Brain` interface, `LocalBrain` (fixed to `127.0.0.1:11434`, `/api/chat`) and `OnlineBrain` (`<base>/v1/chat/completions`). Replies validated with zod. `runner.ts`: the runner's model list, model download (streamed, line-capped, 2-minute stall limit) and model details, on the same fixed address. |
+| `src/core/setup.ts` | First-run setup: the runner's status, downloading one of Sage's two models through the runner (after the main process's box), the install guide's one fixed address (after its box), and `setupDone`. |
 | `src/core/skills/` | The skill registry, the built-in skills, the ask-first `ApprovalGate`, the untrusted-text wrapper and the JSONL action log. |
 | `src/core/assistant.ts` | One conversation: sends messages to the brain, runs tool calls through the registry, caps calls per turn. |
 | `src/core/notes.ts`, `reminders.ts`, `scheduler.ts` | Notes and reminders as atomic JSON files in `userData`; the reminder scheduler with an injectable clock, which marks a reminder shown only after the notifier confirms it. |
@@ -54,7 +55,7 @@ strike them through with a reason.
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
 | `src/main/` | The Electron main process: `main.ts` (thin wiring), `security.ts` (window options, CSP, URL and permission rules), `ipc.ts` (validated handlers), `fuses-config.ts`. |
 | `src/preload/preload.ts` | Exposes the typed `window.sage` API through `contextBridge`; nothing else. |
-| `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. Voice is in `voice-controls.ts` (hold to talk, the download offer, spoken replies), `voice.ts` (recorder, 16 kHz conversion, speech) and `voice-text.ts`; `renderer.ts` only finds the elements. |
+| `src/renderer/` | The chat window: plain TypeScript, HTML and CSS, no framework. Voice is in `voice-controls.ts` (hold to talk, the download offer, spoken replies), `voice.ts` (recorder, 16 kHz conversion, speech) and `voice-text.ts`; the Welcome screen is in `welcome.ts` and `welcome-text.ts`; `renderer.ts` only finds the elements. |
 | `scripts/` | Build, public-repo checker, secret scan. |
 | `electron-builder.json` | The installer settings: app id, the name "Sage" (only here; never `productName` in `package.json`, which would move the data folder), the NSIS installer, `asarUnpack` for the speech engine's native files, and the fuses, which must match `src/main/fuses-config.ts` (a test checks). |
 | `test/` | Tests and saved search pages (`test/fixtures/`). `test/window.ts` starts the real window script on the fake DOM (`fake-dom.ts`) with stand-ins for the microphone, recorder, audio and speech (`fake-media.ts`). |
@@ -94,6 +95,15 @@ strike them through with a reason.
 - **The speech engine** (`sherpa-onnx-node` and its `sherpa-onnx-<platform>-<arch>` packages) is updated
   as one Renovate pull request: check install scripts again, keep its native files unpacked, and run the
   Voice section of `docs/windows-checklist.md` before merging.
+- **First-run setup.** The window names only `standard` or `smaller`, never a model name; a model is
+  downloaded by the local model runner, not by Sage, only after the main process's own box returns
+  Download, and saved as the local model only once it is there. The runner's replies are capped and
+  checked, and its text is never shown or logged. Sage opens exactly one web address, the install
+  guide (`INSTALL_GUIDE_URL` in `src/core/setup.ts`), only from the main process and only after its box
+  returns Open; never add another, or take an address from the window, a reply or a page. `setupDone`
+  is changed only by `finishSetup`; a Settings save keeps it, and setup requests change only their own
+  fields through `SettingsStore.update`. Notices are confirmed and Ctrl+Space works only while Chat is
+  visible.
 - **Tests never use the real network**, real settings or real user data: fake servers on `127.0.0.1`,
   temporary folders, fake key store, fake clock.
 - **Logic in `src/core/`** where tests reach it; keep `src/main/main.ts` thin.
@@ -112,7 +122,7 @@ strike them through with a reason.
   sherpa-onnx-node 2.0.1 (the one run-time dependency) with the Moonshine tiny English model.
 - Sage's data lives in Electron's `userData` folder (`%APPDATA%\sage-assistant` on Windows,
   `~/.config/sage-assistant` on Linux).
-- Planned jobs, one pull request each: first-run setup; later wake word, better voices, signing and
-  updates, macOS. See `docs/roadmap.md`.
+- Planned jobs, one pull request each: wake word, better voices, signing and updates, macOS. See
+  `docs/roadmap.md`.
 - The review machine runs Linux without a display, so Electron itself isn't started in the tests;
   `docs/windows-checklist.md` lists the manual checks to run on Windows.
