@@ -322,13 +322,13 @@ it.
 
 | Code | What it means | What to try |
 | --- | --- | --- |
-| `SAGE-RUN-01` | The local model runner didn't answer: it isn't installed yet, or it isn't running. Sage can't tell which. | Install it with the steps under [local model runner](#local-model-runner), or start it (on Windows, from the Start menu), then choose **Check again**. |
-| `SAGE-RUN-02` | The runner answered, but with something Sage couldn't read: usually an old runner, or another program using the runner's port (11434). | Update the local model runner and start it again, and check that nothing else uses port 11434; then choose **Check again** (or **Try again**). |
-| `SAGE-MOD-01` | The runner couldn't download the model and didn't say why. | Choose **Try again**. If it keeps happening, restart the runner, or download the model with the runner's own command (see [step 1](#local-model-runner)). |
+| `SAGE-RUN-01` | The local model runner didn't answer: it isn't installed, or isn't running. Sage can't tell which. | Install it with the steps under [local model runner](#local-model-runner), or start it (on Windows, from the Start menu), then choose **Check again**. |
+| `SAGE-RUN-02` | The local model runner answered with something Sage couldn't read. Usually it is an old runner, or another program is using the runner's port (11434). | Update the local model runner and start it again, and check that nothing else uses port 11434; then choose **Check again** (or **Try again**). |
+| `SAGE-MOD-01` | The local model runner couldn't download the model, for a reason it didn't say. | Choose **Try again**. If it keeps happening, restart the runner, or download the model with the runner's own command (see [step 1](#local-model-runner)). |
 | `SAGE-MOD-02` | There isn't enough free disk space for the model. | Free up some space (Standard needs about 2.5 GB, Smaller about 1.4 GB), then choose **Try again**. |
-| `SAGE-MOD-03` | The runner couldn't find the model. | Update the local model runner, then choose **Try again**. |
-| `SAGE-MOD-04` | Another model download was still running. | Wait for it to finish or choose **Cancel**, then **Try again**; restarting Sage stops it too. |
-| `SAGE-NET-01` | The runner couldn't reach the internet to download the model. | Check that the PC is online (and that a firewall or proxy lets the runner out), then choose **Try again**. |
+| `SAGE-MOD-03` | The local model runner couldn't find the model. | Update the local model runner, then choose **Try again**. |
+| `SAGE-MOD-04` | A model download was already running. | Wait for it to finish or choose **Cancel**, then **Try again**; restarting Sage stops it too. |
+| `SAGE-NET-01` | The local model runner couldn't reach the internet to download the model. | Check that the PC is online (and that a firewall or proxy lets the runner out), then choose **Try again**. |
 | `SAGE-NET-02` | The download made no progress for 2 minutes, so Sage stopped it. | Check that the PC is online, then choose **Try again**. |
-| `SAGE-SET-01` | The model is downloaded, but Sage couldn't save it as the local model in its settings file. | Check that the disk isn't full and Sage's [data folder](#where-your-data-is) can be written to, then choose **Try again** (no new download is needed). |
-| `SAGE-APP-01` | Sage couldn't run the check itself: the window's request to the rest of Sage failed. | Choose **Check again** or **Try again**. If it keeps happening, restart Sage, and report it as an issue with the code and the diagnostics. |
+| `SAGE-SET-01` | The model is ready, but Sage couldn't save it as the local model. The model is downloaded; Sage's settings file couldn't be written. | Check that the disk isn't full and Sage's [data folder](#where-your-data-is) can be written to, then choose **Try again** (no new download is needed). |
+| `SAGE-APP-01` | Sage couldn't run the check (its own request failed). The window's request to the rest of Sage failed, not the runner. | Choose **Check again** or **Try again**. If it keeps happening, restart Sage, and report it as an issue with the code and the diagnostics. |

@@ -16,8 +16,8 @@ import {
 const root = join(import.meta.dirname, "..");
 const read = (path: string) => readFile(join(root, path), "utf8");
 
-/** The codes in the first column of the "Support codes" table, in order. */
-async function documentedCodes(): Promise<string[]> {
+/** The rows of the "Support codes" table, in order: the code and what it means. */
+async function documentedRows(): Promise<{ code: string; meaning: string }[]> {
   const doc = await read("docs/installing.md");
   const start = doc.indexOf("### Support codes");
   assert.ok(start > doc.indexOf("## Troubleshooting"), "a Support codes part under Troubleshooting");
@@ -26,8 +26,13 @@ async function documentedCodes(): Promise<string[]> {
   assert.match(section, /^\| Code \| What it means \| What to try \|$/m);
   return [...section.matchAll(/^\| `([^`]+)` \|([^|]+)\|([^|]+)\|$/gm)].map((row) => {
     assert.ok(row[2]!.trim().length > 10 && row[3]!.trim().length > 10, `${row[1]} has a meaning and a fix`);
-    return row[1]!;
+    return { code: row[1]!, meaning: row[2]!.trim() };
   });
+}
+
+/** The codes in the first column of the "Support codes" table, in order. */
+async function documentedCodes(): Promise<string[]> {
+  return (await documentedRows()).map((row) => row.code);
 }
 
 test("every code Sage can show is in the docs table once, and the table has no others", async () => {
@@ -35,6 +40,14 @@ test("every code Sage can show is in the docs table once, and the table has no o
   assert.equal(new Set(documented).size, documented.length, "no code twice");
   assert.deepEqual([...documented].sort(), [...SUPPORT_CODE_LIST].sort());
   for (const code of SUPPORT_CODE_LIST) assert.match(code, /^SAGE-[A-Z]{3}-\d{2}$/);
+});
+
+test("each docs row starts with the meaning the diagnostics text gives, so the two can't drift", async () => {
+  for (const { code, meaning } of await documentedRows()) {
+    const short = SUPPORT_CODES[code as keyof typeof SUPPORT_CODES];
+    assert.ok(short, code);
+    assert.ok(meaning.startsWith(short), `${code}: "${meaning}" starts with "${short}"`);
+  }
 });
 
 test("each code in the table is one Sage really gives for a failure it can tell apart", async () => {
