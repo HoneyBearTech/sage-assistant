@@ -8,6 +8,12 @@ All notable changes to Sage are documented here. The format follows
 
 ### Changed
 
+- **Settings files from 0.1.1 move over unchanged.** The online service becomes *Another online
+  service*, with the same address, model and key; a local brain stays local.
+- **The privacy note:** "nothing you type leaves your computer" now says it holds for *On this computer*
+  only, and the README says what each online brain sends where. Online brains cost money per use, and
+  Sage can't cap spending: the README, the Welcome screen and Settings point to each company's own
+  spending limits.
 - **A new look: a calm heads-up display in green.** The window is dark by default: a deep green-black
   ground with a faint grid, one sage-mint accent, amber for you and for anything waiting on you,
   hairline panels with corner ticks, cut-corner main buttons, and small monospace capitals for tabs,
@@ -21,6 +27,25 @@ All notable changes to Sage are documented here. The format follows
 
 ### Added
 
+- **More online brains, with your own keys.** Settings → Brain is now a list: *On this computer* (still
+  the default), *Claude* (an Anthropic key), *OpenAI* (an OpenAI key), *Gemini* (a Google AI Studio key)
+  and *Another online service* (an address and a key, as before). Each choice has a one-line note on
+  what it costs, that its key is kept in your system's protected storage, and that what you type and
+  the results of Sage's skills go to that company. The first time you pick or save an online brain,
+  Sage says the same in one line. Sage's skills and its ask-first rule are unchanged: the services only
+  answer, or ask to use one of Sage's skills.
+- **Claude through Anthropic's Messages API**, with Sage's skills as tools; **Gemini through Google's own
+  API**, which sends back the signatures current Gemini models need for skill requests; **OpenAI**
+  through the existing chat-completions brain at OpenAI's address. No new packages.
+- **One key per company,** each encrypted on its own and sent only to its company's fixed address,
+  checked at the moment of each request. Switching brains never mixes keys; removing one keeps the
+  others. On Linux, keys are still refused without a real keyring.
+- **Load models** asks the company for its current models to pick from (the model box stays editable),
+  **Test** checks a saved key with one free request, and **Get a key** opens the company's key page in
+  your web browser, after Sage's own asking box, at a fixed address.
+- **Clear errors** for a wrong or revoked key, credit or quota used up, a model that doesn't exist or was
+  retired, a busy service, a time-out and no network. The service's own error text is never shown or
+  saved.
 - **Theme setting:** Settings → Look → Theme: *Dark* (the default), *Light* or *Match system*. Older
   settings files load with *Dark*.
 - **The orb:** a glowing ring above the message box that shows what Sage is doing: ready, listening

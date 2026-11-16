@@ -26,27 +26,31 @@ used.
 +---------------------------------------|---------|----------|---------|--------------------+
                                         v         v          v         v
                           Ollama on 127.0.0.1  online     DuckDuckGo  Hugging Face     confirmation box,
-                          (local brain)        model      HTML page   (the speech      notifications,
-                                               service    (search)    file, once,      apps and files
-                                               (optional)             after asking)
+                          (local brain)        brain:     HTML page   (the speech      notifications,
+                                               Anthropic, (search)    file, once,      apps and files
+                                               OpenAI,                after asking)
+                                               Google or
+                                               another
+                                               (optional)
 ```
 
 | Part | Where | What it does |
 | --- | --- | --- |
 | Chat window | `src/renderer/` | Plain TypeScript, HTML and CSS. Shows the chat, the settings screen and, on first start, the Welcome screen, in the dark "sage HUD" look or its light version (see [The window's look](#the-windows-look)). Runs sandboxed with no Node access; inserts text only with `textContent`. |
-| Preload | `src/preload/preload.ts` | Exposes `window.sage` through `contextBridge`, and nothing else: twenty-one typed calls to the main process, and one listener, `onAsking`, for the main process's news about its asking box (one way; it passes on only the checked fields). |
+| Preload | `src/preload/preload.ts` | Exposes `window.sage` through `contextBridge`, and nothing else: twenty-four typed calls to the main process, and one listener, `onAsking`, for the main process's news about its asking box (one way; it passes on only the checked fields). |
 | IPC handlers | `src/main/ipc.ts` | One handler per channel. Validates every payload with zod; never sends the key to the window (only whether one is saved). Removes the saved key when the online address moves to a different service, saves a new key only when the address on screen is the saved one, and stops a turn in progress when the brain or the service changes. |
 | Notifications | `src/main/notify.ts` | Shows a reminder as a desktop notification and waits up to 5 seconds for the system to confirm it. Reports whether it was confirmed; it never reports a guess. |
 | Main wiring | `src/main/main.ts` | Creates the window, locks down the session (permissions, requests, navigation), supplies the native confirmation dialog (wrapped so the window hears when it opens and closes), the Welcome screen's two boxes (before a model download and before opening the install guide), notifications, `shell.openPath`, `shell.openExternal` (used only for the install guide's fixed address), the app launcher and the encrypted key store. Checks the sender of every IPC call. |
 | Window security | `src/main/security.ts` | The window options, the CSP and the URL and permission rules, as pure functions the tests check. |
 | Asking news | `src/core/asking.ts` | Wraps the confirmation dialog: tells the window when it opens (with the sentence it shows) and when it closes (allowed or not). The answer comes only from the dialog. |
 | Assistant | `src/core/assistant.ts` | Sends the conversation and the skill list to the brain, runs the tool calls it returns through the registry, and stops after six tool calls or six rounds per message (three each for `add_note` and `add_reminder`). **New chat** abandons a turn in progress: it runs no further tool calls and writes nothing to the history. |
-| Brain | `src/core/brain/` | `LocalBrain` (Ollama's `/api/chat` on `127.0.0.1:11434`) and `OnlineBrain` (`<base>/v1/chat/completions`). Settings pick one for each message. |
+| Brain | `src/core/brain/` | `LocalBrain` (Ollama's `/api/chat` on `127.0.0.1:11434`); `OnlineBrain` (chat-completions: `<base>/v1/chat/completions` for another online service, `https://api.openai.com/v1/chat/completions` for OpenAI); `MessagesBrain` (`anthropic.ts`: Anthropic's Messages API, `https://api.anthropic.com/v1/messages`, skills as tools, skill results as `tool_result` blocks); `GeminiBrain` (`gemini.ts`: Google's `generateContent`, skills as function declarations, each skill request's thought signature sent back in the same turn). `services.ts` holds the three companies' fixed addresses, key pages and default models; `request.ts` is the shared request (redirects refused, one time limit, size cap); `errors.ts` turns a status and a few known error-type fields into a plain sentence. Settings pick one brain for each message. |
 | Skills | `src/core/skills/` | The registry, the eleven built-in skills, the ask-first gate, the untrusted-text wrapper and the action log. |
-| Data stores | `src/core/notes.ts`, `reminders.ts`, `settings.ts`, `keystore.ts` | JSON files written atomically, and the encrypted key file. |
+| Data stores | `src/core/notes.ts`, `reminders.ts`, `settings.ts`, `keystore.ts` | JSON files written atomically, and the encrypted key files. |
 | Scheduler | `src/core/scheduler.ts` | Checks reminders every 15 seconds and shows each one that is due, once. If the desktop notification isn't confirmed, the reminder goes to the notice board. It is marked as shown only when the desktop confirmed it or the window confirmed it is on screen; until then it stays due and comes back on the next check or the next start. Each reminder is handled on its own, and one that was shown but couldn't be recorded is never shown again. |
 | Notices | `src/core/notices.ts` | Messages from Sage itself (reminders for the window, data files set aside), collected by the window every 5 seconds and shown in the chat. Each notice has an id; the window confirms the ids it has put in the chat once the Chat view is open and the window isn't hidden or minimised, and only that delivers a notice. One not yet confirmed is handed out again with the same id, so the window skips it if it already shows it. Deleting a reminder withdraws its notice, and a reminder that no longer exists is skipped. At most 50 wait at once (confirmed or not): the oldest are kept, and the window is told how many more are waiting. |
-| Service keys | `src/core/keystore.ts` | The key is saved together with the service (origin) it was entered for, and each turn's online brain asks only for the key of its own service. |
+| Service keys | `src/core/keystore.ts` | One encrypted file per online brain. A company's key is saved with that company's fixed origin; another online service's key with the origin it was entered for. Every request asks `ServiceKeys.keyForRequest(brain, url)` for the key with the exact address it is about to call, and gets it only if that address's origin is the one the key was saved for (and, for a company, its fixed origin). |
+| Online services | `src/core/online-services.ts` | **Load models**, **Test** and **Get a key** for the three companies: the window sends only the company's id; the main process lists the models (or tests the key with that free list) at the fixed address with the saved key, and opens the fixed key page after its own box. |
 | Search | `src/core/search/` | The `SearchProvider` interface and the DuckDuckGo HTML provider with its parser. |
 | Voice | `src/core/voice/` | `model.ts`: the speech model's three files (pinned address, exact size, SHA-256). `download.ts`: the download (https only, at most five forwards, size cap, fingerprint check, 30-second stall limit, moved into place only when all match, leftovers deleted). `transcriber.ts`: starts the speech helper, one recording at a time, 60-second limit, a fresh helper after a crash. `helper-protocol.ts`: the validated messages between the two, and the helper's own logic. `voice.ts`: ties them together; the download only after the main process's own box says Download, and the files' fingerprints checked again once per run before first use. |
 | Speech helper | `src/helper/voice-helper.ts` | Built as `dist/voice-helper.cjs` and run as Electron's utility process. The only code that loads the speech engine (`sherpa-onnx-node`); gets sound, sends back text. |
@@ -185,8 +189,10 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
    start, or a settings file from before this setting existed), it shows the **Welcome screen**;
    otherwise Chat. Reminders and other notices are collected only from then on, and confirmed only while
    Chat is visible, so they wait while the Welcome screen is open. Ctrl+Space works only on Chat.
-2. **Where should Sage think?** *On this computer* goes on to the runner. *An online service* marks setup
-   as done and opens Settings, where the address, model and key are saved as before.
+2. **Where should Sage think?** *On this computer* goes on to the runner. *An online service (Claude,
+   OpenAI, Gemini or another)* marks setup as done and opens Settings at the brain list, with a line on
+   what to do there (pick one, save, then save its key; **Get a key** opens the company's key page). The
+   step says that online brains are paid per use and that Sage can't cap spending.
 3. **The local model runner.** The main process asks the runner for its model list on `127.0.0.1:11434`
    and answers *not reachable* (not installed or not started: Sage can't tell them apart without running
    programs), *an answer Sage couldn't read*, *running without the saved model* or *ready*, and which of
@@ -228,8 +234,9 @@ Everything is in Electron's `userData` folder: `%APPDATA%\sage-assistant` on Win
 
 | File | Written by | Contents |
 | --- | --- | --- |
-| `settings.json` | `SettingsStore` | Brain switch, model names, online address, app list, approved folders, Read replies aloud, whether setup is done, the theme and the sound switch. No secrets: the schema has no field for one and drops unknown fields. |
-| `online-key.bin` | `EncryptedFileKeyStore` | The online key, encrypted with Electron `safeStorage` (DPAPI on Windows, the desktop keyring on Linux). |
+| `settings.json` | `SettingsStore` | The brain (`local`, `claude`, `openai`, `gemini` or `other`; a 0.1.1 file's `online` loads as `other`), model names (one per company under `services`), another online service's address, app list, approved folders, Read replies aloud, whether setup is done, the theme and the sound switch. No secrets: the schema has no field for one and drops unknown fields. |
+| `claude-key.bin`, `openai-key.bin`, `gemini-key.bin` | `EncryptedFileKeyStore` | Each company's key with its fixed origin, encrypted with Electron `safeStorage` (DPAPI on Windows, the desktop keyring on Linux). |
+| `online-key.bin` | `EncryptedFileKeyStore` | Another online service's key with the origin it was entered for (the same file as in 0.1.1), encrypted the same way. |
 | `notes.json` | `NotesStore` | Notes (id, title, text, times). |
 | `reminders.json` | `RemindersStore` | Reminders (id, text, due time, when it fired). |
 | `action-log.jsonl` | `ActionLog` | One JSON line per allowed or declined action: time, call id, skill, the sentence shown, decision, outcome. |
@@ -256,7 +263,7 @@ Recordings and their words are never written to disk or logged.
 | Speech engine | sherpa-onnx-node 2.0.1 (Apache-2.0) | Offline speech recognition, ready-built for Windows and Linux, with no install scripts. Sage's only run-time dependency, and its only native code. Loaded only in the speech helper. |
 | Speech model | Moonshine tiny, English (MIT) | Small and fast; downloaded once, after asking. |
 
-There are no vendor SDKs: both brains, the runner client, the search and the speech file download use
+There are no vendor SDKs: all four brains, the runner client, the search and the speech file download use
 `fetch`. Spoken
 replies use the window's built-in speech, with no package.
 

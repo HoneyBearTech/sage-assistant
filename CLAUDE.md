@@ -4,10 +4,10 @@
 
 Sage (S.A.G.E., System for Assistance, Guidance & Execution) is a desktop assistant that runs on the
 owner's own computer: an Electron app with a text chat, hold-to-talk voice recognised on the PC, a
-switchable brain (a local model runner on `127.0.0.1`, or an online service with the chat-completions
-format), a few skills, and an ask-first rule for anything that opens or deletes something. It installs on Windows (a one-click installer, see
+switchable brain (a local model runner on `127.0.0.1`; Claude, OpenAI or Gemini with the user's own key;
+or another online service with the chat-completions format), a few skills, and an ask-first rule for anything that opens or deletes something. It installs on Windows (a one-click installer, see
 `docs/releasing.md`) and runs from source on Windows and Linux. Safety and privacy are the point of the project: no local server, no command skill, no
-bypass mode, no telemetry, and the online key encrypted by the operating system.
+bypass mode, no telemetry, and every online key encrypted by the operating system.
 
 ## Before structural changes
 
@@ -42,14 +42,15 @@ strike them through with a reason.
 
 | Path | What it is |
 | --- | --- |
-| `src/core/brain/` | The `Brain` interface, `LocalBrain` (fixed to `127.0.0.1:11434`, `/api/chat`) and `OnlineBrain` (`<base>/v1/chat/completions`). Replies validated with zod. `runner.ts`: the runner's model list, model download (streamed, line-capped, 2-minute stall limit) and model details, on the same fixed address. |
+| `src/core/brain/` | The `Brain` interface, `LocalBrain` (fixed to `127.0.0.1:11434`, `/api/chat`), `OnlineBrain` (chat-completions, for OpenAI and another online service), `MessagesBrain` (`anthropic.ts`) and `GeminiBrain` (`gemini.ts`). `services.ts`: the companies' fixed addresses, key pages and default models; `request.ts` and `errors.ts`: the shared request and the plain error sentences. Replies validated with zod. `runner.ts`: the runner's model list, model download (streamed, line-capped, 2-minute stall limit) and model details, on the same fixed address. |
 | `src/core/setup.ts` | First-run setup: the runner's status, downloading one of Sage's two models through the runner (after the main process's box), the install guide's one fixed address (after its box), and `setupDone`. |
 | `src/core/skills/` | The skill registry, the built-in skills, the ask-first `ApprovalGate`, the untrusted-text wrapper and the JSONL action log. |
 | `src/core/assistant.ts` | One conversation: sends messages to the brain, runs tool calls through the registry, caps calls per turn. |
 | `src/core/notes.ts`, `reminders.ts`, `scheduler.ts` | Notes and reminders as atomic JSON files in `userData`; the reminder scheduler with an injectable clock, which marks a reminder shown only after the notifier confirms it. |
 | `src/core/notices.ts`, `src/main/notify.ts` | Messages from Sage itself for the window (reminders, data files set aside), delivered only when the window confirms it has shown them (`ackNotices`); the desktop notification, which reports only a confirmed show. |
 | `src/core/search/` | `SearchProvider` and the DuckDuckGo HTML provider with a small dependency-free parser. |
-| `src/core/settings.ts`, `keystore.ts` | Settings JSON (no secrets) and the `KeyStore` (encrypted file via an `Encryptor`). |
+| `src/core/settings.ts`, `keystore.ts` | Settings JSON (no secrets) and the key stores (one encrypted file per online brain via an `Encryptor`; `ServiceKeys`). |
+| `src/core/online-services.ts` | Load models, Test and Get a key for the three companies, at fixed addresses, from the main process. |
 | `src/core/voice/` | Voice in the main process: the pinned speech model (`model.ts`), its download (`download.ts`), the speech helper's manager (`transcriber.ts`) and messages (`helper-protocol.ts`), and `Voice` (`voice.ts`), which asks in the main process's own box before downloading. |
 | `src/helper/voice-helper.ts` | The speech helper, built as `dist/voice-helper.cjs` and run as Electron's utility process; the only code that loads `sherpa-onnx-node`. Keep it small: its logic is in `src/core/voice/helper-protocol.ts`. |
 | `src/core/sage.ts` | Wires everything together from injected dependencies; tests use it with fakes. |
@@ -76,10 +77,14 @@ strike them through with a reason.
 - **Apps only from the list in Settings**, launched with an argument array and `shell: false`. **Files
   only inside approved folders**, checked after `realpath`, only types on the allowlist in
   `src/core/files.ts` (documents, pictures, sound, video), opened with `shell.openPath`.
-- **The online key never leaves the key store**: not in settings, logs, the action log, the chat, the
-  window or error messages. It is tied to the service (origin) it was entered for and handed out only
-  for that one (`ServiceKeys.keyFor`). Keep `test/key-leak.test.ts` and `test/key-binding.test.ts`
-  passing and extend them for new writers.
+- **Online keys never leave the key store**: not in settings, logs, the action log, the chat, the
+  window or error messages. Each brain has its own key: a company's key is tied to that company's
+  fixed origin (`src/core/brain/services.ts`), another online service's key to the origin it was
+  entered for, and a key is handed out only for a request to that origin, checked with the exact
+  address at the moment of the request (`ServiceKeys.keyForRequest`). The window names only a brain or
+  a company, never an address for a company. A service's error text is never shown or logged. Keep
+  `test/key-leak.test.ts`, `test/key-binding.test.ts` and `test/brain-keys.test.ts` passing and extend
+  them for new writers.
 - **Tests never sleep or use real timeouts or free-port tricks**: mocked timers, `FakeClock` or events
   (see CONTRIBUTING.md; `test/test-rules.test.ts` checks it).
 - **The window stays locked down**: `contextIsolation`, `sandbox`, no `nodeIntegration`, `webSecurity`,
@@ -100,9 +105,10 @@ strike them through with a reason.
 - **First-run setup.** The window names only `standard` or `smaller`, never a model name; a model is
   downloaded by the local model runner, not by Sage, only after the main process's own box returns
   Download, and saved as the local model only once it is there. The runner's replies are capped and
-  checked, and its text is never shown or logged. Sage opens exactly one web address, the install
-  guide (`INSTALL_GUIDE_URL` in `src/core/setup.ts`), only from the main process and only after its box
-  returns Open; never add another, or take an address from the window, a reply or a page. `setupDone`
+  checked, and its text is never shown or logged. Sage opens only fixed web addresses: the install
+  guide (`INSTALL_GUIDE_URL` in `src/core/setup.ts`) and the three companies' key pages (`keyPage` in
+  `src/core/brain/services.ts`), only from the main process and only after its box returns Open; never
+  add another without the same rules, or take an address from the window, a reply or a page. `setupDone`
   is changed only by `finishSetup`; a Settings save keeps it, and setup requests change only their own
   fields through `SettingsStore.update`. Notices are confirmed and Ctrl+Space works only while Chat is
   visible.

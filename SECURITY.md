@@ -48,8 +48,10 @@ In scope, for example:
 - Text from a web page, search result or note that makes Sage take an action the user didn't ask for.
 - Opening an app that isn't on the user's list, or a file outside the approved folders (for example
   through `..`, a symlink or a shortcut).
-- The online key reaching the settings file, a log, the action log, the chat, the window, or any address
-  other than the configured online service.
+- An online key reaching the settings file, a log, the action log, the chat, the window, or any address
+  other than its own service's (Anthropic's, OpenAI's or Google's fixed address for their keys, the
+  configured address for another online service's key), or one brain's key sent with another brain's
+  requests.
 - The chat window loading remote content, navigating away, opening new windows, or getting a permission
   other than the microphone.
 
