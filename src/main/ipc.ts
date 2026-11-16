@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { serviceOrigin } from "../core/brain/online.js";
+import { validateKey } from "../core/keystore.js";
 import { describeError } from "../core/log.js";
 import type { Sage } from "../core/sage.js";
 import type { Settings } from "../core/settings.js";
@@ -97,8 +98,25 @@ export function toPublicSettings(settings: Settings, keys: PublicSettings["keys"
  * The main-process side of every channel. Each payload is validated here; the window is treated
  * as untrusted input like everything else. main.ts checks the sender before calling these.
  */
+/** The model name the chosen brain uses: a change to it stops a turn in progress. */
+export function activeModel(settings: Settings): string {
+  switch (settings.brain) {
+    case "local":
+      return settings.local.model;
+    case "other":
+      return settings.online.model;
+    default:
+      return settings.services[settings.brain].model;
+  }
+}
+
 export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel, Handler> {
   const fail = (message: string): Result => ({ ok: false, message });
+  // A turn in progress was started with the key that was saved then; once the chosen brain's key is
+  // replaced or removed, it stops rather than carry on.
+  const stopTurnIfActive = async (brain: Settings["brain"]) => {
+    if ((await sage.settings.load()).brain === brain) sage.assistant.stopTurn();
+  };
   return {
     [CHANNELS.send]: async (payload) => {
       const parsed = sendPayload.safeParse(payload);
@@ -129,7 +147,11 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       const after = serviceOrigin(result.settings.online.baseUrl);
       // A turn in progress was started against the old brain or service; it stops rather than
       // carry on against settings the user has moved away from.
-      if (previous.brain !== result.settings.brain || serviceOrigin(previous.online.baseUrl) !== after) {
+      if (
+        previous.brain !== result.settings.brain ||
+        serviceOrigin(previous.online.baseUrl) !== after ||
+        activeModel(previous) !== activeModel(result.settings)
+      ) {
         sage.assistant.stopTurn();
       }
       const notes: string[] = [];
@@ -150,7 +172,11 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       if (!parsed.success) return fail("That doesn't look like a key.");
       try {
         const brain = parsed.data.brain;
+        // Checked before anything changes, so a key that is refused stops nothing.
+        validateKey(parsed.data.key);
         if (brain !== "other") {
+          // A turn in progress with the chosen brain stops first, so it can't finish with the old key.
+          await stopTurnIfActive(brain);
           // A company's key is bound to that company's fixed address, held in the main process.
           await sage.keyStore.setCompanyKey(brain, parsed.data.key);
           return { ok: true };
@@ -161,6 +187,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
         // otherwise be tied to a service it wasn't entered for.
         const origin = serviceOrigin((await sage.settings.load()).online.baseUrl);
         if (serviceOrigin(parsed.data.baseUrl) !== origin) return fail(SAVE_SETTINGS_FIRST);
+        await stopTurnIfActive(brain);
         await sage.keyStore.setOtherKey(parsed.data.key, origin);
         return { ok: true };
       } catch (error) {
@@ -171,7 +198,9 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     [CHANNELS.clearKey]: async (payload): Promise<Result> => {
       const parsed = clearKeyPayload.safeParse(payload);
       if (!parsed.success) return fail(NOT_READ);
-      await sage.keyStore.clear(parsed.data.brain);
+      const brain = parsed.data.brain;
+      await stopTurnIfActive(brain);
+      await sage.keyStore.clear(brain);
       return { ok: true };
     },
     // Each of these sends only a company's id; the addresses are fixed in the main process, and a

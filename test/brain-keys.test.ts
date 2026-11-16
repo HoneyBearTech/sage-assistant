@@ -8,7 +8,9 @@ import { brainFor, createSage } from "../src/core/sage.js";
 import { defaultSettings, type Settings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS, privacyLine } from "../src/shared/api.js";
+import { SETTINGS_CHANGED_REPLY } from "../src/core/assistant.js";
 import {
+  deferred,
   fakeEncryptor,
   fakeFetch,
   FakePresenter,
@@ -18,6 +20,7 @@ import {
   MemoryKeyStore,
   memoryKeyStores,
   REFUSED_PORT,
+  settled,
   tempDir,
 } from "./helpers.js";
 
@@ -353,4 +356,55 @@ test("a key must be printable ASCII: anything else gets a plain message and noth
     await keys.keyForRequest("claude", "https://api.anthropic.com/v1/messages"),
     "sk-ant-api03-Fake_Key-For.Tests~0123",
   );
+});
+
+test("changing the chosen brain's model, replacing or removing its key stops a turn in progress", async (t) => {
+  const held: ReturnType<typeof deferred<Response>>[] = [];
+  const fake = fakeFetch(() => {
+    const reply = deferred<Response>();
+    held.push(reply);
+    return reply.promise;
+  });
+  const stores = memoryKeyStores();
+  const { sage, handlers } = sageAt(await tempDir(t), { keyStores: stores, fetch: fake.fetch });
+  await handlers[CHANNELS.setKey]({ brain: "claude", key: CLAUDE_KEY, baseUrl: "" });
+  await handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "claude" });
+  const answer = (text: string) =>
+    jsonResponse(200, { content: [{ type: "text", text }], stop_reason: "end_turn" });
+  const changes: [string, () => Promise<unknown>][] = [
+    [
+      "the model",
+      () =>
+        handlers[CHANNELS.saveSettings]({
+          ...defaultSettings(),
+          brain: "claude",
+          services: { ...defaultSettings().services, claude: { model: "claude-opus-5-5" } },
+        }),
+    ],
+    ["a new key", () => handlers[CHANNELS.setKey]({ brain: "claude", key: `${CLAUDE_KEY}-2`, baseUrl: "" })],
+    ["the key removed", () => handlers[CHANNELS.clearKey]({ brain: "claude" })],
+  ];
+  for (const [what, change] of changes) {
+    await handlers[CHANNELS.setKey]({ brain: "claude", key: CLAUDE_KEY, baseUrl: "" });
+    const turn = handlers[CHANNELS.send]({ text: "hello" });
+    await settled();
+    await change();
+    held.at(-1)!.resolve(answer("too late"));
+    assert.equal(await turn, SETTINGS_CHANGED_REPLY, what);
+  }
+  // Another brain's key, or the same model saved again, leaves the turn alone.
+  await handlers[CHANNELS.setKey]({ brain: "claude", key: CLAUDE_KEY, baseUrl: "" });
+  await handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "claude" });
+  for (const change of [
+    () => handlers[CHANNELS.setKey]({ brain: "gemini", key: GEMINI_KEY, baseUrl: "" }),
+    () => handlers[CHANNELS.clearKey]({ brain: "openai" }),
+    () => handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "claude" }),
+  ]) {
+    const turn = handlers[CHANNELS.send]({ text: "hello" });
+    await settled();
+    await change();
+    held.at(-1)!.resolve(answer("in time"));
+    assert.equal(await turn, "in time");
+  }
+  assert.equal(sage.assistant.transcript.at(-1)?.content, "in time");
 });
