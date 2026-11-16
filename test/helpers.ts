@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -10,9 +10,11 @@ import type { Clock } from "../src/core/scheduler.js";
 import type { ConfirmPresenter, ConfirmRequest } from "../src/core/skills/gate.js";
 
 export async function tempDir(t: { after(fn: () => Promise<void> | void): void }): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "sage-test-"));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  return dir;
+  const created = await mkdtemp(join(tmpdir(), "sage-test-"));
+  t.after(() => rm(created, { recursive: true, force: true }));
+  // Return the canonical path: on Windows runners os.tmpdir() can be an 8.3 short path
+  // (C:\Users\RUNNER~1\...), while the code under test returns real (long) paths.
+  return realpath(created);
 }
 
 export interface Recorded {
