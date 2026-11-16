@@ -58,6 +58,13 @@ export const MOONSHINE_TINY_EN: SpeechModel = {
 /** The question the main process asks, in its own box, before anything is downloaded. */
 export const DOWNLOAD_QUESTION = "Voice needs a 44 MB speech file from Hugging Face. Download it now?";
 
+/**
+ * The line under the question. The download is an ordinary request to Hugging Face (it sees this PC's
+ * address, like any website), so the box promises only what is true: nothing of the user's goes with it.
+ */
+export const DOWNLOAD_DETAIL =
+  "It is downloaded once, then kept on this PC. None of your speech or text is sent: it is an ordinary file download from Hugging Face.";
+
 /** `<userData>/models`: the only place the download writes. */
 export function modelsDir(dataDir: string): string {
   return join(dataDir, "models");

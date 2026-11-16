@@ -58,7 +58,8 @@ model, and puts the words **in the message box**. Nothing is sent until you chec
   from Hugging Face. Download it now?"* Only if you choose **Download** does it fetch the model's three
   files, from fixed addresses pinned to one exact version, and it uses them only if each file's size and
   SHA-256 fingerprint match. After that, voice works offline. **This is the only thing Sage downloads by
-  itself**, and nothing is sent: it is a plain file download.
+  itself.** None of your speech or text is sent: it is an ordinary file download, so Hugging Face sees a
+  request from your PC, as with any website.
 - **The microphone is on only while you hold** the key or the button. It also turns off if Sage's window
   loses focus or you start a **New chat**. The sound stays in memory and is never saved or logged, and
   neither are the words, beyond what happens to typed messages.

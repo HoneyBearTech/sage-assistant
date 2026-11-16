@@ -93,7 +93,8 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
 - [ ] Hold **Ctrl+Space**: the line under the chat says voice needs a one-time 44 MB speech file, with a
       **Download** button. No microphone prompt has appeared yet.
 - [ ] Choose **Download**: Sage's own box asks *"Voice needs a 44 MB speech file from Hugging Face.
-      Download it now?"*. Choose **Not now**: nothing is downloaded and **Download** is offered again.
+      Download it now?"*, with a line saying none of your speech or text is sent. Choose **Not now**:
+      nothing is downloaded and **Download** is offered again.
 - [ ] Choose **Download**, then **Download** in the box: a progress line with **Cancel** appears. Choose
       **Cancel**: it says the download was cancelled, offers **Try again**, and
       `%APPDATA%\sage-assistant\models` holds no files.

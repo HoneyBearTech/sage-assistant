@@ -18,8 +18,10 @@ All notable changes to Sage are documented here. The format follows
 - **A one-time speech file download**, only after you agree in Sage's own box ("Voice needs a 44 MB
   speech file from Hugging Face. Download it now?"), with progress, Cancel and Try again. The three
   files come from fixed addresses pinned to one version, over https only, and are used only if their
-  size and SHA-256 fingerprint match. It is the only thing Sage downloads by itself, and it sends
-  nothing. Voice works offline after that.
+  size and SHA-256 fingerprint match. It is the only thing Sage downloads by itself; none of your
+  speech or text is sent with it (it is an ordinary file download from Hugging Face). Sage checks the
+  files' fingerprints again before first use in each run, and stops a download that stalls for 30
+  seconds. Voice works offline after that.
 - **Spoken replies** with a voice installed on your PC, and a new setting, **Read replies aloud**:
   after voice messages (the default), always, or never. **Stop speaking**, the talk key and New chat
   stop it. Settings says so if the PC has no voice. Settings files from earlier versions load unchanged.

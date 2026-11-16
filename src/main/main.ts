@@ -18,7 +18,7 @@ import { EncryptedFileKeyStore, type Encryptor, osEncryptionUsable } from "../co
 import { consoleSink } from "../core/log.js";
 import { createSage } from "../core/sage.js";
 import type { ConfirmPresenter } from "../core/skills/gate.js";
-import { DOWNLOAD_QUESTION } from "../core/voice/model.js";
+import { DOWNLOAD_DETAIL, DOWNLOAD_QUESTION } from "../core/voice/model.js";
 import type { HelperProcess } from "../core/voice/transcriber.js";
 import { CHANNELS } from "../shared/api.js";
 import { createIpcHandlers } from "./ipc.js";
@@ -88,7 +88,7 @@ async function confirmVoiceDownload(): Promise<boolean> {
     type: "question" as const,
     title: "Sage voice",
     message: DOWNLOAD_QUESTION,
-    detail: "It is downloaded once and kept on this PC. Nothing is sent.",
+    detail: DOWNLOAD_DETAIL,
     buttons: ["Not now", "Download"],
     defaultId: 0,
     cancelId: 0,

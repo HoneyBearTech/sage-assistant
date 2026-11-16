@@ -27,7 +27,7 @@ risk that remains. The tests named here run with `npm run verify`.
 | Web pages and search results | **Not trusted.** Anyone can write them. |
 | Note and file contents | **Not trusted** as instructions; they may contain pasted text from anywhere. |
 | The online service | Trusted with the conversation (the user chose it), not with anything else. |
-| Hugging Face and its download servers | **Not trusted** with what they send: each file is used only if its exact size and SHA-256 fingerprint match the ones in Sage's code. Nothing is sent to them. |
+| Hugging Face and its download servers | **Not trusted** with what they send: each file is used only if its exact size and SHA-256 fingerprint match the ones in Sage's code. They get only ordinary download requests (so they see the PC's address), never the user's speech or text. |
 | The speech engine (`sherpa-onnx-node`) | Trusted code at a pinned version, like Electron itself; run in its own process and fed only checked sound. |
 | Other programs running as the same user | Out of scope: they can already do anything the user can (see section 5). |
 
@@ -267,7 +267,8 @@ crash; or a misheard word could be sent to the brain.
   are resolved against the current https address), with no cookies or credentials. A file is stopped as
   soon as it is larger than expected, and the model folder is put in place only when all three files
   match; anything half-finished is deleted after a failure, a cancel, a stall (30 seconds without a
-  reply or new bytes), or at the next start. Nothing is sent: these are plain GET requests.
+  reply or new bytes), or at the next start. None of the user's speech or text is sent: these are plain
+  GET requests, which show Hugging Face the PC's address like any download; the box says so.
   *Evidence:* `test/voice-download.test.ts` (a fake server on `127.0.0.1`: a correct file, forwards, a
   forward to plain http, too many forwards, a wrong fingerprint, too big and too small, a dropped
   connection, a cancel, a server that never answers and one that stops sending, leftovers deleted),
@@ -320,7 +321,8 @@ A bug in the window, or a hostile string displayed in it, must not become code e
 
 No telemetry, analytics or crash reporting exists in the code (`test/security.test.ts` checks the
 sources for them and lists every network address). With the local brain, only web searches leave the
-computer, plus the one-time download of the speech file, which sends nothing. Speech is turned into text
+computer, plus the one-time download of the speech file, an ordinary request that carries none of your
+speech or text. Speech is turned into text
 on the PC, and replies are read aloud with the PC's own voices. With an online brain, the conversation,
 including tool results and words that came from talking, goes to the service the user chose.
 

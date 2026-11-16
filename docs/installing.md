@@ -168,7 +168,8 @@ Hold **Ctrl+Space** while Sage's window is focused, or press and hold **Hold to 
 The words go into the message box; press Enter to send them.
 
 - **The first time**, Sage asks *"Voice needs a 44 MB speech file from Hugging Face. Download it now?"*.
-  Choose **Download**. A line under the chat shows the progress, with **Cancel**; if it fails or the PC
+  Choose **Download**. None of your speech or text is sent: it is an ordinary file download, so Hugging
+  Face sees a request from your PC, as with any website. A line under the chat shows the progress, with **Cancel**; if it fails or the PC
   is offline, it says so and offers **Try again**. Once the file is there, voice works without the
   internet. It is kept in Sage's data folder, in `models/`.
 - **Windows asks for the microphone** the first time, or may have it turned off. If Sage says the

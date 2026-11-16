@@ -15,6 +15,7 @@ import {
   type Timers,
 } from "../src/core/voice/download.js";
 import {
+  DOWNLOAD_DETAIL,
   DOWNLOAD_QUESTION,
   isModelReady,
   MOONSHINE_TINY_EN,
@@ -106,6 +107,11 @@ test("the real speech file: three pinned https addresses on Hugging Face, with s
   assert.equal(totalSize(MOONSHINE_TINY_EN), 44_243_206);
   assert.equal(Math.round(totalSize(MOONSHINE_TINY_EN) / 1e6), 44, "the box says 44 MB");
   assert.equal(DOWNLOAD_QUESTION, "Voice needs a 44 MB speech file from Hugging Face. Download it now?");
+  // The box doesn't claim nothing at all is sent (the download is a request to Hugging Face), only
+  // that none of the user's speech or text goes with it.
+  assert.match(DOWNLOAD_DETAIL, /None of your speech or text is sent/);
+  assert.match(DOWNLOAD_DETAIL, /Hugging Face/);
+  assert.doesNotMatch(DOWNLOAD_DETAIL, /Nothing is sent/i);
 });
 
 test("a correct download is checked and moved into the model folder, with progress", async (t) => {
