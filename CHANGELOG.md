@@ -6,6 +6,8 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-16
+
 ### Added
 
 - **A Sage icon:** a white leaf on a sage-green tile, for the installer, `Sage.exe`, the Start-menu and
@@ -108,3 +110,6 @@ All notable changes to Sage are documented here. The format follows
   to **Settings → Set up Sage** instead of a command to type.
 - The talk key (Ctrl+Space) works only while the chat is shown, and Sage's window starts with the chat
   hidden until it knows whether to show the Welcome screen.
+
+[Unreleased]: https://github.com/HoneyBearTech/sage-assistant/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.1.0
