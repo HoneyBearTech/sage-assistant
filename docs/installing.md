@@ -1,9 +1,46 @@
 # Installing
 
-For now Sage runs from its source code, on Windows and on Linux. A one-click Windows installer is the
-next job (see [the future installer](#the-future-windows-installer) below).
+There are two ways to get Sage:
 
-## What you need
+- **On Windows, the installer** from the GitHub Releases page: see
+  [Installing on Windows](#installing-on-windows). You still need the local model runner for the local
+  brain (step 1 below), or an online model service.
+- **From the source code**, on Windows and Linux: steps 1 to 4 below.
+
+Both share the same data folder, so notes, reminders, settings and the key you made in a copy run from
+source are there in the installed app too.
+
+## Installing on Windows
+
+1. **Download** from the repository's
+   [Releases page](https://github.com/HoneyBearTech/sage-assistant/releases): under the newest release,
+   choose `Sage-Setup-<version>.exe` and `SHA256SUMS.txt`. Download only from this page.
+2. **Check the checksum** before you run it. In PowerShell (see
+   [Opening PowerShell](#opening-powershell-or-a-terminal)), in your Downloads folder, with the version
+   you downloaded:
+
+   ```powershell
+   cd $HOME\Downloads
+   (Get-FileHash .\Sage-Setup-0.2.0.exe -Algorithm SHA256).Hash -eq (-split (Get-Content .\SHA256SUMS.txt))[0]
+   ```
+
+   It must print `True`. If it prints `False`, don't run the file: download both again. How to check
+   that GitHub built the file (its provenance) is in [releasing.md](releasing.md#checking-a-downloaded-installer).
+3. **Run the installer.** The installer isn't code-signed yet (that is planned, see the
+   [roadmap](roadmap.md)), so Windows SmartScreen may say *"Windows protected your PC"*. Choose
+   **More info**, check the file name is `Sage-Setup-<version>.exe`, then choose **Run anyway**. Do this
+   only for a file from the Releases page whose checksum matched.
+4. It installs for your Windows account only, without asking for admin rights, adds **Sage** to the Start
+   menu and the desktop, and starts Sage. Then set it up as in [step 4](#4-set-it-up).
+
+**Updating:** download the newer installer from the Releases page, check it the same way, and run it.
+It replaces the old version; your data stays.
+
+**Uninstalling:** **Settings → Apps → Installed apps** (on Windows 10, **Settings → Apps → Apps &
+features**), find **Sage**, and choose **Uninstall**. Your notes, reminders, settings, action log and key
+stay in `%APPDATA%\sage-assistant`; delete that folder too to remove them.
+
+## What you need (from source)
 
 | What | Size | Why |
 | --- | --- | --- |
@@ -140,7 +177,9 @@ results, notes), is sent to that service.
 
 ## Updating
 
-From the `sage-assistant` folder:
+The installed app: run the newer installer, as in [Installing on Windows](#installing-on-windows).
+
+A copy run from source, from the `sage-assistant` folder:
 
 ```sh
 git pull
@@ -158,16 +197,13 @@ so they carry over.
 
 ## Uninstalling
 
-Delete the `sage-assistant` source folder. To remove your data too, delete the data folder above. To
-remove the local brain, uninstall Ollama (its models are in its own folder).
+The installed app: uninstall it from Windows Settings, as in
+[Installing on Windows](#installing-on-windows); your data stays.
 
-## The future Windows installer
+A copy run from source: delete the `sage-assistant` source folder.
 
-The next job adds a one-click Windows installer. Until it is signed with a code-signing certificate
-(planned later, see the [roadmap](roadmap.md)), Windows SmartScreen will warn *"Windows protected your
-PC"* the first time you run it, because the installer is new and unsigned. Only continue (**More info**,
-then **Run anyway**) if you downloaded it from this repository's GitHub Releases page and its checksum
-matches the one published with the release. The installer job will document both steps.
+Either way, to remove your data too, delete the data folder above. To remove the local brain, uninstall
+the local model runner (its models are in its own folder).
 
 ## Troubleshooting
 
