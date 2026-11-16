@@ -20,12 +20,12 @@ The release workflow is a small program that GitHub runs for you. In short:
 - It writes a fingerprint of the file (the checksum) and a signed receipt of how it was built (the
   provenance), so anyone can check the download wasn't changed or swapped.
 - It reuses no old build files, and it holds no saved passwords or keys.
-- It publishes the release only when the build and all the tests succeed. If anything fails, nothing is
-  published.
+- It publishes the release only when the build and all the tests succeed. If the build or a test fails,
+  nothing is published (unless you made the release on the Releases page yourself; see step 6 below).
 
 You set it up once (step 1 under [Making a release](#making-a-release-step-by-step)), then each release
-is a version pull request and a tag. The rest of this page is the exact steps, and then the technical
-details for anyone who wants to check the workflow.
+is a version pull request and a tag. The technical details come next, for anyone who wants to check the
+workflow; the exact steps follow under [Making a release](#making-a-release-step-by-step).
 
 ## Technical details: the release workflow
 
