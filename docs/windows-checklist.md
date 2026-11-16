@@ -398,8 +398,8 @@ haven't since the last update). The first `npm run dist` downloads a few hundred
       the install folder under `resources\app.asar.unpacked\node_modules\sherpa-onnx-win-x64` (to find
       the install folder, right-click Sage in the Start menu and choose **Open file location**,
       right-click the Sage shortcut there, choose **Properties**, then **Open File Location**).
-- [ ] Close Sage. Open `package.json` in Notepad, change `"version": "0.1.0"` to `"version": "0.1.1"`
-      and save (don't commit it). Run `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
+- [ ] Close Sage. Open `package.json` in Notepad, raise the version by one patch step (for example
+      `"version": "0.2.0"` to `"version": "0.2.1"`) and save (don't commit it). Run `npm run dist` again, and run the new installer over the installed app: it replaces it, Sage starts,
       and the note is still there. Then put `package.json` back with `git checkout package.json`.
 - [ ] Close Sage. Uninstall it in Settings → Apps → Installed apps (Windows 10: Apps & features): the shortcuts are gone, and
       `%APPDATA%\sage-assistant` still holds `notes.json` and `settings.json`. `npm start` from the source

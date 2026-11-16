@@ -2,6 +2,29 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - release-0-2-0
+
+**Context:** the owner asked for a release with everything merged since 0.1.1, so the new work can be
+installed and tried on Windows.
+
+**Decisions:**
+- **0.2.0, a minor release.** Since `v0.1.1`: the new look part 1 (#24), more online brains (#25), the
+  OpenSSF badge (#26), the Home screen with a daily brief (#27) and the Welcome start-up sequence (#28).
+  Four of them add features.
+- The changelog's entries moved unchanged under the new heading, with "Added" before "Changed" as Keep a
+  Changelog orders them; the links point to `v0.2.0`.
+- The roadmap marks 0.1.1 as released and checked, and adds the owner's checklist sections for 0.2.0.
+- The Windows checklist's upgrade step now says to raise the version by one patch step, instead of naming
+  0.1.0 and 0.1.1.
+
+**Review:** the Security Officer found nothing: the release workflow is unchanged and identical to the copy
+in Releasing, only the three version fields changed, and a Linux `npm run dist:dir` build packaged every
+file the five features need, with all seven fuses as configured. The Auditor approved, and noted the
+checklist's stale upgrade versions, which were fixed. GitHub's checks pass, Windows included. A second
+security review wasn't available this month.
+
+**Rejected findings:** none.
+
 ## 2026-11-16 - welcome-boot
 
 **Context:** the owner asked for the Welcome screen as a start-up sequence, part 3 of the new look, together

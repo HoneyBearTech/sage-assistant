@@ -6,24 +6,7 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
-
-- **Settings files from 0.1.1 move over unchanged.** The online service becomes *Another online
-  service*, with the same address, model and key; a local brain stays local.
-- **The privacy note:** "nothing you type leaves your computer" now says it holds for *On this computer*
-  only, and the README says what each online brain sends where. Online brains cost money per use, and
-  Sage can't cap spending: the README, the Welcome screen and Settings point to each company's own
-  spending limits.
-- **A new look: a calm heads-up display in green.** The window is dark by default: a deep green-black
-  ground with a faint grid, one sage-mint accent, amber for you and for anything waiting on you,
-  hairline panels with corner ticks, cut-corner main buttons, and small monospace capitals for tabs,
-  labels and status, all in the PC's own fonts. Messages stay in the system font, larger (16 px). No
-  text is smaller than 12 px, and the main colours keep at least 4.5 to 1 contrast in both themes.
-- **The chat is a transcript.** Rows labelled `YOU` and `SAGE` instead of bubbles; Sage's newest reply
-  types itself out in about a second at most, and a click or any key shows it all at once. Notices
-  keep their own dashed card.
-- **Reduced motion is honoured.** With the system's "reduce motion" setting on, nothing in the window
-  moves and replies appear at once.
+## [0.2.0] - 2026-11-16
 
 ### Added
 
@@ -106,6 +89,25 @@ All notable changes to Sage are documented here. The format follows
   an action, a low tone when Sage asks. Off until you switch on **Sound** in the top bar; remembered.
 - **A preview page for review** (`npm run preview`, into `out/preview/`): the real window with sample
   data and a control strip. Not part of Sage.
+
+### Changed
+
+- **Settings files from 0.1.1 move over unchanged.** The online service becomes *Another online
+  service*, with the same address, model and key; a local brain stays local.
+- **The privacy note:** "nothing you type leaves your computer" now says it holds for *On this computer*
+  only, and the README says what each online brain sends where. Online brains cost money per use, and
+  Sage can't cap spending: the README, the Welcome screen and Settings point to each company's own
+  spending limits.
+- **A new look: a calm heads-up display in green.** The window is dark by default: a deep green-black
+  ground with a faint grid, one sage-mint accent, amber for you and for anything waiting on you,
+  hairline panels with corner ticks, cut-corner main buttons, and small monospace capitals for tabs,
+  labels and status, all in the PC's own fonts. Messages stay in the system font, larger (16 px). No
+  text is smaller than 12 px, and the main colours keep at least 4.5 to 1 contrast in both themes.
+- **The chat is a transcript.** Rows labelled `YOU` and `SAGE` instead of bubbles; Sage's newest reply
+  types itself out in about a second at most, and a click or any key shows it all at once. Notices
+  keep their own dashed card.
+- **Reduced motion is honoured.** With the system's "reduce motion" setting on, nothing in the window
+  moves and replies appear at once.
 
 ## [0.1.1] - 2026-11-16
 
@@ -234,6 +236,7 @@ All notable changes to Sage are documented here. The format follows
 - The talk key (Ctrl+Space) works only while the chat is shown, and Sage's window starts with the chat
   hidden until it knows whether to show the Welcome screen.
 
-[Unreleased]: https://github.com/HoneyBearTech/sage-assistant/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/HoneyBearTech/sage-assistant/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.2.0
 [0.1.1]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.1.1
 [0.1.0]: https://github.com/HoneyBearTech/sage-assistant/releases/tag/v0.1.0

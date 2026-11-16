@@ -1,6 +1,6 @@
 {
   "name": "sage-assistant",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Sage: a desktop assistant that runs on your own computer, with a local or online brain and an ask-first rule for anything risky.",
   "license": "MIT",
