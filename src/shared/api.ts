@@ -45,6 +45,8 @@ export interface PublicSettings {
   online: { baseUrl: string; model: string; hasKey: boolean };
   apps: PublicAppEntry[];
   folders: string[];
+  /** Read replies aloud: after voice messages, always, or never. */
+  speakReplies: "voice" | "always" | "never";
 }
 
 export type SettingsInput = Omit<PublicSettings, "online"> & {

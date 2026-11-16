@@ -58,6 +58,7 @@ export function toPublicSettings(settings: Settings, hasKey: boolean): PublicSet
     online: { baseUrl: settings.online.baseUrl, model: settings.online.model, hasKey },
     apps: settings.apps.map((app) => ({ name: app.name, path: app.path, args: [...app.args] })),
     folders: [...settings.folders],
+    speakReplies: settings.speakReplies,
   };
 }
 

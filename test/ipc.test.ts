@@ -300,6 +300,8 @@ test("toPublicSettings copies only the public fields", () => {
   const settings = { ...defaultSettings(), apps: [{ name: "A", path: "/a", args: ["x"] }] };
   const out = toPublicSettings(settings, true);
   assert.deepEqual(Object.keys(out.online).sort(), ["baseUrl", "hasKey", "model"]);
+  assert.deepEqual(Object.keys(out).sort(), ["apps", "brain", "folders", "local", "online", "speakReplies"]);
+  assert.equal(out.speakReplies, "voice");
   out.apps[0]!.args.push("y");
   assert.deepEqual(settings.apps[0]!.args, ["x"], "a copy, not the stored object");
 });

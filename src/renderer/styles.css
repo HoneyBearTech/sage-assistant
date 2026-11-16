@@ -134,6 +134,7 @@ button:disabled {
 }
 
 textarea,
+select,
 input[type="text"],
 input[type="url"],
 input[type="password"] {
@@ -163,6 +164,29 @@ input[type="password"] {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.voice-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0 16px 8px;
+}
+
+.voice-bar:not(:has(#voice-status:not(:empty), button:not([hidden]))) {
+  display: none;
+}
+
+.talk {
+  touch-action: none;
+  user-select: none;
+}
+
+.talk.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
 }
 
 .settings {

@@ -7,6 +7,9 @@ import { Serial } from "./serial.js";
 /** A small model that can use tools and runs on most PCs. */
 export const DEFAULT_LOCAL_MODEL = "qwen3:4b";
 
+/** The choices for "Read replies aloud". */
+export const SPEAK_REPLIES = ["voice", "always", "never"] as const;
+
 export const appEntrySchema = z.object({
   name: z.string().trim().min(1).max(60),
   /** The full path to the program. */
@@ -41,6 +44,11 @@ export const settingsSchema = z.object({
       "Each app needs a different name",
     ),
   folders: z.array(z.string().trim().min(1).max(1000)).max(50).default([]),
+  /**
+   * Read replies aloud: after voice messages (the default), always, or never. Added without a new
+   * version: a settings file saved before it existed loads unchanged, with the default.
+   */
+  speakReplies: z.enum(SPEAK_REPLIES).default("voice"),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
