@@ -11,7 +11,7 @@ All notable changes to Sage are documented here. The format follows
 - **The chat window's script is now a function, `startChatWindow()`, so the coverage report counts it
   once.** Each window test used to load the script again and every load was counted as a separate,
   partly covered file. `src/renderer/main.ts` calls the function and the build bundles it into the same
-  `renderer.js`. This is a test-only change: Sage behaves the same.
+  `renderer.js`. The window code is reorganised, not changed: Sage behaves the same.
 
 ### Fixed
 
