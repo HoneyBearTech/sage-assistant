@@ -373,3 +373,49 @@ test("without a saved key there is nothing to wait for: saving one and testing r
     message: "Save a Claude key first.",
   });
 });
+
+test("an answer to a request made with the old key is never shared or kept after the key changed", async () => {
+  // Order 1: the old request finishes after the new one.
+  {
+    const answers: ReturnType<typeof deferred<Response>>[] = [];
+    const { online, calls, clock } = await services(() => {
+      const answer = deferred<Response>();
+      answers.push(answer);
+      return answer.promise;
+    });
+    clock.step = 0;
+    const old = online.testKey("claude");
+    await settled();
+    online.forget("claude");
+    const fresh = online.testKey("claude");
+    await settled();
+    assert.equal(calls.length, 2, "the call after the change doesn't share the old request");
+    answers[1]!.resolve(jsonResponse(200, { data: [{ id: "new-key-model" }] }));
+    assert.deepEqual(await fresh, { ok: true, message: "The key works: Claude answered." });
+    answers[0]!.resolve(jsonResponse(401, { type: "error", error: { type: "authentication_error" } }));
+    assert.match(((await old) as { message: string }).message, /didn't accept the key/);
+    // Within the cooldown, the answer kept is the new key's, not the old one's.
+    assert.deepEqual(await online.listModels("claude"), { ok: true, models: ["new-key-model"] });
+    assert.equal(calls.length, 2);
+  }
+  // Order 2: the old request finishes first, after the change.
+  {
+    const answers: ReturnType<typeof deferred<Response>>[] = [];
+    const { online, calls, clock } = await services(() => {
+      const answer = deferred<Response>();
+      answers.push(answer);
+      return answer.promise;
+    });
+    clock.step = 0;
+    const old = online.listModels("gemini");
+    await settled();
+    online.forget("gemini");
+    answers[0]!.resolve(jsonResponse(200, { models: [{ name: "models/old-key-model" }] }));
+    await old;
+    const fresh = online.listModels("gemini");
+    await settled();
+    assert.equal(calls.length, 2, "the old answer wasn't kept");
+    answers[1]!.resolve(jsonResponse(200, { models: [{ name: "models/new-key-model" }] }));
+    assert.deepEqual(await fresh, { ok: true, models: ["new-key-model"] });
+  }
+});

@@ -96,9 +96,14 @@ export class OnlineServices {
   private readonly timeoutMs: number;
   private readonly now: () => number;
   /** The request running for each company: a second Load models or Test shares it. */
-  private readonly running = new Map<Company, Promise<ModelListResult>>();
+  private readonly running = new Map<Company, { generation: number; request: Promise<ModelListResult> }>();
   /** Each company's last answer from the service, and when it came. */
   private readonly recent = new Map<Company, { at: number; result: ModelListResult }>();
+  /**
+   * Goes up for a company whenever its key is saved or removed. An answer to a request started
+   * under an older value is neither kept nor shared with calls made after the change.
+   */
+  private readonly keyGeneration = new Map<Company, number>();
 
   constructor(private readonly deps: OnlineServicesDeps) {
     this.fetch = deps.fetch ?? ((input, init) => fetch(input, init));
@@ -113,19 +118,27 @@ export class OnlineServices {
   listModels(company: Company): Promise<ModelListResult> {
     const recent = this.recent.get(company);
     if (recent && this.now() - recent.at < COOLDOWN_MS) return Promise.resolve(recent.result);
+    const generation = this.generationOf(company);
     const running = this.running.get(company);
-    if (running) return running;
-    const request = this.askForModels(company).finally(() => this.running.delete(company));
-    this.running.set(company, request);
+    if (running && running.generation === generation) return running.request;
+    const request = this.askForModels(company, generation).finally(() => {
+      if (this.running.get(company)?.request === request) this.running.delete(company);
+    });
+    this.running.set(company, { generation, request });
     return request;
   }
 
-  /** Forgets the last answer for a company, when its key was saved or removed. */
+  /** Forgets everything Sage learned with a company's old key, when its key was saved or removed. */
   forget(company: Company): void {
+    this.keyGeneration.set(company, this.generationOf(company) + 1);
     this.recent.delete(company);
   }
 
-  private async askForModels(company: Company): Promise<ModelListResult> {
+  private generationOf(company: Company): number {
+    return this.keyGeneration.get(company) ?? 0;
+  }
+
+  private async askForModels(company: Company, generation: number): Promise<ModelListResult> {
     const service = serviceName(SERVICES[company].name);
     const url = MODELS_URLS[company];
     // The key for exactly this address: checked here, at the point of the request.
@@ -144,7 +157,8 @@ export class OnlineServices {
       : names
         ? { ok: true, models: cleanModelNames(names.filter((name) => !name.includes(key))) }
         : { ok: false, message: unreadableMessage(service) };
-    this.recent.set(company, { at: this.now(), result });
+    // Kept for the next few seconds only if the key is still the one this request was made with.
+    if (this.generationOf(company) === generation) this.recent.set(company, { at: this.now(), result });
     return result;
   }
 
