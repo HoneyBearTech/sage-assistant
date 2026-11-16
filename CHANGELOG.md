@@ -41,7 +41,8 @@ All notable changes to Sage are documented here. The format follows
   and what to try.
 - **Copy diagnostics.** A failed step offers **Copy diagnostics…**: Sage puts together a short text on
   your PC (its version, the system, the processor, the step and code, the kind of brain, whether the
-  runner answered and its version, whether the chosen model is there, the voice status, the theme and
+  runner answered and its version, the model tried and the saved one and whether each is
+  downloaded, the voice status, the theme and
   reduced motion), shows all of it in a read-only box, and **Copy to clipboard** copies exactly that.
   It never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders,
   and Sage sends it nowhere.

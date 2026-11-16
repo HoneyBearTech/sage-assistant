@@ -10,6 +10,7 @@ import type {
 import { SAGE_MODELS } from "../shared/api.js";
 import { SETUP_STEP_LABELS, SUPPORT_CODES } from "../shared/support-codes.js";
 import type { Settings } from "./settings.js";
+import type { TriedModel } from "./setup.js";
 
 // Copy diagnostics, for the Welcome screen's failed steps. The text is built here, in the main
 // process, from a fixed list of fields: Sage's version, the system, the step and its support code,
@@ -53,6 +54,8 @@ export interface DiagnosticsDeps {
   loadSettings: () => Promise<Settings>;
   runnerStatus: () => Promise<RunnerStatus>;
   voiceStatus: () => Promise<VoiceStatus>;
+  /** The model the last model request tried and didn't finish with (Setup.triedModel). */
+  triedModel: () => TriedModel | null;
   /** The redactor's: every key Sage has seen becomes "[redacted]". */
   redact: (text: string) => string;
   /** Puts text on the clipboard (Electron's clipboard, in the main process). */
@@ -76,6 +79,8 @@ export interface DiagnosticsFacts {
   theme: Settings["theme"] | "unknown";
   /** The local model in Settings, by name only when it is one of Sage's two. */
   model: { kind: "sage"; name: string } | { kind: "other" } | { kind: "unknown" };
+  /** The model the failed step tried, if any: always one of Sage's two. */
+  tried: TriedModel | null;
   runner: RunnerStatus | null;
   voice: VoiceStatus["model"] | null;
 }
@@ -96,12 +101,23 @@ const VOICE_WORDS: Record<VoiceStatus["model"], string> = {
 /** The text's lines, in order, as [label, value]. Labels are fixed; values are scrubbed later. */
 export function diagnosticsLines(facts: DiagnosticsFacts): [string, string][] {
   const runner = facts.runner;
-  const present =
-    !runner || runner.state === "unreachable" || runner.state === "unreadable"
-      ? "unknown (the runner didn't say)"
-      : runner.state === "ready"
-        ? "yes"
-        : "no";
+  const listed = runner && (runner.state === "ready" || runner.state === "no-model") ? runner : null;
+  const unknown = "unknown, the runner didn't say";
+  const saved = !listed ? unknown : listed.state === "ready" ? "yes" : "no";
+  const tried = facts.tried;
+  const triedText = !tried
+    ? "none"
+    : tried.saveFailed
+      ? `${SAGE_MODELS[tried.choice].name} (downloaded, but not saved as the local model)`
+      : `${SAGE_MODELS[tried.choice].name} (downloaded: ${
+          !listed ? unknown : listed.downloaded[tried.choice] ? "yes" : "no"
+        })`;
+  const savedName =
+    facts.model.kind === "sage"
+      ? facts.model.name
+      : facts.model.kind === "other"
+        ? "not one of Sage's two, name left out"
+        : "unknown";
   return [
     ["Sage version", facts.appVersion],
     ["System", `${facts.os} ${facts.osVersion}`],
@@ -111,15 +127,8 @@ export function diagnosticsLines(facts: DiagnosticsFacts): [string, string][] {
     ["Brain", facts.brain],
     ["Local model runner", runner ? RUNNER_WORDS[runner.state] : "couldn't be checked"],
     ["Runner version", runner?.version ?? "not reported"],
-    [
-      "Chosen local model",
-      facts.model.kind === "sage"
-        ? facts.model.name
-        : facts.model.kind === "other"
-          ? "not one of Sage's two (name left out)"
-          : "unknown",
-    ],
-    ["Chosen model downloaded", present],
+    ["Model tried", triedText],
+    ["Saved model", `${savedName} (downloaded: ${saved})`],
     ["Voice", facts.voice ? VOICE_WORDS[facts.voice] : "couldn't be checked"],
     ["Theme", facts.theme],
     ["Reduced motion", facts.request.reducedMotion ? "on" : "off"],
@@ -221,6 +230,7 @@ export class Diagnostics {
           : { kind: "other" },
       runner,
       voice: voice?.model ?? null,
+      tried: this.deps.triedModel(),
     };
   }
 

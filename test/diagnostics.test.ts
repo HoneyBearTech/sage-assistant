@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DIAGNOSTICS_MESSAGES, type SystemFacts, scrubValue, systemFacts } from "../src/core/diagnostics.js";
-import { createSage, type DiagnosticsParts } from "../src/core/sage.js";
+import { createSage, type DiagnosticsParts, type SageDeps } from "../src/core/sage.js";
 import { defaultSettings } from "../src/core/settings.js";
 import { createIpcHandlers } from "../src/main/ipc.js";
 import { CHANNELS, type DiagnosticsResult, type Result } from "../src/shared/api.js";
@@ -32,7 +32,12 @@ const PLANTED_SYSTEM: SystemFacts = {
 
 async function sageWith(
   t: Parameters<typeof tempDir>[0],
-  options: { port?: number; system?: SystemFacts; clipboard?: (text: string) => void } = {},
+  options: {
+    port?: number;
+    system?: SystemFacts;
+    clipboard?: (text: string) => void;
+    setup?: SageDeps["setup"];
+  } = {},
 ) {
   const dataDir = await tempDir(t);
   const copied: string[] = [];
@@ -55,6 +60,7 @@ async function sageWith(
     logSink: () => {},
     localPort: options.port ?? REFUSED_PORT,
     diagnostics,
+    ...(options.setup ? { setup: options.setup } : {}),
   });
   const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
   return { sage, handlers, copied };
@@ -96,8 +102,8 @@ test("the text has each expected line, built from the real checks", async (t) =>
       "Brain: local",
       "Local model runner: answered",
       "Runner version: 0.12.3",
-      "Chosen local model: qwen3:4b",
-      "Chosen model downloaded: yes",
+      "Model tried: none",
+      "Saved model: qwen3:4b (downloaded: yes)",
       "Voice: speech file not downloaded",
       "Theme: light",
       "Reduced motion: on",
@@ -118,7 +124,7 @@ test("each answer of the runner, the model and the voice gets its own fixed word
   assert.match(missing.text, /^Support code: SAGE-RUN-01: /m);
   assert.match(missing.text, /^Local model runner: didn't answer$/m);
   assert.match(missing.text, /^Runner version: not reported$/m);
-  assert.match(missing.text, /^Chosen model downloaded: unknown \(the runner didn't say\)$/m);
+  assert.match(missing.text, /^Saved model: qwen3:4b \(downloaded: unknown, the runner didn't say\)$/m);
   assert.match(missing.text, /^Reduced motion: off$/m);
 
   // A runner that answers with something Sage can't read.
@@ -145,8 +151,7 @@ test("each answer of the runner, the model and the voice gets its own fixed word
     })) as DiagnosticsResult & { ok: true }
   ).text;
   assert.match(ownText, /^Local model runner: answered$/m);
-  assert.match(ownText, /^Chosen local model: not one of Sage's two \(name left out\)$/m);
-  assert.match(ownText, /^Chosen model downloaded: no$/m);
+  assert.match(ownText, /^Saved model: not one of Sage's two, name left out \(downloaded: no\)$/m);
   assert.ok(!ownText.includes("private-model"));
 
   // Facts that can't be read say so; the rest still show.
@@ -169,7 +174,7 @@ test("each answer of the runner, the model and the voice gets its own fixed word
   assert.match(broken, /^Voice: couldn't be checked$/m);
   assert.match(broken, /^Local model runner: couldn't be checked$/m);
   assert.match(broken, /^Brain: unknown$/m);
-  assert.match(broken, /^Chosen local model: unknown$/m);
+  assert.match(broken, /^Saved model: unknown \(downloaded: unknown, the runner didn't say\)$/m);
   assert.match(broken, /^Theme: unknown$/m);
 });
 
@@ -370,4 +375,62 @@ test("keys are redacted before anything else is scrubbed, so no part of a key su
   assert.match(built.text, /^Runner version: 0\.12\.3-\[redacted\]$/m);
   assert.match(built.text, /^System: Linux 6\.8 \[redacted\]$/m);
   for (const part of ["fake", "value", "rest-of-key"]) assert.ok(!built.text.includes(part), part);
+});
+
+/** Setup's boxes, answered Download, for a model request that gets as far as the runner. */
+const AGREE: SageDeps["setup"] = {
+  confirmPull: async () => true,
+  confirmOpenGuide: async () => false,
+  openExternal: async () => {},
+};
+
+test("the model the failed step tried is reported, beside the saved one", async (t) => {
+  // Standard is saved and downloaded; Smaller is tried, and the disk is full.
+  const server = await fakeServer(t, (req, res) => {
+    if (req.url === "/api/tags") return json(res, 200, { models: [{ name: "qwen3:4b" }] });
+    if (req.url === "/api/pull") return json(res, 500, { error: "no space left on device" });
+    json(res, 404, {});
+  });
+  const { sage } = await sageWith(t, { port: server.port, setup: AGREE });
+  const failed = await sage.setup.pullModel("smaller");
+  assert.equal(failed.status === "failed" && failed.code, "SAGE-MOD-02");
+  const built = (await sage.diagnostics.build({
+    step: "model",
+    code: "SAGE-MOD-02",
+    reducedMotion: false,
+  })) as DiagnosticsResult & { ok: true };
+  assert.match(built.text, /^Model tried: qwen3:1\.7b \(downloaded: no\)$/m);
+  assert.match(built.text, /^Saved model: qwen3:4b \(downloaded: yes\)$/m);
+  assert.deepEqual(sage.setup.triedModel(), { choice: "smaller", saveFailed: false });
+});
+
+test("a model that downloaded but couldn't be saved is reported as such; a success clears it", async (t) => {
+  const server = await fakeServer(t, (req, res) => {
+    if (req.url === "/api/tags")
+      return json(res, 200, { models: [{ name: "qwen3:4b" }, { name: "qwen3:1.7b" }] });
+    json(res, 404, {});
+  });
+  const { sage } = await sageWith(t, { port: server.port, setup: AGREE });
+  const update = sage.settings.update.bind(sage.settings);
+  sage.settings.update = async () => ({ ok: false, message: "the disk is read-only" });
+  const failed = await sage.setup.pullModel("smaller");
+  assert.equal(failed.status === "failed" && failed.code, "SAGE-SET-01");
+  const built = (await sage.diagnostics.build({
+    step: "model",
+    code: "SAGE-SET-01",
+    reducedMotion: false,
+  })) as DiagnosticsResult & { ok: true };
+  assert.match(built.text, /^Model tried: qwen3:1\.7b \(downloaded, but not saved as the local model\)$/m);
+  assert.match(built.text, /^Saved model: qwen3:4b \(downloaded: yes\)$/m);
+  // Saved this time: nothing is left as tried.
+  sage.settings.update = update;
+  assert.equal((await sage.setup.pullModel("smaller")).status, "done");
+  assert.equal(sage.setup.triedModel(), null);
+  const after = (await sage.diagnostics.build({
+    step: "model",
+    code: "SAGE-MOD-01",
+    reducedMotion: false,
+  })) as DiagnosticsResult & { ok: true };
+  assert.match(after.text, /^Model tried: none$/m);
+  assert.match(after.text, /^Saved model: qwen3:1\.7b \(downloaded: yes\)$/m);
 });

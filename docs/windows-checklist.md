@@ -146,7 +146,8 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
 - [ ] **Copy diagnostics.** On the failed runner step, choose **Copy diagnostics…**: a box opens below
       with the whole text, and the keyboard focus moves to it. Read it: Sage's version, "System:
       Windows" and its version, the CPU, "Setup step: 02 Model runner", "Support code: SAGE-RUN-01: …",
-      "Brain: local", "Local model runner: didn't answer", the runner version, the chosen model, the
+      "Brain: local", "Local model runner: didn't answer", the runner version, "Model tried: none",
+      "Saved model: …", the
       voice status, the theme and reduced motion. Choose **Copy to clipboard**: it says "Copied."
       Open Notepad and paste: the text is exactly what the box showed. Check it holds no user name, no
       `C:\Users\…` path, no e-mail address, no key, no web address, and no note or reminder text (with
@@ -179,7 +180,8 @@ Welcome screen again at any time, choose **Settings → Set up Sage**.
       runner, with the line "Model qwen3:1.7b... download failed", a support code (`SAGE-NET-01` or
       `SAGE-NET-02`) and **Copy diagnostics…**, and offers **Try again**. Look the code up in
       `docs/installing.md` (Troubleshooting → Support codes). Choose **Copy diagnostics…**: the box says
-      "Setup step: 03 Model" and the same code. Turn the network back on.
+      "Setup step: 03 Model", the same code,
+      "Model tried: qwen3:1.7b (downloaded: no)" and the saved model. Turn the network back on.
 - [ ] **A real download.** **Try again**, then **Download**: the progress goes up to the full size, then
       it says "The Smaller model is ready." with **Next**, the lines "Model qwen3:1.7b... ready" and
       "Skills... supported", no code, and no warning about skills. Choose **Next**: "04 Ready" lists

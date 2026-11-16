@@ -314,8 +314,8 @@ such as `SAGE-RUN-01`, and a **Copy diagnostics…** button. The code says which
 says what to try. If you ask for help, give the code, and paste the diagnostics if you like: **Copy
 diagnostics…** shows the whole text first, and **Copy to clipboard** copies it. It holds Sage's version,
 the system and its version, the processor type, the step and its code, the kind of brain (never a key or
-an online address), whether the runner answered and its version, whether the chosen model is there (by
-name only if it is one of Sage's two), the voice status, and the theme and reduced-motion settings. It
+an online address), whether the runner answered and its version, the model the failed step tried and the saved local model, each with whether it is
+downloaded (by name only if it is one of Sage's two), the voice status, and the theme and reduced-motion settings. It
 never holds a key, a web or e-mail address, your user name, a folder path, notes or reminders. Sage
 sends it nowhere.
 

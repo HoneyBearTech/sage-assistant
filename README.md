@@ -78,7 +78,8 @@ When a check fails, Sage shows a short **support code** next to its plain senten
 and **Copy to clipboard** copies exactly that, for you to paste wherever you ask for help. It holds
 Sage's version, the system and its version, the processor type, the step and its code, the kind of
 brain (local, claude, openai, gemini or other), whether the local model runner answered and its version,
-whether the chosen model is there (named only if it is one of Sage's two), the voice status, and the
+the model the failed step tried and the saved local model, each with whether it is
+downloaded (named only if it is one of Sage's two), the voice status, and the
 theme and reduced-motion settings. It never holds a key, a web or e-mail address, your user name, a
 folder path, notes or reminders, and **Sage sends it nowhere**: it is copied only when you choose Copy.
 

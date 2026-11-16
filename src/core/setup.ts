@@ -39,6 +39,12 @@ export const SETUP_MESSAGES = {
   notMarked: "Sage couldn't save that setup is done. Try again.",
 } as const;
 
+/** The model a request tried: one of Sage's two, and whether it was there but couldn't be saved. */
+export interface TriedModel {
+  choice: ModelChoice;
+  saveFailed: boolean;
+}
+
 export interface SetupDeps {
   settings: SettingsStore;
   runner: RunnerClient;
@@ -77,7 +83,18 @@ export class Setup {
       }
     | undefined;
 
+  /**
+   * The model the last request tried, from the closed choice, for Copy diagnostics: set when a
+   * request starts, marked when the model was there but couldn't be saved, cleared on success.
+   */
+  private attempt: TriedModel | null = null;
+
   constructor(private readonly deps: SetupDeps) {}
+
+  /** The model the last model request tried and didn't finish with, or null. */
+  triedModel(): TriedModel | null {
+    return this.attempt ? { ...this.attempt } : null;
+  }
 
   async status(): Promise<RunnerStatus> {
     const model = (await this.deps.settings.load()).local.model;
@@ -114,6 +131,7 @@ export class Setup {
     }
     const current = { controller: new AbortController(), transferring: false, completed: 0, total: 0 };
     this.pull = current;
+    this.attempt = { choice, saveFailed: false };
     const signal = current.controller.signal;
     try {
       const model = SAGE_MODELS[choice].name;
@@ -151,7 +169,12 @@ export class Setup {
         }
         this.deps.logger.info(`The local model runner downloaded ${model}.`);
       }
-      return await this.useModel(model, current);
+      const result = await this.useModel(model, current);
+      if (result.status === "done") this.attempt = null;
+      else if (result.status === "failed" && result.code === "SAGE-SET-01") {
+        this.attempt = { choice, saveFailed: true };
+      }
+      return result;
     } catch (error) {
       // A fixed line only: nothing from the runner (or an error carrying its text) reaches the log.
       this.deps.logger.warn(`A model download failed unexpectedly (${errorName(error)}).`);

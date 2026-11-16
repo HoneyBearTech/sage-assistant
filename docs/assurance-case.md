@@ -432,8 +432,8 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   `diagnostics` (`sage:setup-diagnostics`) takes a strict object with the step (`runner` or `model`), a
   support code from the table and a yes or no for reduced motion; it returns the text, built in the
   main process from a fixed list of fields (Sage's version, the system and its version, the
-  processor, the step and code, the kind of brain, whether the runner answered and its version, the
-  local model by name only if it is one of Sage's two and whether it is there, the voice status, the
+  processor, the step and code, the kind of brain, whether the runner answered and its version, the model the step tried (from the closed choice, kept in the main process) and the saved local
+  model, each by name only if it is one of Sage's two and with whether it is downloaded, the voice status, the
   theme and reduced motion). It never reads a key, an online address, the apps, folders, notes or
   reminders, and every value is also scrubbed of the home folder, the user name, e-mail addresses, web
   addresses other than loopback and every key the redactor knows. `copyDiagnostics`

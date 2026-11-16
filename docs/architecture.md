@@ -302,8 +302,10 @@ that the two lists match and that every code is used.
 yes or no, checked with zod), nothing else. The main process (`src/core/diagnostics.ts`) builds the
 text from a fixed list of fields: Sage's version, the system and its version, the processor, the step
 and code, the kind of brain (`local`, `claude`, `openai`, `gemini` or `other`), whether the runner
-answered and its version, the local model (named only if it is one of Sage's two) and whether it is
-there, the voice status, the theme and reduced motion. It never reads keys, addresses, apps, folders,
+answered and its version, the model the failed step tried (kept in the main process
+by `Setup` from the closed choice when a model request starts, marked when it downloaded but couldn't
+be saved, cleared on success) and the saved local model, each named only if it is one of Sage's two,
+with whether it is downloaded, the voice status, the theme and reduced motion. It never reads keys, addresses, apps, folders,
 notes or reminders. As a second line of defence each value is scrubbed of the home folder, the user
 name, e-mail addresses, web addresses other than loopback, and every key the redactor knows. The text
 is kept under a new id (`diag-N`), replacing the one before, and returned for the window to show in
