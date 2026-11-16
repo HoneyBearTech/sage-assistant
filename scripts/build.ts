@@ -47,7 +47,7 @@ await Promise.all([
   }),
   build({
     ...common,
-    entryPoints: ["src/renderer/renderer.ts"],
+    entryPoints: ["src/renderer/main.ts"],
     outfile: "dist/renderer/renderer.js",
     platform: "browser",
     format: "iife",
