@@ -15,7 +15,12 @@ function runner(
   state: RunnerStatus["state"],
   downloaded = { standard: false, smaller: false },
 ): RunnerStatus {
-  return { state, model: "qwen3:4b", downloaded };
+  return {
+    state,
+    model: "qwen3:4b",
+    downloaded,
+    version: state === "ready" || state === "no-model" ? "0.12.3" : null,
+  };
 }
 
 async function welcomeWindow(
@@ -313,6 +318,7 @@ test("declined, cancelled and failed downloads say so, and Try again works", asy
     {
       status: "failed",
       message: "There isn't enough free disk space for the model. Free up some space, then try again.",
+      code: "SAGE-MOD-02",
     },
     { status: "done", skills: "unknown" },
   ];

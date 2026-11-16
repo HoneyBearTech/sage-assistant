@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SupportCode } from "../../shared/support-codes.js";
 import type { Timers } from "../voice/download.js";
 import { systemTimers } from "../voice/download.js";
 import { type FetchLike, isTimeout, readJsonCapped } from "./brain.js";
@@ -40,6 +41,31 @@ export const PULL_MESSAGES = {
     "The download made no progress for 2 minutes, so Sage stopped it. Check that this PC is online, then try again.",
 } as const;
 
+/** The support code for each of the download's messages (src/shared/support-codes.ts). */
+export const PULL_CODES: Record<keyof typeof PULL_MESSAGES, SupportCode> = {
+  unreachable: "SAGE-RUN-01",
+  unreadable: "SAGE-RUN-02",
+  offline: "SAGE-NET-01",
+  stalled: "SAGE-NET-02",
+  disk: "SAGE-MOD-02",
+  notFound: "SAGE-MOD-03",
+  other: "SAGE-MOD-01",
+};
+
+/** The support code for one of PULL_MESSAGES; anything else counts as "other". */
+export function pullCode(message: string): SupportCode {
+  for (const [key, text] of Object.entries(PULL_MESSAGES)) {
+    if (text === message) return PULL_CODES[key as keyof typeof PULL_MESSAGES];
+  }
+  return PULL_CODES.other;
+}
+
+/**
+ * The runner's version, as Sage reads it: digits and dots with an optional short suffix, and
+ * nothing else. Anything else counts as not reported, so no other text from the runner is ever kept.
+ */
+const RUNNER_VERSION = /^\d{1,6}(?:\.\d{1,6}){1,3}(?:[-+][0-9A-Za-z.-]{1,32})?$/;
+
 export type ModelList = { ok: true; names: string[] } | { ok: false; reason: "unreachable" | "unreadable" };
 
 export type PullOutcome =
@@ -74,6 +100,8 @@ export interface RunnerClientOptions {
 const tagsReply = z.object({
   models: z.array(z.object({ name: z.string().min(1).max(500) })).max(10_000),
 });
+
+const versionReply = z.object({ version: z.string().regex(RUNNER_VERSION) });
 
 const showReply = z.object({ capabilities: z.array(z.string().max(200)).max(1_000).nullish() });
 
@@ -157,6 +185,28 @@ export class RunnerClient {
     const parsed = tagsReply.safeParse(body);
     if (!parsed.success) return { ok: false, reason: "unreadable" };
     return { ok: true, names: parsed.data.models.map((model) => model.name) };
+  }
+
+  /**
+   * The runner's version, or null when it doesn't say (or says something that isn't a plain version
+   * number). Only asked once the runner has answered for its models.
+   */
+  async version(): Promise<string | null> {
+    try {
+      const response = await this.fetch(`${this.base}/api/version`, {
+        method: "GET",
+        redirect: "error",
+        signal: AbortSignal.timeout(this.statusTimeoutMs),
+      });
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        return null;
+      }
+      const parsed = versionReply.safeParse(await readJsonCapped(response, MAX_STATUS_BYTES));
+      return parsed.success ? parsed.data.version : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Whether `model` can use tools (Sage's skills), as far as the runner says. */

@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
-import type { AskingEvent, HomeSummary, PublicSettings, SageApi } from "../src/shared/api.js";
+import type {
+  AskingEvent,
+  DiagnosticsRequest,
+  HomeSummary,
+  PublicSettings,
+  SageApi,
+} from "../src/shared/api.js";
 import { installFakeDom, removeFakeDom } from "./fake-dom.js";
 import { type FakeMedia, installFakeMedia, removeFakeMedia } from "./fake-media.js";
 import { settled } from "./helpers.js";
@@ -73,6 +79,8 @@ export async function startWindow(
     keyPages: [] as string[],
     homeSummary: 0,
     claims: 0,
+    diagnostics: [] as DiagnosticsRequest[],
+    copied: [] as string[],
   };
   const settings: PublicSettings = {
     brain: "local",
@@ -141,12 +149,25 @@ export async function startWindow(
       state: "ready",
       model: settings.local.model,
       downloaded: { standard: false, smaller: false },
+      version: "0.12.3",
     }),
     pullModel: async (choice) => {
       calls.pulls.push(choice);
       return { status: "done", skills: "yes" };
     },
     pullStatus: async () => ({ downloading: false, completed: 0, total: 0 }),
+    diagnostics: async (request) => {
+      calls.diagnostics.push(request);
+      return {
+        ok: true,
+        id: `diag-${calls.diagnostics.length}`,
+        text: "Sage diagnostics\nSupport code: test",
+      };
+    },
+    copyDiagnostics: async (id) => {
+      calls.copied.push(id);
+      return { ok: true };
+    },
     cancelPull: async () => {
       calls.cancelPull++;
       return "cancelled";

@@ -9,6 +9,7 @@ import { ResponsesBrain } from "./brain/responses.js";
 import { RunnerClient } from "./brain/runner.js";
 import type { Launcher } from "./apps.js";
 import { type KeyStores, ServiceKeys } from "./keystore.js";
+import { Diagnostics, type SystemFacts } from "./diagnostics.js";
 import { createLogger, type Logger, type LogSink, SecretRedactor } from "./log.js";
 import { Home } from "./home.js";
 import { NoticeBoard } from "./notices.js";
@@ -49,7 +50,23 @@ export interface SageDeps {
   voice?: VoiceParts;
   /** First-run setup's parts from the main process; without them nothing is asked or opened. */
   setup?: SetupParts;
+  /** Copy diagnostics' parts from the main process; without them nothing can be copied. */
+  diagnostics?: DiagnosticsParts;
 }
+
+/** Sage's version and the clipboard, for Copy diagnostics; `system` only for tests. */
+export interface DiagnosticsParts {
+  appVersion: string;
+  writeClipboard: (text: string) => void;
+  system?: SystemFacts;
+}
+
+const NO_DIAGNOSTICS: DiagnosticsParts = {
+  appVersion: "unknown",
+  writeClipboard: () => {
+    throw new Error("No clipboard here.");
+  },
+};
 
 /**
  * The main process's boxes for the Welcome screen and the key pages, and the web browser. A box
@@ -106,6 +123,8 @@ export interface Sage {
   services: OnlineServices;
   /** Home's read-only summary, and the morning brief's once-a-day mark. */
   home: Home;
+  /** Copy diagnostics for the Welcome screen: built here, copied only on request, never sent. */
+  diagnostics: Diagnostics;
 }
 
 export function createSage(deps: SageDeps): Sage {
@@ -201,7 +220,19 @@ export function createSage(deps: SageDeps): Sage {
     now,
   });
 
+  const diagnosticsParts = deps.diagnostics ?? NO_DIAGNOSTICS;
+  const diagnostics = new Diagnostics({
+    appVersion: diagnosticsParts.appVersion,
+    writeClipboard: diagnosticsParts.writeClipboard,
+    loadSettings: () => settings.load(),
+    runnerStatus: () => setup.status(),
+    voiceStatus: () => voice.status(),
+    redact: (text) => redactor.redact(text),
+    ...(diagnosticsParts.system ? { system: diagnosticsParts.system } : {}),
+  });
+
   return {
+    diagnostics,
     home,
     services,
     assistant,

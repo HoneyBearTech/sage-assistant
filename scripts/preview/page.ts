@@ -142,12 +142,15 @@ const sage: SageApi = {
     state: "no-model",
     model: settings.local.model,
     downloaded: { standard: false, smaller: true },
+    version: "0.12.3",
   }),
   pullModel: async () => ({ status: "declined" }),
   pullStatus: async () => ({ downloading: false, completed: 0, total: 0 }),
   cancelPull: async () => "idle",
   openInstallGuide: async () => ({ status: "declined" }),
   finishSetup: async () => ({ ok: true }),
+  diagnostics: async () => ({ ok: false, message: "The preview has no diagnostics." }),
+  copyDiagnostics: async () => ({ ok: false, message: "The preview has no clipboard." }),
   setSound: async (on) => {
     settings.sound = on;
     return { ok: true };

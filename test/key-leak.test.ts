@@ -104,10 +104,13 @@ test("the online key never appears in any file, log line, reply or the chat hist
   });
 
   const presenter = new FakePresenter(true);
+  const clipboard: string[] = [];
   const sage = createSage({
     dataDir: dir,
     keyStores: encryptedKeyStores(dir, fakeEncryptor()),
     presenter,
+    // Copy diagnostics: what it builds and copies is searched too.
+    diagnostics: { appVersion: "0.0.0", writeClipboard: (text) => clipboard.push(text) },
     notify: () => true,
     openPath: async () => "",
     launch: async () => {},
@@ -149,6 +152,13 @@ test("the online key never appears in any file, log line, reply or the chat hist
   assert.ok((await readdir(dir)).includes("notes.json"));
   assert.ok((await readdir(dir)).includes("action-log.jsonl"));
   sage.logger.error(`a log line that mentions ${SENTINEL} by accident`);
+  const diagnostics = (await handlers[CHANNELS.diagnostics]({
+    step: "runner",
+    code: "SAGE-RUN-01",
+    reducedMotion: false,
+  })) as { ok: true; id: string; text: string };
+  assert.deepEqual(await handlers[CHANNELS.copyDiagnostics]({ id: diagnostics.id }), { ok: true });
+  assert.match(diagnostics.text, /^Brain: other$/m, "the diagnostics really ran");
 
   const encodings = [
     SENTINEL,
@@ -167,6 +177,8 @@ test("the online key never appears in any file, log line, reply or the chat hist
     JSON.stringify(publicSettings),
     JSON.stringify(sage.assistant.transcript),
     JSON.stringify(presenter.asked),
+    diagnostics.text,
+    ...clipboard,
   ];
   for (const text of everythingElse) assert.ok(!text.includes(SENTINEL), `leaked: ${text.slice(0, 200)}`);
   assert.ok(

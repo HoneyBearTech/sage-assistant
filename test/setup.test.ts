@@ -36,6 +36,8 @@ const RUNNER_TEXT = "secret-runner-wording-xyz";
 interface FakeRunner {
   models: string[];
   capabilities?: string[];
+  /** What GET /api/version answers; no answer (404) when not given. */
+  version?: unknown;
   /** Answers a pull; by default progress, then success. */
   pull?: (req: Recorded, res: ServerResponse) => void;
 }
@@ -56,6 +58,9 @@ async function setupWith(
   if (runner !== "none") {
     const server = await fakeServer(t, (req, res) => {
       if (req.url === "/api/tags") return json(res, 200, { models: runner.models.map((name) => ({ name })) });
+      if (req.url === "/api/version" && runner.version !== undefined) {
+        return json(res, 200, { version: runner.version });
+      }
       if (req.url === "/api/show") {
         return json(res, 200, runner.capabilities ? { capabilities: runner.capabilities } : {});
       }
@@ -100,18 +105,21 @@ test("the runner's status for the saved local model, and which of Sage's models 
     state: "unreachable",
     model: "qwen3:4b",
     downloaded: { standard: false, smaller: false },
+    version: null,
   });
   const empty = await setupWith(t, { models: ["something-else:latest"] });
   assert.deepEqual(await empty.setup.status(), {
     state: "no-model",
     model: "qwen3:4b",
     downloaded: { standard: false, smaller: false },
+    version: null,
   });
-  const both = await setupWith(t, { models: ["qwen3:1.7b", "qwen3:4b"] });
+  const both = await setupWith(t, { models: ["qwen3:1.7b", "qwen3:4b"], version: "0.12.3" });
   assert.deepEqual(await both.setup.status(), {
     state: "ready",
     model: "qwen3:4b",
     downloaded: { standard: true, smaller: true },
+    version: "0.12.3",
   });
   // A model of the user's own, saved without a tag, matches the runner's ":latest".
   const own = await setupWith(t, { models: ["mymodel:latest"] });
@@ -120,6 +128,28 @@ test("the runner's status for the saved local model, and which of Sage's models 
   // A reply Sage can't read.
   const odd = await fakeServer(t, (_req, res) => json(res, 200, { models: RUNNER_TEXT }));
   assert.equal((await (await bareSetup(t, odd.port)).status()).state, "unreadable");
+});
+
+test("the runner's version is kept only when it is a plain version number", async (t) => {
+  for (const [version, expected] of [
+    ["0.12.3", "0.12.3"],
+    ["0.13.0-rc1", "0.13.0-rc1"],
+    ["1.2", "1.2"],
+    [RUNNER_TEXT, null],
+    ["0.12.3 /home/someone", null],
+    ["https://elsewhere.example/1.0", null],
+    ["9".repeat(50), null],
+    [12, null],
+    [{ major: 0 }, null],
+  ] as const) {
+    const { setup, requests } = await setupWith(t, { models: ["qwen3:4b"], version });
+    assert.equal((await setup.status()).version, expected, JSON.stringify(version));
+    assert.ok(requests.some((req) => req.url === "/api/version" && req.method === "GET"));
+  }
+  // A runner that doesn't answer for its models isn't asked for its version.
+  const odd = await fakeServer(t, (_req, res) => json(res, 500, {}));
+  assert.equal((await (await bareSetup(t, odd.port)).status()).version, null);
+  assert.ok(!odd.requests.some((req) => req.url === "/api/version"));
 });
 
 /** A Setup on `port` that is never allowed to ask, download or open anything. */
@@ -224,6 +254,7 @@ test("while downloading: progress, one download at a time, and Cancel saves noth
   assert.deepEqual(await setup.pullModel("smaller"), {
     status: "failed",
     message: SETUP_MESSAGES.alreadyDownloading,
+    code: "SAGE-MOD-04",
   });
   setup.cancelPull();
   assert.deepEqual(await running, { status: "cancelled" });
@@ -259,7 +290,7 @@ test("a failed download gives Sage's message, saves nothing, and Try again works
   };
   const { setup, settings, lines } = await setupWith(t, runner);
   const failed = await setup.pullModel("smaller");
-  assert.deepEqual(failed, { status: "failed", message: PULL_MESSAGES.disk });
+  assert.deepEqual(failed, { status: "failed", message: PULL_MESSAGES.disk, code: "SAGE-MOD-02" });
   assert.deepEqual(await settings.load(), defaultSettings());
   assert.ok(!lines.join("\n").includes(RUNNER_TEXT), "the runner's text isn't logged");
   fail = false;
@@ -272,6 +303,7 @@ test("with no runner, a download isn't offered: no box, and the plain message", 
   assert.deepEqual(await setup.pullModel("standard"), {
     status: "failed",
     message: PULL_MESSAGES.unreachable,
+    code: "SAGE-RUN-01",
   });
   assert.deepEqual(asked.pull, []);
   const odd = await fakeServer(t, (_req, res) => json(res, 500, {}));
@@ -279,6 +311,7 @@ test("with no runner, a download isn't offered: no box, and the plain message", 
   assert.deepEqual(await unreadable.pullModel("standard"), {
     status: "failed",
     message: PULL_MESSAGES.unreadable,
+    code: "SAGE-RUN-02",
   });
 });
 
@@ -371,7 +404,7 @@ async function ipcWith(t: Parameters<typeof tempDir>[0], models: string[] = []) 
 
 test("the window can only pick one of Sage's two models, never send a model name", async (t) => {
   const { handlers, server, asked } = await ipcWith(t);
-  const refused = { status: "failed", message: "Sage couldn't read that choice." };
+  const refused = { status: "failed", message: "Sage couldn't read that choice.", code: "SAGE-APP-01" };
   for (const payload of [
     undefined,
     { choice: "qwen3:4b" },
@@ -405,6 +438,7 @@ test("the runner's status, the install guide and finishing go through their own 
     state: "ready",
     model: "qwen3:4b",
     downloaded: { standard: true, smaller: false },
+    version: null,
   });
   // Whatever the window sends, only the fixed address is opened.
   assert.deepEqual(await handlers[CHANNELS.openInstallGuide]({ url: "https://elsewhere.example" }), {
@@ -612,7 +646,11 @@ test("an unexpected error is logged as a fixed line, never with its text", async
     confirmOpenGuide: async () => false,
     openExternal: async () => {},
   });
-  assert.deepEqual(await setup.pullModel("standard"), { status: "failed", message: PULL_MESSAGES.other });
+  assert.deepEqual(await setup.pullModel("standard"), {
+    status: "failed",
+    message: PULL_MESSAGES.other,
+    code: "SAGE-MOD-01",
+  });
   assert.ok(!lines.join("\n").includes(RUNNER_TEXT));
   assert.ok(lines.some((line) => line.includes("A model download failed unexpectedly (TypeError).")));
 });

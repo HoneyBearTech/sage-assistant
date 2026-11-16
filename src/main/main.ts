@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -207,6 +208,8 @@ async function start(): Promise<void> {
     logSink: consoleSink,
     voice: { confirmDownload: confirmVoiceDownload, startHelper: startVoiceHelper },
     setup: setupParts,
+    // Copy diagnostics: written to the clipboard only when the user chooses Copy, never sent.
+    diagnostics: { appVersion: app.getVersion(), writeClipboard: (text) => clipboard.writeText(text) },
   });
   await sage.voice.removeLeftovers();
   app.on("will-quit", () => {

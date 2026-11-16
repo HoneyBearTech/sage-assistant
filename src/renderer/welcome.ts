@@ -164,7 +164,7 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
     try {
       result = await sage.pullModel(choice);
     } catch {
-      result = { status: "failed", message: WELCOME_TEXT.failed };
+      result = { status: "failed", message: WELCOME_TEXT.failed, code: "SAGE-APP-01" };
     } finally {
       clearInterval(poll);
       downloading = false;
