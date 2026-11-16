@@ -397,6 +397,8 @@ export function startChatWindow(): void {
   let draftModels: Record<Company, string> = { claude: "", openai: "", gemini: "" };
   /** The company whose model the model box shows now (null when another brain is chosen). */
   let shownCompany: Company | null = null;
+  /** The brain whose key box is on screen: a key typed for one brain is never saved for another. */
+  let shownBrain: BrainChoice | null = null;
   /** Goes up whenever the chosen company changes; a model list for an earlier one is dropped. */
   let companyChanges = 0;
 
@@ -470,6 +472,10 @@ export function startChatWindow(): void {
       keyResult.textContent = "";
     }
     shownCompany = company;
+    // A key typed (and not saved) for one brain is cleared when another is picked, so Save key can
+    // only ever store it for the brain it was typed for.
+    if (brain !== shownBrain) keyInput.value = "";
+    shownBrain = brain;
     panels.local.hidden = brain !== "local";
     panels.other.hidden = brain !== "other";
     panels.service.hidden = company === null;

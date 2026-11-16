@@ -241,3 +241,25 @@ test("Get a key asks the main process with the company's id only, and says what 
   await settled();
   assert.match(el("key-result").textContent, /^Sage couldn't open your web browser/);
 });
+
+test("a key typed for one brain is cleared when another is picked, so it is never saved for the other", async (t) => {
+  const { el, calls } = await startWindow(t, async () => "");
+  el("tab-settings").click();
+  pick(el, "claude");
+  el("online-key").value = "fake-claude-key-for-tests";
+  pick(el, "openai");
+  assert.equal(el("online-key").value, "", "the box empties on the switch");
+  el("save-key").click();
+  await settled();
+  assert.deepEqual(calls.keys, [], "nothing was saved for OpenAI");
+  el("online-key").value = "fake-openai-key-for-tests";
+  el("save-key").click();
+  await settled();
+  assert.deepEqual(calls.keys, [["openai", "fake-openai-key-for-tests"]]);
+  // Picking the same brain again keeps what is typed.
+  el("online-key").value = "fake-openai-key-number-two";
+  pick(el, "openai");
+  assert.equal(el("online-key").value, "fake-openai-key-number-two");
+  pick(el, "other");
+  assert.equal(el("online-key").value, "");
+});
