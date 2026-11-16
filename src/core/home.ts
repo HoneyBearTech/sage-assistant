@@ -99,6 +99,23 @@ export function homeSummary(input: HomeInputs): HomeSummary {
   };
 }
 
+/** A saved brief day this far ahead of today means the clock was wrong then; it is replaced. */
+export const BRIEF_DAYS_AHEAD_BROKEN = 2;
+
+/**
+ * Whether the morning brief is due today (both days as YYYY-MM-DD on the PC's clock): when none was
+ * shown yet, or the last one was on an earlier day. A last day later than today (the clock was moved
+ * back) means not yet, so the day never moves backwards and the brief isn't shown twice for one day;
+ * but a last day more than BRIEF_DAYS_AHEAD_BROKEN days ahead is taken as a broken clock, and today
+ * counts again.
+ */
+export function briefDue(lastBrief: string | null, today: string): boolean {
+  if (lastBrief === null || lastBrief < today) return true;
+  if (lastBrief === today) return false;
+  const [year, month, day] = today.split("-").map(Number) as [number, number, number];
+  return lastBrief > localDate(new Date(year, month - 1, day + BRIEF_DAYS_AHEAD_BROKEN));
+}
+
 function timeOf(stamp: string): number {
   const time = Date.parse(stamp);
   return Number.isFinite(time) ? time : 0;
@@ -138,16 +155,16 @@ export class Home {
    * True only the first time it is asked on a new day while the morning brief is on, and that day
    * is then saved (under the settings lock, changing nothing else), so a second window load, or a
    * restart, the same day gets false. False when the day couldn't be saved: better no brief than one
-   * every time the window opens.
+   * every time the window opens. The saved day never moves backwards (see `briefDue`).
    */
   async claimMorningBrief(): Promise<boolean> {
     const today = localDate(this.deps.now());
     // Most days, and whenever it is off, nothing needs saving: the file isn't touched.
     const saved = await this.deps.settings.load();
-    if (!saved.morningBrief || saved.lastBrief === today) return false;
+    if (!saved.morningBrief || !briefDue(saved.lastBrief, today)) return false;
     let claimed = false;
     const result = await this.deps.settings.update((current) => {
-      if (!current.morningBrief || current.lastBrief === today) return current;
+      if (!current.morningBrief || !briefDue(current.lastBrief, today)) return current;
       claimed = true;
       return { ...current, lastBrief: today };
     });
