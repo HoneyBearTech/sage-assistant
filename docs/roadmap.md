@@ -128,6 +128,10 @@ later, and what Sage will not do.
 - [ ] **Minor:** in Settings, a Test or Load models still running when that company's key is saved or
       removed can show its old answer ("The key works" next to "No key saved"). Sage itself never reuses
       the old answer; only the window's display is stale. Clear pending results when the key changes.
+- [x] **OpenSSF Best Practices badge** (openssf-badge): the badge for project 16810 under the README's
+      title, explained in [the GitHub checks notes](github-checks.md).
+- [ ] **Owner:** fill in the questionnaire at https://www.bestpractices.dev/projects/16810 (the badge
+      shows "in progress" until then). A later job can draft suggested answers from the repo.
 - [ ] **GitHub Copilot sign-in** with the user's subscription, after a trial that checks it can answer
       without using its own tools. Its own plan.
 
