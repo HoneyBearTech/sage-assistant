@@ -112,6 +112,9 @@ microphone. To start from scratch, close Sage and delete `%APPDATA%\sage-assista
       appear. Tab to the button, hold **Space** while you speak, and let go: the same.
 - [ ] On the button, hold **Space**, press **Tab** while still holding, then let go: the microphone icon
       disappears as soon as you press Tab (not after 30 seconds), and the words appear.
+- [ ] Send a question, and while Sage is answering, Tab to the button and hold **Enter** while you speak.
+      Keep holding Enter after the reply appears: the words appear in the message box and are **not**
+      sent. Let go of Enter, then press it again: now they are sent.
 - [ ] Hold Ctrl+Space, let go, and press Ctrl+Space again at once while it says "Working out what you
       said…": it says it is still working, and only the first words appear. Talk again, let go and
       click **New chat** at once: the status line clears and no words appear.

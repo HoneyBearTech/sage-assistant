@@ -75,6 +75,9 @@ composer.addEventListener("submit", (event) => {
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
+    // Only a fresh press sends: not a held key repeating, and not while the key that started a
+    // recording is still down (holding Enter on Talk can end with the focus here).
+    if (event.repeat || voice.holdingTalkKey()) return;
     void submit();
   }
 });

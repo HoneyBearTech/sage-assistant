@@ -254,8 +254,11 @@ crash; or a misheard word could be sent to the brain.
   or opens a connection; the CSP and permissions unchanged), `test/renderer-voice.test.ts` (no worklets,
   workers, blob addresses or console logging).
 - **Words go into the box, never sent by themselves.** The transcript is added to the message box and
-  the user presses Enter. Text from speech is like typed text: it goes only to the brain, and skills run
-  only from the model's tool calls, with the ask-first rule (T1). *Evidence:* `test/renderer-voice.test.ts`.
+  the user presses Enter. Only a fresh Enter press sends: not a held key repeating, and not while the key
+  that started a recording is still down (holding Enter on the Talk button can end with the focus in
+  the message box). Text from speech is like typed text: it goes only to the brain, and skills run
+  only from the model's tool calls, with the ask-first rule (T1). *Evidence:* `test/renderer-voice.test.ts`
+  ("Enter held on Talk while a reply arrives never sends the words it dictated").
 - **Checked at the boundary.** The transcribe channel accepts only an `Int16Array` of 1 to 480,000
   samples (30 seconds), on a buffer no bigger than that, checked before it is read; one recording at a
   time. *Evidence:* `test/ipc.test.ts`, `test/voice.test.ts`.

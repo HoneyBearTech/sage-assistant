@@ -85,7 +85,8 @@ strike them through with a reason.
 - **No telemetry, analytics or crash reporting**, and no network calls from the window.
 - **Voice.** The microphone is open only while the talk key or button is held (closed on release, after
   30 seconds, on blur, hidden window or New chat); sound and words are never saved or logged. The words
-  go into the message box, never sent by themselves. The window needs no new permission, worklet, worker,
+  go into the message box, never sent by themselves (Enter sends only on a fresh press, not a repeat or
+  while the key that started a recording is held). The window needs no new permission, worklet, worker,
   `blob:` address or CSP change. The speech file is downloaded only by the main process, only after its
   own box returns Download, from the pinned addresses in `src/core/voice/model.ts`, https only, checked
   by size and SHA-256; it is the only thing Sage downloads by itself. Spoken replies use only voices

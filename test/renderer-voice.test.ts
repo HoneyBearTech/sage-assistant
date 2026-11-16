@@ -250,6 +250,68 @@ test("New chat keeps the box's words, and with them the mark that they came from
   assert.equal(media.speech.spoken.length, 1);
 });
 
+test("Enter held on Talk while a reply arrives never sends the words it dictated", async (t) => {
+  const reply = deferred<string>();
+  const { el, calls, media } = await voiceWindow(t, { send: () => reply.promise });
+  const input = el("input");
+  const talk = el("talk");
+  input.value = "first question";
+  input.dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["first question"]);
+  // While the reply is pending: hold Enter on the Talk button and speak.
+  talk.dispatch("keydown", { key: "Enter" });
+  await settled();
+  t.mock.timers.tick(1_500);
+  // The reply arrives and focuses the message box: the button loses focus, the recording stops and
+  // is worked out while Enter is still held.
+  reply.resolve("The reply.");
+  await settled();
+  talk.dispatch("blur");
+  assert.equal(media.streams[0]!.open, false);
+  await settled();
+  await settled();
+  assert.equal(input.value, "hello Sage");
+  // The held Enter keeps repeating, now in the message box: nothing is sent.
+  input.dispatch("keydown", { key: "Enter", repeat: true });
+  input.dispatch("keydown", { key: "Enter", repeat: true });
+  await settled();
+  assert.deepEqual(calls.send, ["first question"], "not sent by a repeating Enter");
+  // Even a keydown that doesn't say it repeats sends nothing while the key is still down.
+  input.dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["first question"]);
+  // Let go of Enter, then press it again: now it is sent.
+  pressKey("keyup", { key: "Enter" });
+  input.dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["first question", "hello Sage"]);
+});
+
+test("a held key is forgotten when the window loses focus, so Enter sends again", async (t) => {
+  const { el, calls } = await voiceWindow(t);
+  el("talk").dispatch("keydown", { key: "Enter" });
+  await settled();
+  // Released in another window: Sage never sees the key go up.
+  blurWindow();
+  el("input").value = "typed";
+  el("input").dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["typed"]);
+  // The same after Ctrl+Space, and a repeating Enter alone never sends.
+  pressKey("keydown", ctrlSpace);
+  await settled();
+  setWindowVisibility("hidden");
+  setWindowVisibility("visible");
+  el("input").value = "again";
+  el("input").dispatch("keydown", { key: "Enter", repeat: true });
+  await settled();
+  assert.deepEqual(calls.send, ["typed"]);
+  el("input").dispatch("keydown", { key: "Enter" });
+  await settled();
+  assert.deepEqual(calls.send, ["typed", "again"]);
+});
+
 test('after New chat drops a job, its "still working" line goes when that job ends', async (t) => {
   const answer = deferred<TranscribeResult>();
   const { el, hold, status, media } = await voiceWindow(t, { transcribe: () => answer.promise });

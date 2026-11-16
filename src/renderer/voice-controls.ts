@@ -29,6 +29,11 @@ export interface VoiceControls {
   reset(): void;
   /** For a message being sent: true if any of its words came from talking. Clears the mark. */
   takeFromVoice(): boolean;
+  /**
+   * True from pressing a key that starts a recording until that key is let go, even after the
+   * recording itself has stopped: a held Enter must not go on to send the words it just dictated.
+   */
+  holdingTalkKey(): boolean;
   /** Reads Sage's final reply aloud if the setting says so; never while Sage is listening. */
   replied(reply: string, fromVoice: boolean, setting: PublicSettings["speakReplies"]): void;
 }
@@ -60,6 +65,8 @@ export function createVoiceControls(
   let downloading = false;
   let ready = false;
   let fromVoice = false;
+  /** The key (or "ctrl-space") pressed to start a recording, until it is let go. */
+  let heldKey: string | null = null;
 
   const speaker = new Speaker(synth, (current) => {
     el.stopSpeaking.hidden = !current.speaking;
@@ -224,10 +231,18 @@ export function createVoiceControls(
     if (!isTalkKey(event)) return;
     event.preventDefault();
     if (event.repeat) return;
+    heldKey = "ctrl-space";
     void startTalk("key");
   });
   // Letting go is watched on the whole page, so it works wherever the focus has moved meanwhile.
   document.addEventListener("keyup", (event) => {
+    if (
+      heldKey === "ctrl-space"
+        ? event.key === "Control" || event.code === "Space" || event.key === " "
+        : event.key === heldKey
+    ) {
+      heldKey = null;
+    }
     const stops =
       talk?.source === "key"
         ? // Letting go of either key stops it.
@@ -253,7 +268,9 @@ export function createVoiceControls(
   el.talkButton.addEventListener("keydown", (event) => {
     if (event.ctrlKey || (event.key !== " " && event.key !== "Enter")) return;
     event.preventDefault();
-    if (!event.repeat) void startTalk("button-key", event.key);
+    if (event.repeat) return;
+    heldKey = event.key;
+    void startTalk("button-key", event.key);
   });
   // Held from the keyboard and the focus moves away (Tab, or a reply focusing the message box): it
   // stops there, and what was said so far is worked out.
@@ -261,9 +278,15 @@ export function createVoiceControls(
     if (talk?.source === "button-key") void stopTalk();
   });
 
-  window.addEventListener("blur", () => cancelTalk(VOICE_TEXT.lostFocus));
+  // Key releases aren't seen while another window has the focus, so a held key is forgotten here.
+  window.addEventListener("blur", () => {
+    heldKey = null;
+    cancelTalk(VOICE_TEXT.lostFocus);
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") cancelTalk(VOICE_TEXT.lostFocus);
+    if (document.visibilityState !== "hidden") return;
+    heldKey = null;
+    cancelTalk(VOICE_TEXT.lostFocus);
   });
 
   el.input.addEventListener("input", () => {
@@ -311,6 +334,9 @@ export function createVoiceControls(
       // The status line goes (a download keeps its progress line). The message box keeps its text,
       // so the mark that some of it came from talking stays until the box is emptied or sent.
       if (!downloading) show("");
+    },
+    holdingTalkKey() {
+      return heldKey !== null;
     },
     takeFromVoice() {
       const taken = fromVoice;
