@@ -39,6 +39,8 @@ export class Assistant {
   private generation = 0;
   /** The reply for each stopped turn, by the generation it started under. */
   private readonly stopped = new Map<number, string>();
+  /** Cancels the running turn's requests to the brain; fired whenever the turn is stopped. */
+  private turnAbort: AbortController | null = null;
   private readonly now: () => Date;
 
   constructor(private readonly deps: AssistantDeps) {
@@ -67,12 +69,17 @@ export class Assistant {
     if (this.busy) this.stopped.set(this.generation, reply);
     this.generation++;
     this.busy = false;
+    // The brain sends nothing more for the stopped turn, and its request in flight is cancelled.
+    this.turnAbort?.abort();
+    this.turnAbort = null;
   }
 
   async send(text: string): Promise<string> {
     if (this.busy) return "I'm still working on your last message.";
     this.busy = true;
     const generation = this.generation;
+    const turnAbort = new AbortController();
+    this.turnAbort = turnAbort;
     const current = () => this.generation === generation;
     const stoppedReply = () => {
       const reply = this.stopped.get(generation) ?? CLEARED_REPLY;
@@ -80,7 +87,7 @@ export class Assistant {
       return reply;
     };
     try {
-      const reply = await this.turn(text, current);
+      const reply = await this.turn(text, current, turnAbort.signal);
       if (!current()) return stoppedReply();
       this.history.push({ role: "user", content: text }, { role: "assistant", content: reply });
       if (this.history.length > HISTORY_LIMIT) this.history.splice(0, this.history.length - HISTORY_LIMIT);
@@ -90,7 +97,7 @@ export class Assistant {
     }
   }
 
-  private async turn(text: string, current: () => boolean): Promise<string> {
+  private async turn(text: string, current: () => boolean, signal: AbortSignal): Promise<string> {
     const brain = await this.deps.getBrain();
     const tools = this.deps.registry.toolSpecs();
     const messages: ChatMessage[] = [
@@ -104,7 +111,10 @@ export class Assistant {
       if (!current()) return CLEARED_REPLY;
       // The same tools for every request of this message, so an online service that checks its
       // earlier replies against the request finds nothing changed; past the limit, tool use is off.
-      const reply = await brain.chat(messages, tools, callsUsed < MAX_TOOL_CALLS_PER_TURN);
+      const reply = await brain.chat(messages, tools, {
+        allowTools: callsUsed < MAX_TOOL_CALLS_PER_TURN,
+        signal,
+      });
       if (!current()) return CLEARED_REPLY;
       if (!reply.ok) return reply.message;
       if (reply.toolCalls.length === 0) return reply.content.trim() || "(Sage had nothing to say.)";

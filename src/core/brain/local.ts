@@ -4,6 +4,9 @@ import {
   type Brain,
   type BrainReply,
   type ChatMessage,
+  type ChatOptions,
+  requestSignal,
+  STOPPED_MESSAGE,
   type FetchLike,
   isTimeout,
   parseArgs,
@@ -56,9 +59,11 @@ export class LocalBrain implements Brain {
     this.timeoutMs = options.timeoutMs ?? 180_000;
   }
 
-  async chat(messages: ChatMessage[], allTools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], allTools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
     // Past the skill limit no tools are offered at all.
-    const tools = allowTools ? allTools : [];
+    const tools = options.allowTools === false ? [] : allTools;
+    // A stopped turn sends nothing more.
+    if (options.signal?.aborted) return { ok: false, message: STOPPED_MESSAGE };
     const body = {
       model: this.options.model,
       stream: false,
@@ -72,9 +77,10 @@ export class LocalBrain implements Brain {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
         redirect: "error",
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: requestSignal(AbortSignal.timeout(this.timeoutMs), options.signal),
       });
     } catch (error) {
+      if (options.signal?.aborted) return { ok: false, message: STOPPED_MESSAGE };
       if (isTimeout(error)) {
         return { ok: false, message: "The local model took too long to answer. Try again." };
       }

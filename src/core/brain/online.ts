@@ -4,6 +4,7 @@ import {
   type Brain,
   type BrainReply,
   type ChatMessage,
+  type ChatOptions,
   type FetchLike,
   parseArgs,
   scrubStrings,
@@ -95,9 +96,9 @@ export class OnlineBrain implements Brain {
     this.service = options.service ?? OTHER_SERVICE;
   }
 
-  async chat(messages: ChatMessage[], allTools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], allTools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
     // Past the skill limit no tools are offered at all.
-    const tools = allowTools ? allTools : [];
+    const tools = options.allowTools === false ? [] : allTools;
     const url = completionsUrl(this.options.baseUrl ?? "");
     if (!url) {
       return {
@@ -136,6 +137,7 @@ export class OnlineBrain implements Brain {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
         body: JSON.stringify(body),
+        ...(options.signal ? { signal: options.signal } : {}),
       },
       this.service,
       this.timeoutMs,

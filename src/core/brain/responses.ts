@@ -4,6 +4,7 @@ import {
   type Brain,
   type BrainReply,
   type ChatMessage,
+  type ChatOptions,
   type FetchLike,
   parseArgs,
   scrubStrings,
@@ -81,7 +82,8 @@ export class ResponsesBrain implements Brain {
     this.timeoutMs = options.timeoutMs ?? CHAT_TIMEOUT_MS;
   }
 
-  async chat(messages: ChatMessage[], tools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], tools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
+    const allowTools = options.allowTools !== false;
     if (!this.options.model.trim()) {
       return { ok: false, message: "Choose the model for OpenAI in Settings first." };
     }
@@ -95,6 +97,7 @@ export class ResponsesBrain implements Brain {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
         body: JSON.stringify(responsesRequest(this.options.model, messages, tools, allowTools)),
+        ...(options.signal ? { signal: options.signal } : {}),
       },
       this.service,
       this.timeoutMs,

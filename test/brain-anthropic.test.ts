@@ -12,9 +12,13 @@ import {
   REFUSAL_MESSAGE,
 } from "../src/core/brain/anthropic.js";
 import type { ChatMessage } from "../src/core/brain/brain.js";
+import { CLEARED_REPLY, SETTINGS_CHANGED_REPLY } from "../src/core/assistant.js";
 import { createSage } from "../src/core/sage.js";
+import { createIpcHandlers } from "../src/main/ipc.js";
+import { CHANNELS } from "../src/shared/api.js";
 import { defaultSettings } from "../src/core/settings.js";
 import {
+  deferred,
   failingBody,
   FakePresenter,
   type FetchCall,
@@ -393,10 +397,10 @@ const FINAL = {
 /** Sage itself (the real assistant, skills and gate) with Claude chosen, answering from `replies`. */
 async function sageWithClaude(
   t: Parameters<typeof tempDir>[0],
-  replies: (call: FetchCall, index: number) => Response,
+  replies: (call: FetchCall, index: number, init: RequestInit) => Response | Promise<Response>,
 ) {
   let index = 0;
-  const fake = fakeFetch((call) => replies(call, index++));
+  const fake = fakeFetch((call, init) => replies(call, index++, init));
   const sage = createSage({
     dataDir: await tempDir(t),
     keyStores: memoryKeyStores(),
@@ -410,7 +414,8 @@ async function sageWithClaude(
   await sage.keyStore.setCompanyKey("claude", KEY);
   await sage.settings.save({ ...defaultSettings(), brain: "claude" });
   const bodies = () => fake.calls.map((call) => JSON.parse(call.body) as Record<string, any>);
-  return { sage, calls: fake.calls, bodies };
+  const handlers = createIpcHandlers(sage, { chooseFolder: async () => null, chooseApp: async () => null });
+  return { sage, handlers, calls: fake.calls, bodies };
 }
 
 test("within one message, each reply goes back exactly as it came, thinking blocks and signatures included", async (t) => {
@@ -560,4 +565,86 @@ test("a reply cut off at max_tokens keeps its text, runs no skill and says so; a
   );
   const reply = await empty.claude.chat([{ role: "user", content: "q" }], tools);
   assert.ok(reply.ok && reply.content === "" && reply.toolCalls.length === 0);
+});
+
+test("a turn stopped while a request is out sends nothing more: no retry after the key is removed, the brain switched or New chat", async (t) => {
+  const stops: [string, (ctx: Awaited<ReturnType<typeof sageWithClaude>>) => Promise<unknown>, string][] = [
+    [
+      "the key removed",
+      (ctx) => ctx.handlers[CHANNELS.clearKey]({ brain: "claude" }),
+      SETTINGS_CHANGED_REPLY,
+    ],
+    [
+      "the brain switched to this computer",
+      (ctx) => ctx.handlers[CHANNELS.saveSettings]({ ...defaultSettings(), brain: "local" }),
+      SETTINGS_CHANGED_REPLY,
+    ],
+    ["New chat", (ctx) => ctx.handlers[CHANNELS.reset](undefined), CLEARED_REPLY],
+  ];
+  for (const honoursAbort of [false, true]) {
+    for (const [what, stop, expected] of stops) {
+      const held = deferred<Response>();
+      const ctx = await sageWithClaude(t, (_call, index, init) => {
+        if (index === 0) return jsonResponse(200, ROUND_1);
+        if (honoursAbort) {
+          // As a real request does: the turn's signal cancels it.
+          init.signal?.addEventListener("abort", () => held.resolve(jsonResponse(400, SIGNATURE_ERROR)));
+        }
+        return held.promise;
+      });
+      const turn = ctx.sage.assistant.send("what do I have?");
+      while (ctx.calls.length < 2) await settled();
+      await stop(ctx);
+      // The service then refuses a thinking signature: the retry is not sent for a stopped turn.
+      held.resolve(jsonResponse(400, SIGNATURE_ERROR));
+      assert.equal(await turn, expected, what);
+      await settled();
+      assert.equal(ctx.calls.length, 2, `${what}: no request after the turn stopped`);
+    }
+  }
+});
+
+test("each request reads the key again, the retry included, and none is sent once the signal fired", async () => {
+  const keys = [KEY, "fake-claude-key-replaced"];
+  let reads = 0;
+  const controller = new AbortController();
+  const fake = fakeFetch((_call) => jsonResponse(400, SIGNATURE_ERROR));
+  const claude = new MessagesBrain({
+    model: "claude-sonnet-5-5",
+    getKey: async () => keys[Math.min(reads++, 1)]!,
+    fetch: fake.fetch,
+  });
+  await claude.chat([{ role: "user", content: "q" }], tools);
+  assert.equal(reads, 2);
+  assert.deepEqual(
+    fake.calls.map((call) => call.headers["x-api-key"]),
+    [KEY, "fake-claude-key-replaced"],
+  );
+  // A key removed before the retry: nothing is sent without one.
+  let removed = false;
+  const gone = fakeFetch(() => {
+    removed = true;
+    return jsonResponse(400, SIGNATURE_ERROR);
+  });
+  const vanishing = new MessagesBrain({
+    model: "m",
+    getKey: async () => (removed ? null : KEY),
+    fetch: gone.fetch,
+  });
+  assert.deepEqual(await vanishing.chat([{ role: "user", content: "q" }], tools), {
+    ok: false,
+    message: "Add your Claude key in Settings first.",
+  });
+  assert.equal(gone.calls.length, 1);
+  // The signal fires while the first request is out: no retry.
+  const stopping = fakeFetch(() => {
+    controller.abort();
+    return jsonResponse(400, SIGNATURE_ERROR);
+  });
+  const stopped = new MessagesBrain({ model: "m", getKey: async () => KEY, fetch: stopping.fetch });
+  const reply = await stopped.chat([{ role: "user", content: "q" }], tools, { signal: controller.signal });
+  assert.ok(!reply.ok);
+  assert.equal(stopping.calls.length, 1);
+  assert.equal((await stopped.chat([], tools, { signal: controller.signal })).ok, false);
+  assert.equal(stopping.calls.length, 1, "an already-stopped turn sends nothing");
 });

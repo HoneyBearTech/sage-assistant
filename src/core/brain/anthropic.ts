@@ -4,7 +4,10 @@ import {
   type Brain,
   type BrainReply,
   type ChatMessage,
+  type ChatOptions,
   type FetchLike,
+  type Replay,
+  STOPPED_MESSAGE,
   scrubStrings,
   stripThinking,
   type ToolCall,
@@ -85,34 +88,45 @@ export class MessagesBrain implements Brain {
     this.timeoutMs = options.timeoutMs ?? CHAT_TIMEOUT_MS;
   }
 
-  async chat(messages: ChatMessage[], tools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], tools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
     if (!this.options.model.trim()) {
       return { ok: false, message: "Choose the model for Claude in Settings first." };
     }
-    // The key for exactly this address: checked here, at the point of the request.
-    const key = await this.options.getKey(MESSAGES_URL);
-    if (!key) return { ok: false, message: "Add your Claude key in Settings first." };
-    const send = (dropThinking: boolean) =>
-      requestService(
+    const { signal } = options;
+    // Every request, a retry included, is checked here first: a stopped turn sends nothing more,
+    // and the key is read again for exactly this address (it may have been removed or replaced).
+    const send = async (dropThinking: boolean) => {
+      if (signal?.aborted) return { ok: false as const, message: STOPPED_MESSAGE };
+      const key = await this.options.getKey(MESSAGES_URL);
+      if (!key) return { ok: false as const, message: "Add your Claude key in Settings first." };
+      const body = messagesRequest(this.options.model, messages, tools, {
+        allowTools: options.allowTools !== false,
+        dropThinking: () => dropThinking,
+      });
+      const reply = await requestService(
         this.fetch,
         MESSAGES_URL,
         {
           method: "POST",
           headers: anthropicHeaders(key),
-          body: JSON.stringify(
-            messagesRequest(this.options.model, messages, tools, { allowTools, dropThinking }),
-          ),
+          body: JSON.stringify(body),
+          ...(signal ? { signal } : {}),
         },
         this.service,
         this.timeoutMs,
         this.options.timeoutSignal,
       );
+      return { ...reply, key };
+    };
     let reply = await send(false);
     // The service refused a thinking block it sent earlier in this message (it can bind them to a
     // conversation): send the same request once more with every thinking block left out, which it
     // allows.
-    if (!reply.ok && reply.status === 400 && reply.kinds?.has(THINKING_SIGNATURE)) reply = await send(true);
+    if (!reply.ok && "status" in reply && reply.status === 400 && reply.kinds?.has(THINKING_SIGNATURE)) {
+      reply = await send(true);
+    }
     if (!reply.ok) return { ok: false, message: reply.message };
+    const { key } = reply;
     const parsed = messagesReply.safeParse(reply.body);
     if (!parsed.success) return { ok: false, message: unreadableMessage(this.service) };
     const { stop_reason: stopReason } = parsed.data;
@@ -157,8 +171,8 @@ export class MessagesBrain implements Brain {
 export interface MessagesRequestOptions {
   /** False once the skill limit is reached: the same tools are sent, with tool use switched off. */
   allowTools?: boolean;
-  /** Leave out every thinking block (recovery after the service refused one). */
-  dropThinking?: boolean;
+  /** Which earlier replies to send without their thinking blocks (recovery after the service refused one). */
+  dropThinking?: (replay: Replay) => boolean;
 }
 
 /**
@@ -199,7 +213,7 @@ export function messagesRequest(
         if (message.replay?.format === "messages") {
           add(
             "assistant",
-            options.dropThinking
+            options.dropThinking?.(message.replay)
               ? message.replay.items.filter(
                   (block) => !THINKING_TYPES.has((block as Block | null)?.type as string),
                 )

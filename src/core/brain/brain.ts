@@ -41,15 +41,36 @@ export type BrainReply =
   | { ok: true; content: string; toolCalls: ToolCall[]; replay?: Replay }
   | { ok: false; message: string };
 
+export interface ChatOptions {
+  /**
+   * False once the skill limit for the message is reached: the brain must not let the model ask for
+   * a skill (an online service that checks its earlier replies against the request is sent the same
+   * tools with tool use switched off; the others are sent none). True by default.
+   */
+  allowTools?: boolean;
+  /**
+   * Fires when the message's turn is stopped (New chat, or the brain, its model or its key changed).
+   * A brain checks it before every request it sends, a retry included, and the request in flight is
+   * cancelled with it; after that, nothing more is sent.
+   */
+  signal?: AbortSignal;
+}
+
+/** What a brain returns once its turn was stopped; the assistant never shows it. */
+export const STOPPED_MESSAGE = "(Stopped.)";
+
 export interface Brain {
   readonly kind: "local" | "online";
-  /**
-   * One request. `tools` is the same list for every request of a message; once the skill limit is
-   * reached `allowTools` is false, and the brain must not let the model ask for a skill (an online
-   * service that checks its earlier replies against the request is sent the same tools with tool
-   * use switched off; the others are sent none).
-   */
-  chat(messages: ChatMessage[], tools: ToolSpec[], allowTools?: boolean): Promise<BrainReply>;
+  /** One request. `tools` is the same list for every request of a message. */
+  chat(messages: ChatMessage[], tools: ToolSpec[], options?: ChatOptions): Promise<BrainReply>;
+}
+
+/**
+ * The signal for one request: its own time limit, plus the turn's signal if there is one. Both
+ * cancel the request.
+ */
+export function requestSignal(timeout: AbortSignal, turn: AbortSignal | undefined): AbortSignal {
+  return turn ? AbortSignal.any([timeout, turn]) : timeout;
 }
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;

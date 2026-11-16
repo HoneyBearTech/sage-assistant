@@ -3,7 +3,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Brain, BrainReply, ChatMessage, ToolCall, ToolSpec } from "../src/core/brain/brain.js";
+import type {
+  Brain,
+  BrainReply,
+  ChatMessage,
+  ChatOptions,
+  ToolCall,
+  ToolSpec,
+} from "../src/core/brain/brain.js";
 import type { Encryptor, KeyStore, KeyStores, SavedKey } from "../src/core/keystore.js";
 import { createLogger, type Logger, SecretRedactor } from "../src/core/log.js";
 import type { Clock } from "../src/core/scheduler.js";
@@ -176,11 +183,21 @@ export class FakeClock implements Clock {
 /** A brain that replays scripted replies and records what it was sent. */
 export class ScriptedBrain implements Brain {
   readonly kind = "local";
-  readonly calls: { messages: ChatMessage[]; tools: ToolSpec[]; allowTools: boolean }[] = [];
+  readonly calls: {
+    messages: ChatMessage[];
+    tools: ToolSpec[];
+    allowTools: boolean;
+    signal?: AbortSignal;
+  }[] = [];
   private index = 0;
   constructor(private readonly replies: (BrainReply | ((messages: ChatMessage[]) => BrainReply))[]) {}
-  async chat(messages: ChatMessage[], tools: ToolSpec[], allowTools = true): Promise<BrainReply> {
-    this.calls.push({ messages: structuredClone(messages), tools, allowTools });
+  async chat(messages: ChatMessage[], tools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
+    this.calls.push({
+      messages: structuredClone(messages),
+      tools,
+      allowTools: options.allowTools !== false,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     const next = this.replies[Math.min(this.index++, this.replies.length - 1)];
     if (!next) return { ok: true, content: "", toolCalls: [] };
     return typeof next === "function" ? next(messages) : next;

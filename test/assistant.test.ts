@@ -10,10 +10,13 @@ import {
 import { ActionLog } from "../src/core/skills/action-log.js";
 import { ApprovalGate } from "../src/core/skills/gate.js";
 import { defineSkill, SkillRegistry } from "../src/core/skills/registry.js";
+import type { BrainReply } from "../src/core/brain/brain.js";
 import {
   captureLogs,
+  deferred,
   FakePresenter,
   ScriptedBrain,
+  settled,
   tempDir,
   textReply,
   toolCall,
@@ -189,4 +192,33 @@ test("history is trimmed to the most recent messages", async (t) => {
   for (let i = 0; i < HISTORY_LIMIT; i++) await assistant.send(`message ${i}`);
   assert.equal(assistant.transcript.length, HISTORY_LIMIT);
   assert.equal(assistant.transcript.at(-2)!.content, `message ${HISTORY_LIMIT - 1}`);
+});
+
+test("each turn gives the brain a signal that fires when the turn is stopped or the chat cleared", async (t) => {
+  for (const stop of ["stopTurn", "reset"] as const) {
+    const held = deferred<BrainReply>();
+    const brain = new ScriptedBrain([() => textReply("unused")]);
+    brain.chat = async (messages, tools, options = {}) => {
+      brain.calls.push({
+        messages,
+        tools,
+        allowTools: options.allowTools !== false,
+        signal: options.signal!,
+      });
+      return held.promise;
+    };
+    const { assistant } = await setup(t, brain);
+    const turn = assistant.send("hello");
+    while (brain.calls.length === 0) await settled();
+    const signal = brain.calls[0]!.signal!;
+    assert.equal(signal.aborted, false);
+    assistant[stop]();
+    assert.equal(signal.aborted, true, stop);
+    held.resolve(textReply("too late"));
+    await turn;
+    // The next turn gets a new signal of its own.
+    brain.chat = ScriptedBrain.prototype.chat.bind(brain);
+    await assistant.send("again");
+    assert.equal(brain.calls.at(-1)!.signal!.aborted, false);
+  }
 });

@@ -105,6 +105,32 @@ test("keys are kept apart: saving, switching and removing one leaves the others 
   assert.equal(await keys.keyForRequest("claude", "https://api.anthropic.com/v1/messages"), CLAUDE_KEY);
 });
 
+test("once the turn is stopped, no brain sends anything", async () => {
+  const fake = fakeFetch(() => jsonResponse(200, {}));
+  const keys = new ServiceKeys(memoryKeyStores());
+  await keys.setCompanyKey("claude", CLAUDE_KEY);
+  await keys.setCompanyKey("openai", OPENAI_KEY);
+  await keys.setCompanyKey("gemini", GEMINI_KEY);
+  await keys.setOtherKey(OTHER_KEY, "https://service.example");
+  const stopped = AbortSignal.abort();
+  for (const brain of ["local", "claude", "openai", "gemini", "other"] as const) {
+    const settings: Settings = {
+      ...defaultSettings(),
+      brain,
+      online: { baseUrl: "https://service.example/v1", model: "m" },
+    };
+    const reply = await brainFor(settings, keys, { fetch: fake.fetch }).chat(
+      [{ role: "user", content: "hi" }],
+      [],
+      {
+        signal: stopped,
+      },
+    );
+    assert.equal(reply.ok, false, brain);
+  }
+  assert.equal(fake.calls.length, 0);
+});
+
 test("each brain sends only its own key, only to its own service", async () => {
   const fake = fakeFetch((call) => {
     if (call.url.startsWith("https://api.anthropic.com/")) {

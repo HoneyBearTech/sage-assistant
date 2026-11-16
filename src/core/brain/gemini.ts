@@ -4,6 +4,7 @@ import {
   type Brain,
   type BrainReply,
   type ChatMessage,
+  type ChatOptions,
   type FetchLike,
   scrubStrings,
   stripThinking,
@@ -84,7 +85,8 @@ export class GeminiBrain implements Brain {
     this.timeoutMs = options.timeoutMs ?? 90_000;
   }
 
-  async chat(messages: ChatMessage[], tools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], tools: ToolSpec[], options: ChatOptions = {}): Promise<BrainReply> {
+    const allowTools = options.allowTools !== false;
     if (!this.options.model.trim()) {
       return { ok: false, message: "Choose the model for Gemini in Settings first." };
     }
@@ -106,6 +108,7 @@ export class GeminiBrain implements Brain {
         method: "POST",
         headers: { "x-goog-api-key": key, "content-type": "application/json" },
         body: JSON.stringify(generateRequest(messages, tools, allowTools)),
+        ...(options.signal ? { signal: options.signal } : {}),
       },
       this.service,
       this.timeoutMs,
