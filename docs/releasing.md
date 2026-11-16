@@ -211,9 +211,11 @@ Notes on the workflow:
   stops part-way, a draft is left behind (only people with write access see drafts). Re-running the job
   then finds it: an empty draft gets the three files and is published; a draft that already has files
   stops the job, with a message to delete the draft and re-run.
-- The workflow can't be tried before it is added; the first tagged release is its first real run. If it
-  fails, nothing is published: fix the workflow in a pull request, delete the tag (and any draft or empty
-  release the run or the Releases page left), and tag again.
+- The workflow can't be tried before it is added; the first tagged release is its first real run. If the
+  build fails, nothing is published. If the publishing step fails part-way, a release may be left with
+  only some of the files; if you made the tag on the Releases page, that release is already public. Re-running
+  the job then stops with a message that says what to do. To start over: fix the workflow in a pull request,
+  delete the tag and any release or draft the run or the Releases page left, and tag again.
 
 ## Making a release, step by step
 

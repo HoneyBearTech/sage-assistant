@@ -96,7 +96,7 @@ strike them through with a reason.
 - Node 24 for tooling; Electron 45.3.2; TypeScript strict; Biome 2.6.8; zod 4 for validation.
 - Sage's data lives in Electron's `userData` folder (`%APPDATA%\sage-assistant` on Windows,
   `~/.config/sage-assistant` on Linux).
-- Planned jobs, one pull request each: Windows installer, voice, first-run setup; later wake word,
+- Planned jobs, one pull request each: voice, first-run setup; later wake word,
   better voices, signing and updates, macOS. See `docs/roadmap.md`.
 - The review machine runs Linux without a display, so Electron itself isn't started in the tests;
   `docs/windows-checklist.md` lists the manual checks to run on Windows.

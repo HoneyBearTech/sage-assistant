@@ -2,6 +2,55 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-16 - windows-installer
+
+**Context:** the owner asked to "start the installer job", the next roadmap item, after running the
+Windows checklist (everything worked) and checking the GitHub settings (Dependabot alerts on, Dependabot's
+own update pull requests off).
+
+**Decisions:**
+- **electron-builder 26.18.1 with a one-click NSIS installer**, per user, with no admin rights, shortcuts,
+  and Sage starting when it's installed. Uninstalling keeps Sage's data.
+  - *Rejected:* Electron Forge with Squirrel or an MSI. It would mean reorganising the build around
+    Forge, and MSI isn't one-click. electron-builder's own docs mark its Squirrel target as deprecated.
+- **The data folder stays `%APPDATA%\sage-assistant`.** "Sage" is set as the product name only in
+  `electron-builder.json`, never in `package.json`, because Electron names the data folder after the
+  archive's `package.json`. A test checks this.
+- **Settings in JSON** (`electron-builder.json`), so the fuse drift test reads them with no extra package.
+- **All seven fuses are set by electron-builder** right before any signing step. A test keeps
+  `electron-builder.json` and `src/main/fuses-config.ts` the same. The old `npm run fuses` script is
+  removed. The two new fuses (`GrantFileProtocolExtraPrivileges` off, `EnableCookieEncryption` on) stay
+  only if the owner's Windows test shows the window still loads.
+- **zod moved to the dev dependencies.** It is bundled into `main.cjs`, so the archive holds no
+  `node_modules`.
+- **`electron-winstaller`'s install script is off** (`allowScripts`). It only copies a 7-Zip file for
+  Squirrel, which NSIS doesn't use. Renovate notes on electron-builder updates say to check its version.
+- **The release workflow is ready-to-paste text** in `docs/releasing.md`, because the team doesn't add
+  workflows. It builds only tags on `main`, uses no shared cache, checks the tag against
+  `package.json`, writes `SHA256SUMS.txt` and a build provenance record, and publishes exactly three
+  files. Only the publishing job can write to the repo. It also finishes an empty draft that an earlier
+  run left behind.
+- **The public-repo checker** skips e-mail addresses on a `package-lock.json` line only when the whole
+  line is npm's copied `"deprecated"` notice (one such notice names a package author's public address).
+- **No icon yet, no signing yet.** The installer uses Electron's default icon, and SmartScreen warns about
+  the unsigned installer; the docs explain how to check the checksum and continue.
+
+**Review:** a plan check before Gate A, then QA, the Security Officer, a second security review and the
+Auditor, with one fix round and a re-check. The real installer can only be built on Windows, so the
+owner builds and installs it from the branch, with the checklist's "Installed app" section, before
+final approval.
+
+**Rejected or deferred findings:**
+- *`npm audit` must be clean (Auditor, must-fix).* Rejected for this job. The one advisory
+  (GHSA-g3hv-75wg-m249, minimatch, moderate) is in electron-builder's build tools, and the fixed
+  minimatch is a major version electron-builder 26.18.1 doesn't accept; `npm audit fix --force` would
+  drop to electron-builder 25. The code runs only at build time, on file patterns the repo writes, and
+  both security reviews found it unreachable from untrusted input. Tracked on the roadmap.
+- *The Dependency review check will fail on that advisory and on one WTFPL-licensed package (both
+  security reviews).* Not so: the check passed on the pull request, so the owner didn't need to change it.
+- *The public-repo checker misses e-mail addresses written with JSON escapes.* Real, but older than this
+  job. Deferred to the roadmap.
+
 ## 2026-11-16 - biome-2-6-8
 
 **Context:** the owner asked to "fix the Biome PR". Renovate's pull request #4 moves Biome from 2.5.15
