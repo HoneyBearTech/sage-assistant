@@ -82,6 +82,8 @@ export function startChatWindow(): void {
     if (sendButton.disabled) return;
     const text = input.value.trim();
     if (!text) return;
+    // Sending a message stops the daily brief being read aloud, as talking does.
+    voice.stopBrief();
     const generation = chatGeneration;
     // A voice message: some of its words came from talking, even if they were edited afterwards.
     const fromVoice = voice.takeFromVoice();

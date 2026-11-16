@@ -683,3 +683,45 @@ test("a reply read aloud doesn't show Home's Stop speaking, and it can't stop a 
   el("home-stop-speaking").click();
   assert.equal(media.speech.speaking, true);
 });
+
+// The window never has the brief read aloud while the user talks or sends a message. Leaving Home
+// already stops it; these call the composer and the Talk button directly, to test the guards.
+
+test("sending a message stops the brief being read aloud", async (t) => {
+  const { el, media, calls } = await homeWindow(t, { summary: SAMPLE, settings: { speakReplies: "voice" } });
+  el("home-brief").click();
+  await settled();
+  assert.equal(media.speech.speaking, true);
+  el("input").value = "Hello";
+  el("composer").dispatch("submit");
+  assert.equal(media.speech.speaking, false, "stopped as the message goes");
+  assert.equal(el("home-stop-speaking").hidden, true);
+  await settled();
+  assert.deepEqual(calls.send, ["Hello"]);
+});
+
+test("holding Talk stops the brief being read aloud", async (t) => {
+  const { el, media } = await homeWindow(t, { summary: SAMPLE, settings: { speakReplies: "voice" } });
+  el("home-brief").click();
+  await settled();
+  assert.equal(media.speech.speaking, true);
+  el("talk").dispatch("pointerdown", { button: 0, pointerId: 1 });
+  assert.equal(media.speech.speaking, false);
+  assert.equal(el("home-stop-speaking").hidden, true);
+  el("talk").dispatch("pointerup", { button: 0, pointerId: 1 });
+  await settled();
+});
+
+test("the brief is never read aloud while Talk is held", async (t) => {
+  const { el, media } = await homeWindow(t, { summary: SAMPLE, settings: { speakReplies: "always" } });
+  el("talk").dispatch("pointerdown", { button: 0, pointerId: 1 });
+  await settled();
+  assert.equal(el("talk").getAttribute("aria-pressed"), "true", "the microphone is open");
+  el("home-brief").click();
+  await settled();
+  assert.match(el("home-brief-text").textContent, /^Good morning/, "the brief still shows");
+  assert.equal(media.speech.spoken.length, 0, "but isn't read aloud");
+  assert.equal(el("home-stop-speaking").hidden, true);
+  el("talk").dispatch("pointerup", { button: 0, pointerId: 1 });
+  await settled();
+});
