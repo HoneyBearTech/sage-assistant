@@ -30,8 +30,9 @@ workflow; the exact steps follow under [Making a release](#making-a-release-step
 ## Technical details: the release workflow
 
 The workflow below builds those three files on a GitHub Windows runner whenever a version tag such as
-`v0.1.0` is pushed. The team doesn't add or change workflows, so the owner adds it once, as
-`.github/workflows/release.yml`, through a pull request like any other change.
+`v0.1.0` is pushed. The workflow is on `main` (added in #16) as `.github/workflows/release.yml`. The file
+on `main` is the one that runs, and Renovate keeps its versions up to date there, so the copy below can
+fall behind until the next docs update. If they differ, the file on `main` wins.
 
 What it does, in order:
 
@@ -83,7 +84,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -100,9 +101,9 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version: 24.22.3
           package-manager-cache: false
 
       - name: Install dependencies
@@ -234,8 +235,9 @@ Notes on the workflow:
 
 ## Making a release, step by step
 
-1. **Add the release workflow, once.** If `.github/workflows/release.yml` isn't on `main` yet, add it
-   first; without it, pushing a tag does nothing. On the repository's page on GitHub:
+1. **Add the release workflow, once.** This is already done for this repository (#16). It is kept here
+   for anyone setting up their own copy of Sage. If `.github/workflows/release.yml` isn't on `main` yet,
+   add it first; without it, pushing a tag does nothing. On the repository's page on GitHub:
    1. Choose **Add file → Create new file**.
    2. In the name box type `.github/workflows/release.yml` (typing each `/` makes a folder).
    3. Copy the lines inside the [code box above](#technical-details-the-release-workflow), from
