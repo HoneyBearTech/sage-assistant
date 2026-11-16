@@ -185,6 +185,9 @@ function forgetHeldNotices(): void {
     held.delete(id);
     shownNotices.delete(id);
   }
+  // A confirmation may be going through its batches: make it stop and collect again, which adds
+  // the forgotten notices back before anything more is confirmed.
+  if (collecting) collectAgain = true;
 }
 
 async function confirmShown(): Promise<void> {
@@ -193,7 +196,7 @@ async function confirmShown(): Promise<void> {
   for (let start = 0; start < ids.length; start += MAX_ACK_IDS) {
     // A newer request means this snapshot may be out of date; the collection loop confirms again.
     if (collectAgain || !chatVisible()) return;
-    const batch = ids.slice(start, start + MAX_ACK_IDS);
+    const batch = ids.slice(start, start + MAX_ACK_IDS).filter((id) => held.has(id));
     for (const id of batch) {
       confirming.add(id);
       // Held lines stay hidden until now, so a notice that is withdrawn first is never seen.

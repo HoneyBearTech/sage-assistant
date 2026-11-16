@@ -666,11 +666,50 @@ test("New chat while a notice is held: it comes back in the new list, hidden, an
   await settled();
   el("new-chat").click();
   assert.deepEqual(texts(), []);
+  answers.push(Promise.resolve([notice])); // New chat asks for one more collection
   refresh.resolve([notice]);
   await settled();
   assert.deepEqual(texts(), ["Held"], "added again to the new list");
   assert.equal(el("messages").children[0]?.hidden, false, "shown before it was confirmed");
   assert.deepEqual(acks, [["n1"]], "confirmed once");
+});
+
+test("New chat during a confirmation: a forgotten notice is not acked until it is back in the new list", async (t) => {
+  const waiting: Notice[] = [];
+  const acks: string[][] = [];
+  const onScreen: (string | null)[][] = [];
+  let gate: ReturnType<typeof deferred<void>> | undefined;
+  let screen = (): (string | null)[] => [];
+  const { el, texts } = await startWindow(t, async () => "", {
+    takeNotices: async () => structuredClone(waiting),
+    ackNotices: async (ids) => {
+      acks.push(ids);
+      onScreen.push(screen());
+      await gate?.promise;
+    },
+  });
+  screen = texts;
+  for (let i = 0; i < MAX_ACK_IDS + 1; i++) waiting.push({ id: `n${i}`, text: `R${i}` });
+  el("tab-settings").click();
+  t.mock.timers.tick(5_000);
+  await settled();
+
+  // The first batch is being confirmed when New chat clears the list.
+  gate = deferred<void>();
+  el("tab-chat").click();
+  await settled();
+  assert.equal(acks.length, 1);
+  el("new-chat").click();
+  gate.resolve();
+  gate = undefined;
+  await settled();
+
+  const last = `n${MAX_ACK_IDS}`;
+  const lastIndex = acks.findIndex((batch) => batch.includes(last));
+  assert.ok(lastIndex > 0, "the forgotten notice is confirmed in the end");
+  assert.ok(onScreen[lastIndex]?.includes(`R${MAX_ACK_IDS}`), "but only once it is shown in the new list");
+  assert.equal(acks.flat().filter((id) => id === last).length, 1, "and once");
+  assert.ok(texts().includes(`R${MAX_ACK_IDS}`));
 });
 
 test("only held notices are taken out of the chat; confirmed ones, or ones being confirmed, stay", async (t) => {
