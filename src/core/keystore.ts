@@ -181,6 +181,13 @@ export function validateKey(key: string): string {
     throw new KeyStoreError("That doesn't look like a key: it should be 8 to 500 characters.");
   }
   if (/\s/.test(trimmed)) throw new KeyStoreError("A key can't contain spaces or line breaks.");
+  // Keys are plain letters, digits and ordinary symbols (all three companies' are); anything else
+  // was pasted by mistake, and couldn't be sent in a request header anyway.
+  if (!/^[\x21-\x7e]+$/.test(trimmed)) {
+    throw new KeyStoreError(
+      "That doesn't look like a key: it can only contain letters, digits and ordinary symbols such as - and _.",
+    );
+  }
   return trimmed;
 }
 

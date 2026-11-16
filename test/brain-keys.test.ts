@@ -334,3 +334,23 @@ test("picking an online brain says once, on Save, what is sent to which company"
   })) as { ok: boolean };
   assert.equal(models.ok, false, "a model name is at most 200 characters");
 });
+
+test("a key must be printable ASCII: anything else gets a plain message and nothing is saved", async () => {
+  const keys = new ServiceKeys(memoryKeyStores());
+  for (const bad of [
+    "fake-ключ-for-tests",
+    "fake–dash–for-tests",
+    "fake-key-\u0000-tests",
+    "fake-key-🔑-tests",
+  ]) {
+    await assert.rejects(keys.setCompanyKey("claude", bad), /letters, digits and ordinary symbols/, bad);
+    await assert.rejects(keys.setOtherKey(bad, null), /letters, digits and ordinary symbols/, bad);
+  }
+  await assert.rejects(keys.setCompanyKey("claude", "fake key with space"), /spaces/);
+  assert.deepEqual(await keys.hasKeys(), { claude: false, openai: false, gemini: false, other: false });
+  await keys.setCompanyKey("claude", "  sk-ant-api03-Fake_Key-For.Tests~0123  ");
+  assert.equal(
+    await keys.keyForRequest("claude", "https://api.anthropic.com/v1/messages"),
+    "sk-ant-api03-Fake_Key-For.Tests~0123",
+  );
+});
