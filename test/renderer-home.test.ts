@@ -164,10 +164,12 @@ test("the clock's timer stops while the window is hidden and restarts, redrawn, 
 /** Runs the test in the PC time zone `zone`, putting the old one back afterwards. */
 function inZone(t: { after(fn: () => void): void }, zone: string): void {
   const before = process.env.TZ;
+  const original = new Intl.DateTimeFormat().resolvedOptions().timeZone;
   process.env.TZ = zone;
   t.after(() => {
+    // Name the original zone first: on Windows, deleting TZ alone leaves the last zone in force.
+    process.env.TZ = before ?? original;
     if (before === undefined) delete process.env.TZ;
-    else process.env.TZ = before;
   });
 }
 
