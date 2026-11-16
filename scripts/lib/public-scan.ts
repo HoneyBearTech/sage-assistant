@@ -74,10 +74,13 @@ export function isPlaceholderUser(name: string): boolean {
 
 /**
  * True for a `"deprecated":` notice in package-lock.json. npm copies these from the registry, and
- * some name the package author's public contact address. Only e-mail findings are skipped there.
+ * some name the package author's public contact address. Only e-mail findings are skipped there, and
+ * only when the whole line is that one string property, so nothing placed after it is skipped.
  */
+const LOCKFILE_DEPRECATION = /^\s*"deprecated": "(?:[^"\\]|\\.)*",?\s*$/;
+
 function isLockfileDeprecation(file: string, content: string): boolean {
-  return /(^|[\\/])package-lock\.json$/.test(file) && /^\s*"deprecated": "/.test(content);
+  return /(^|[\\/])package-lock\.json$/.test(file) && LOCKFILE_DEPRECATION.test(content);
 }
 
 /** Finds every problem in one file's text. */

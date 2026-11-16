@@ -101,6 +101,35 @@ test("package-lock.json deprecation notices may name the author's address; nothi
     scanText("package-lock.json", `      "author": "${at("author", "maintainer.org")}",`).map((f) => f.kind),
     ["email"],
   );
+  // A notice with an escaped quote in it is still one string property.
+  assert.deepEqual(
+    scanText(
+      "package-lock.json",
+      `      "deprecated": "Use \\"new-pkg\\". ${at("author", "maintainer.org")}"`,
+    ).map((f) => f.kind),
+    [],
+  );
+  // An address after the notice on the same line, in another property or as trailing text, is found.
+  const address = at("someone", "maintainer.org");
+  for (const line of [
+    `      "deprecated": "Old versions are not supported.", "author": "${address}",`,
+    `      "deprecated": "Old versions are not supported.", ${address}`,
+    `      "deprecated": "Old versions are not supported." ${address}`,
+  ]) {
+    assert.deepEqual(
+      scanText("package-lock.json", line).map((f) => f.match),
+      [address],
+      line,
+    );
+  }
+  // Then the whole line is checked, the notice included.
+  assert.deepEqual(
+    scanText(
+      "package-lock.json",
+      `      "deprecated": "Contact ${at("author", "maintainer.org")}", "author": "${address}"`,
+    ).map((f) => f.match),
+    [at("author", "maintainer.org"), address],
+  );
   // Addresses and host names in a deprecation notice are still found.
   assert.deepEqual(
     scanText("package-lock.json", `      "deprecated": "moved to ${ip(10, 0, 0, 5)}",`).map((f) => f.kind),
