@@ -196,10 +196,10 @@ test("a problem visible in the plain line is reported once, even with other esca
   assert.deepEqual(scanText("f", `{"a": "${address}", "b": "tab${esc("\t")}", "c": "x${BS}/y"}`), [
     { file: "f", line: 1, kind: "email", match: address },
   ]);
-  // The same address in both forms on one line: the plain one is reported, the escaped copy is not.
+  // The same address in both forms on one line is two positions, so two findings.
   assert.deepEqual(
     scanText("f", `${address} ${address.replace("@", esc("@"))}`).map((f) => f.match),
-    [address],
+    [address, address + ESCAPES_NOTE],
   );
   // A different address written with escapes next to a plain one is found as well.
   const other = at("john", "gmail.com");
@@ -260,5 +260,31 @@ test("an address with an escape inside it is reported once, in full", () => {
   assert.deepEqual(
     scanText("f", `${written} ${at("sam", "gmail.com")}`).map((f) => f.match),
     [at("sam", "gmail.com"), at("jane.doe", "gmail.com") + ESCAPES_NOTE],
+  );
+});
+
+test("each finding is one position: distinct or repeated addresses are never merged or split", () => {
+  const address = at("jane.doe", "gmail.com");
+  const split = `jane${esc(".")}doe${"@"}gmail.com`;
+  // A: a plain address, then the same address written with an escape: two findings.
+  assert.deepEqual(
+    scanText("f", `${address} ${split}`).map((f) => f.match),
+    [address, address + ESCAPES_NOTE],
+  );
+  // The tail a plain scan sees after the escape is a different, distinct address: still found.
+  const tail = at("doe", "gmail.com");
+  assert.deepEqual(
+    scanText("f", `${address} ${esc("j")}${tail}`).map((f) => f.match),
+    [address, at("jdoe", "gmail.com") + ESCAPES_NOTE],
+  );
+  // B: the same plain address twice, with an unrelated escape elsewhere: two plain findings, no tail.
+  assert.deepEqual(
+    scanText("f", `${address} ${address} ${esc("x")}`).map((f) => f.match),
+    [address, address],
+  );
+  // The same address twice with escapes in only one of them.
+  assert.deepEqual(
+    scanText("f", `${split} ${split}`).map((f) => f.match),
+    [address + ESCAPES_NOTE, address + ESCAPES_NOTE],
   );
 });

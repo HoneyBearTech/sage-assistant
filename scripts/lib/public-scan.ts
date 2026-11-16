@@ -159,9 +159,10 @@ function scanLine(content: string, skipEmail: boolean): Hit[] {
 
 /**
  * Finds every problem in one file's text. A line with a backslash-u or backslash-slash escape is
- * scanned a second time, decoded. What only shows up there is reported once, with ESCAPES_NOTE after the
- * match. A plain hit that overlaps a decoded hit of the same kind is the same problem seen in part
- * (such as the tail of an address after an escape), so only the decoded, fuller one is reported.
+ * scanned a second time, decoded, and every hit is placed by its span in the written line. A plain hit
+ * that overlaps a decoded hit of the same kind is the same problem seen in part, so it is dropped. A
+ * decoded hit on exactly a plain hit's span, with the same text, is reported plain; any other decoded
+ * hit gets ESCAPES_NOTE after the match. So each finding is one position in the line.
  */
 export function scanText(file: string, text: string): Finding[] {
   const findings: Finding[] = [];
@@ -172,16 +173,22 @@ export function scanText(file: string, text: string): Finding[] {
     const decoded = decodeEscapes(content);
     const extra: Finding[] = [];
     if (decoded.escaped) {
-      const known = new Set(plain.map((hit) => `${hit.kind}\0${hit.match}`));
-      for (const hit of scanLine(decoded.text, skipEmail)) {
-        const key = `${hit.kind}\0${hit.match}`;
-        if (known.has(key)) continue;
-        known.add(key);
-        const from = decoded.spans[hit.index]?.[0] ?? 0;
-        const to = decoded.spans[hit.index + hit.match.length - 1]?.[1] ?? content.length;
-        plain = plain.filter((p) => p.kind !== hit.kind || p.index + p.match.length <= from || p.index >= to);
-        extra.push({ file, line, kind: hit.kind, match: hit.match + ESCAPES_NOTE });
+      const hits = scanLine(decoded.text, skipEmail).map((hit) => ({
+        ...hit,
+        from: decoded.spans[hit.index]?.[0] ?? 0,
+        to: decoded.spans[hit.index + hit.match.length - 1]?.[1] ?? content.length,
+      }));
+      const overlaps = (p: Hit, d: (typeof hits)[number]) =>
+        p.kind === d.kind && p.index < d.to && d.from < p.index + p.match.length;
+      const same = (p: Hit, d: (typeof hits)[number]) =>
+        p.index === d.from && p.index + p.match.length === d.to && p.match === d.match;
+      const kept = plain.filter((p) => !hits.some((d) => overlaps(p, d)));
+      const unchanged = plain.filter((p) => hits.some((d) => overlaps(p, d) && same(p, d)));
+      for (const d of hits) {
+        if (unchanged.some((p) => p.kind === d.kind && same(p, d))) continue;
+        extra.push({ file, line, kind: d.kind, match: d.match + ESCAPES_NOTE });
       }
+      plain = [...kept, ...unchanged];
     }
     for (const hit of plain) findings.push({ file, line, kind: hit.kind, match: hit.match });
     findings.push(...extra);
