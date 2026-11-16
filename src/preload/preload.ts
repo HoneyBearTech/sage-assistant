@@ -26,6 +26,9 @@ const api: SageApi = {
   cancelPull: () => ipcRenderer.invoke(CHANNELS.cancelPull),
   openInstallGuide: () => ipcRenderer.invoke(CHANNELS.openInstallGuide),
   finishSetup: () => ipcRenderer.invoke(CHANNELS.finishSetup),
+  diagnostics: ({ step, code, reducedMotion }) =>
+    ipcRenderer.invoke(CHANNELS.diagnostics, { step, code, reducedMotion }),
+  copyDiagnostics: (id) => ipcRenderer.invoke(CHANNELS.copyDiagnostics, { id }),
   setSound: (on) => ipcRenderer.invoke(CHANNELS.setSound, { on }),
   homeSummary: () => ipcRenderer.invoke(CHANNELS.homeSummary, {}),
   claimMorningBrief: () => ipcRenderer.invoke(CHANNELS.claimMorningBrief, {}),

@@ -122,6 +122,8 @@ test("the window can make exactly these requests, and is told only one thing by 
     "sage:service-test-key",
     "sage:settings-get",
     "sage:settings-save",
+    "sage:setup-diagnostics",
+    "sage:setup-diagnostics-copy",
     "sage:setup-finish",
     "sage:setup-open-guide",
     "sage:setup-pull",
@@ -149,6 +151,19 @@ test("every request goes through the one sender check in main.ts", async () => {
   assert.match(check, /event\.sender !== mainWindow\.webContents/);
   assert.match(check, /!isAppPage\(event\.senderFrame\?\.url, appUrl\)/);
   assert.match(check, /throw new Error/);
+  // Copy diagnostics: the window sends a step, a code and a yes or no, then an id; never any text.
+  const preloadText = await readFile(join(root, "src", "preload", "preload.ts"), "utf8");
+  assert.match(
+    preloadText,
+    /diagnostics: \(\{ step, code, reducedMotion \}\) =>\s*ipcRenderer\.invoke\(CHANNELS\.diagnostics, \{ step, code, reducedMotion \}\),/,
+  );
+  assert.match(
+    preloadText,
+    /copyDiagnostics: \(id\) => ipcRenderer\.invoke\(CHANNELS\.copyDiagnostics, \{ id \}\),/,
+  );
+  // The clipboard is written only in the main process, only by Copy diagnostics.
+  assert.equal(main.match(/clipboard\./g)?.length, 1);
+  assert.match(main, /writeClipboard: \(text\) => clipboard\.writeText\(text\)/);
   // Home's requests carry an empty object and nothing else.
   const preload = await readFile(join(root, "src", "preload", "preload.ts"), "utf8");
   assert.match(preload, /homeSummary: \(\) => ipcRenderer\.invoke\(CHANNELS\.homeSummary, \{\}\),/);

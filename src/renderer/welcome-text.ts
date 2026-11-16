@@ -1,10 +1,23 @@
-import { type ModelChoice, SAGE_MODELS } from "../shared/api.js";
+import {
+  type ModelChoice,
+  type PullResult,
+  type RunnerStatus,
+  SAGE_MODELS,
+  type VoiceStatus,
+} from "../shared/api.js";
+import type { SupportCode } from "../shared/support-codes.js";
 
 // The Welcome screen's texts and steps, without the browser's objects, so the tests can check
 // them directly.
 
 export const WELCOME_STEPS = ["place", "runner", "model", "done"] as const;
 export type WelcomeStep = (typeof WELCOME_STEPS)[number];
+
+/**
+ * The status area that reads out check lines is cleared, then set this much later, so a screen
+ * reader hears a result again even when it is the same as last time.
+ */
+export const ANNOUNCE_DELAY_MS = 100;
 
 /** How often the window asks how far the model download has got. */
 export const PULL_POLL_MS = 500;
@@ -40,7 +53,115 @@ export const WELCOME_TEXT = {
   download: "Download",
   useModel: "Use this model",
   tryAgain: "Try again",
+  supportCode: (code: SupportCode) => `Support code: ${code}`,
+  diagnosticsBuilding: "Sage is putting the diagnostics together…",
+  diagnosticsFailed: "Sage couldn't put the diagnostics together. Try again.",
+  copied: "Copied. Paste it wherever you're asking for help; Sage hasn't sent it anywhere.",
+  copyFailed: "Sage couldn't copy it. Select the text in the box and copy it yourself.",
 } as const;
+
+/**
+ * One check line: what Sage looked at and what it found, from a real answer only. "ok": as hoped;
+ * "fail": the check failed (a support code goes with it); "info": neither, such as a model that
+ * isn't downloaded yet.
+ */
+export interface CheckLine {
+  text: string;
+  state: "ok" | "fail" | "info";
+}
+
+const line = (what: string, found: string, state: CheckLine["state"]): CheckLine => ({
+  text: `${what}... ${found}`,
+  state,
+});
+
+const LOOKING = "Looking for the local model runner";
+
+/** Step 02's lines, from the runner's status (null: the request itself failed). */
+export function runnerLines(status: RunnerStatus | null): CheckLine[] {
+  if (!status) return [line(LOOKING, "couldn't check", "fail")];
+  if (status.state === "unreachable") return [line(LOOKING, "not found", "fail")];
+  if (status.state === "unreadable") return [line(LOOKING, "answered, but Sage couldn't read it", "fail")];
+  const lines = [
+    line(LOOKING, "found", "ok"),
+    status.version
+      ? line(`Runner version ${status.version}`, "ok", "ok")
+      : line("Runner version", "not reported", "info"),
+  ];
+  for (const choice of ["standard", "smaller"] as const) {
+    lines.push(
+      status.downloaded[choice]
+        ? line(`Model ${SAGE_MODELS[choice].name}`, "downloaded", "ok")
+        : line(`Model ${SAGE_MODELS[choice].name}`, "not downloaded yet", "info"),
+    );
+  }
+  return lines;
+}
+
+/** Step 03's lines, from the model request's result. */
+export function modelLines(choice: ModelChoice, result: PullResult): CheckLine[] {
+  const model = `Model ${SAGE_MODELS[choice].name}`;
+  switch (result.status) {
+    case "done":
+      return [
+        line(model, "ready", "ok"),
+        result.skills === "yes"
+          ? line("Skills", "supported", "ok")
+          : result.skills === "no"
+            ? line("Skills", "not supported by this model", "info")
+            : line("Skills", "the runner didn't say", "info"),
+      ];
+    case "declined":
+      return [line(model, "not downloaded", "info")];
+    case "cancelled":
+      return [line(model, "download cancelled", "info")];
+    case "failed":
+      return [failedLine(model, result.code)];
+  }
+}
+
+/** A failed model request's line, from its support code: what failed, in a few words. */
+function failedLine(model: string, code: SupportCode): CheckLine {
+  switch (code) {
+    case "SAGE-RUN-01":
+      return line("Local model runner", "not found", "fail");
+    case "SAGE-RUN-02":
+      return line("Local model runner", "couldn't read it", "fail");
+    case "SAGE-SET-01":
+      return line(model, "downloaded, but not saved", "fail");
+    case "SAGE-MOD-02":
+      return line(model, "not enough space", "fail");
+    case "SAGE-MOD-04":
+      return line(model, "already downloading", "fail");
+    case "SAGE-APP-01":
+      return line(model, "couldn't check", "fail");
+    case "SAGE-MOD-01":
+    case "SAGE-MOD-03":
+    case "SAGE-NET-01":
+    case "SAGE-NET-02":
+      return line(model, "download failed", "fail");
+  }
+}
+
+/** Step 04's lines: the model that was found ready, and the voice status (null: couldn't check). */
+export function doneLines(choice: ModelChoice, voice: VoiceStatus | null): CheckLine[] {
+  return [
+    line(`Model ${SAGE_MODELS[choice].name}`, "ready", "ok"),
+    !voice
+      ? line("Voice", "couldn't check", "info")
+      : voice.model === "ready"
+        ? line("Voice", "ready", "ok")
+        : voice.model === "downloading"
+          ? line("Voice", "downloading", "info")
+          : line("Voice", "not downloaded", "info"),
+  ];
+}
+
+/** What the one polite status area says for a set of new lines: all of them at once. */
+export function announcement(lines: readonly CheckLine[], code?: SupportCode): string {
+  const said = lines.map((item) => `${item.text}.`).join(" ");
+  return code ? `${said} ${WELCOME_TEXT.supportCode(code)}.` : said;
+}
 
 function megabytes(bytes: number): string {
   return Math.round(bytes / 1_000_000).toLocaleString("en-US");

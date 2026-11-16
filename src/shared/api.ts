@@ -1,3 +1,5 @@
+import type { DiagnosticStep, SupportCode } from "./support-codes.js";
+
 /** The only things the chat window can ask the main process for. Shared by preload and renderer. */
 
 export const CHANNELS = {
@@ -21,6 +23,8 @@ export const CHANNELS = {
   cancelPull: "sage:setup-pull-cancel",
   openInstallGuide: "sage:setup-open-guide",
   finishSetup: "sage:setup-finish",
+  diagnostics: "sage:setup-diagnostics",
+  copyDiagnostics: "sage:setup-diagnostics-copy",
   setSound: "sage:sound-set",
   listModels: "sage:service-models",
   testKey: "sage:service-test-key",
@@ -232,17 +236,23 @@ export interface RunnerStatus {
   /** The local model saved in Settings. */
   model: string;
   downloaded: Record<ModelChoice, boolean>;
+  /**
+   * The runner's version number when it answered and said one (digits and dots only, checked in
+   * the main process); null otherwise.
+   */
+  version: string | null;
 }
 
 /**
  * "declined": the user chose Not now in the main process's box. `skills` after a download: whether
- * the runner says the model can use tools ("unknown" when it doesn't say).
+ * the runner says the model can use tools ("unknown" when it doesn't say). A failure carries its
+ * support code (src/shared/support-codes.ts).
  */
 export type PullResult =
   | { status: "done"; skills: "yes" | "no" | "unknown" }
   | { status: "declined" }
   | { status: "cancelled" }
-  | { status: "failed"; message: string };
+  | { status: "failed"; message: string; code: SupportCode };
 
 /** How far the model download has got, in bytes, as the runner reports it. */
 export interface PullStatus {
@@ -262,6 +272,25 @@ export type GuideResult =
   | { status: "opened" }
   | { status: "declined" }
   | { status: "failed"; message: string; address: string };
+
+/**
+ * Copy diagnostics: what the window asks for. The step and support code it is showing, and whether
+ * the window has reduced motion on. Nothing else: the main process builds the text itself.
+ */
+export interface DiagnosticsRequest {
+  step: DiagnosticStep;
+  code: SupportCode;
+  reducedMotion: boolean;
+}
+
+/**
+ * The diagnostics text, built in the main process from a fixed list of fields, to show in full
+ * before copying. `id` names this text for `copyDiagnostics`, which copies exactly it.
+ */
+export type DiagnosticsResult =
+  | { ok: true; id: string; text: string }
+  /** `stale`: a newer build started before this one finished; the window drops it. */
+  | { ok: false; message: string; stale?: true };
 
 export interface SageApi {
   send(text: string): Promise<string>;
@@ -310,6 +339,16 @@ export interface SageApi {
   openInstallGuide(): Promise<GuideResult>;
   /** Saves that setup was finished or skipped, so the Welcome screen isn't shown at start-up. */
   finishSetup(): Promise<Result>;
+  /**
+   * Copy diagnostics, first step: the main process builds the text (no keys, addresses, names,
+   * paths, notes or reminders) for the window to show. Nothing is copied or sent.
+   */
+  diagnostics(request: DiagnosticsRequest): Promise<DiagnosticsResult>;
+  /**
+   * Copy diagnostics, second step: the main process puts the text it built under `id` on the
+   * clipboard. The window never supplies the text. Nothing is sent anywhere.
+   */
+  copyDiagnostics(id: string): Promise<Result>;
   /** The top bar's sound switch: saves only whether sound effects are on. */
   setSound(on: boolean): Promise<Result>;
   /** Home's summary: today's reminders, the latest note titles and the status. Changes nothing. */

@@ -60,7 +60,9 @@ used.
 | Setup | `src/core/setup.ts` | First-run setup: the runner's status for the saved local model and Sage's two models, one download at a time of one of those two (only after the main process's box says Download, stopped when Sage quits), saving it as the local model once it is there, the skills check, opening the install guide's one fixed address after asking, and marking setup done. |
 | Home | `src/core/home.ts` | Home's summary for the window, read-only and bounded: the reminders due on the PC's own day (at most 10, the ones still to come first) and the missed ones not yet shown (at most 5, the newest, with a count of the rest), text cut to 200 characters, the next reminder after today when nothing more is to come today, the titles of the five most recently changed notes (cut to 80 characters, never the text), the brain, whether the speech file is there and the sound switch. Also the morning brief's once-a-day mark (`claimMorningBrief`), saved as `lastBrief` in the settings under the settings lock; the saved day never moves backwards. |
 | Window home | `src/renderer/home.ts`, `home-text.ts` | Home: the clock (the PC's own time format, changed on the minute), the greeting (morning 05:00 to 11:59, afternoon 12:00 to 17:59, evening otherwise), the Today, Notes and Status panels, **Talk to Sage**, and the daily brief, built in `home-text.ts` from the summary in fixed words, typed out with `typing.ts` and read aloud through voice's speaker. |
-| Window welcome | `src/renderer/welcome.ts`, `welcome-text.ts` | The Welcome screen's steps and texts: where Sage thinks, the runner, a model (with progress polled every half second) and Done. |
+| Window welcome | `src/renderer/welcome.ts`, `welcome-text.ts` | The Welcome screen's numbered steps and texts: 01 where Sage thinks, 02 the runner, 03 a model (with progress polled every half second) and 04 Ready; each step's typed check lines (built in DOM-free `welcome-text.ts` from the real answers), the support code of a failed check, and the Copy diagnostics box. |
+| Support codes | `src/shared/support-codes.ts` | The one table of support codes (`SAGE-RUN-01` and so on), the runner states and step labels they go with; `docs/installing.md` has the same table for people (a test keeps the two the same). |
+| Diagnostics | `src/core/diagnostics.ts` | Copy diagnostics: builds the text in the main process from a fixed list of fields, scrubs every value, keeps the text built last under an id, and puts exactly that on the clipboard when the window asks with the id. |
 | Wiring for tests | `src/core/sage.ts` | Builds all of the above from injected parts; the tests use it with fakes. |
 
 ## Skills
@@ -249,7 +251,10 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
    Sage's two models it has. **Open the install guide** asks in the main process's box first, then opens
    one fixed address, the "local model runner" section of `docs/installing.md` on GitHub, with
    `shell.openExternal`. Nothing the window sends is used; if no browser opens, the address is shown to
-   copy.
+   copy. At the same time as the model list, with the same time limit (so a runner that hangs on
+   one costs one wait), the main process asks for the runner's version (`/api/version`, same fixed
+   address, capped and checked). It is kept only when the list answered, and only as a plain version
+   number (digits and dots, with a short suffix at most); anything else counts as not reported.
 4. **A model.** The window sends only `standard` or `smaller`; the main process maps them to `qwen3:4b`
    and `qwen3:1.7b`. A model the runner already has needs no download. Otherwise the main process asks
    in its own box (the size, and that it needs an internet connection and free disk space and that the
@@ -267,11 +272,58 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
    download has finished and the save has started, a cancel no longer applies: a write in progress is
    never undone, Cancel answers "too late" and the window keeps the model as chosen, and Skip waits for
    the save to settle before it marks setup as done.
-5. **Done** says which model Sage uses and how to talk to it; **Start chatting** marks setup as done.
+5. **Ready** says which model Sage uses and how to talk to it; **Start chatting** marks setup as done.
    **Skip setup** does the same at any step, and cancels a model request that hasn't reached its commit
    point. If setup can't be saved as done, the Welcome screen stays and says so. Afterwards, Settings
    updates only the fields setup saved, and only where the form still shows what it showed when the
    Welcome screen closed. **Set up Sage** in Settings opens the Welcome screen again.
+
+**The start-up sequence.** The steps are numbered sections (01 Where Sage thinks, 02 Model runner,
+03 Model, 04 Ready) in the panel style. Each step lists what Sage checked as short lines, built in
+`welcome-text.ts` from an answer the window already has and nothing else: the runner's status (found
+or not, its version, which of Sage's two models it has), the model request's result (ready, not
+downloaded, cancelled or failed, and whether the model can use skills) and, on Ready, the voice status.
+The lines type out one after another with the chat's typist (`typing.ts`); a click or a key shows them
+all, and with reduced motion they appear at once. Each new set is read out once, in full, through one
+polite status area (`welcome-checks-status`), which is cleared first and set a moment later
+(`ANNOUNCE_DELAY_MS`) so the same result is read out again after Check again. A result still
+waiting is dropped, and the area emptied, when a check or download starts again, the other model is chosen, the step changes, or
+setup is finished or skipped; the delayed write also checks that its step is still showing; the lists themselves
+aren't live regions.
+
+**Support codes.** A failed check shows a short code next to its plain sentence, from the one table in
+`src/shared/support-codes.ts`. Each code is a failure Sage can tell apart: the runner's two failed
+states (`SAGE-RUN-01` not reachable, `SAGE-RUN-02` unreadable), each of the download's own messages
+(`PULL_CODES` in `src/core/brain/runner.ts`: `SAGE-MOD-01` to `03`, `SAGE-NET-01` and `02`, and the
+runner codes again when the runner stops answering mid-way), a second download (`SAGE-MOD-04`), a model
+that couldn't be saved as the local model (`SAGE-SET-01`), and a request from the window that failed or
+couldn't be read (`SAGE-APP-01`). The main process puts the code in a failed `PullResult`; the window
+maps the runner's states itself. A declined or cancelled download is the user's own choice and gets no
+code. `docs/installing.md` has the same codes with what to try; `test/support-codes.test.ts` checks
+that the two lists match and that every code is used.
+
+**Copy diagnostics.** A failed step (02 or 03) offers **Copy diagnostics…**. The window asks
+`diagnostics` with the step, the code and whether it has reduced motion on (closed lists and a
+yes or no, checked with zod), nothing else. The main process (`src/core/diagnostics.ts`) builds the
+text from a fixed list of fields: Sage's version, the system and its version, the processor, the step
+and code, the kind of brain (`local`, `claude`, `openai`, `gemini` or `other`), whether the runner
+answered and its version, the model the failed step tried (kept in the main process
+by `Setup` from the closed choice when a model request starts, marked when it downloaded but couldn't
+be saved, cleared on success) and the saved local model, each named only if it is one of Sage's two,
+with whether it is downloaded, the voice status, the theme and reduced motion. It never reads keys, addresses, apps, folders,
+notes or reminders. As a second line of defence each value is scrubbed: every key the redactor knows first (so no
+later substitution can split a key), then the home folder, e-mail addresses, web addresses other than
+loopback and the user name. Each build is numbered when it
+starts, and the text is kept under that number (`diag-N`), replacing the one before; a build that
+finishes after a newer one started is not kept and comes back marked stale, so the window drops it.
+The kept text is returned for the window to show in
+full in a read-only box. **Copy to clipboard** sends only that id (`copyDiagnostics`); the main process
+writes the text it kept under that id to the clipboard (Electron's `clipboard`, main process only), or
+says to build it again if the id isn't the latest, if the text was built more than 2 minutes ago
+(`DIAGNOSTICS_COPY_MS`) or if it was already copied 3 times (`DIAGNOSTICS_MAX_COPIES`): the window
+could ask without the user, so these limits keep it from writing the clipboard again and again. Nothing is sent anywhere, and nothing is logged. When the box hides (a new answer
+for the step, Check again, another step) while the focus is in it, the focus goes back to the step's
+heading.
 
 `setupDone` is changed only by the Welcome screen's own request; a Settings save keeps the stored value.
 Each of the Welcome screen's requests loads the settings, changes only its own fields and saves them

@@ -37,9 +37,11 @@
         <button type="button" id="welcome-skip">Skip setup</button>
       </div>
       <p id="welcome-status" class="hint" role="status"></p>
+      <!-- The check lines, read out once per set (each step's lists below are only for the eye). -->
+      <p id="welcome-checks-status" class="visually-hidden" role="status"></p>
 
       <section id="step-place" class="step">
-        <h2 id="step-place-heading" tabindex="-1">Where should Sage think?</h2>
+        <h2 id="step-place-heading" tabindex="-1"><span class="step-number">01</span> Where Sage thinks</h2>
         <p class="hint">
           On this computer, nothing you type leaves the PC. Online, Sage can use Claude, OpenAI, Gemini or
           another service with your own key: what you type goes to that company, which charges per use (Gemini
@@ -53,9 +55,11 @@
       </section>
 
       <section id="step-runner" class="step" hidden>
-        <h2 id="step-runner-heading" tabindex="-1">The local model runner</h2>
+        <h2 id="step-runner-heading" tabindex="-1"><span class="step-number">02</span> Model runner</h2>
         <p class="hint">Sage thinks on this computer through a separate program, the local model runner.</p>
+        <ol id="runner-checks" class="check-list" aria-label="Checks"></ol>
         <p id="runner-status" role="status"></p>
+        <p id="runner-code" class="support-code" hidden></p>
         <div id="runner-install" hidden>
           <ol class="steps">
             <li>Open the install guide and follow its steps to install the local model runner.</li>
@@ -69,11 +73,12 @@
         <div class="row">
           <button type="button" id="runner-check">Check again</button>
           <button type="button" id="runner-next" class="primary" disabled>Next</button>
+          <button type="button" id="runner-diagnostics" hidden>Copy diagnostics…</button>
         </div>
       </section>
 
       <section id="step-model" class="step" hidden>
-        <h2 id="step-model-heading" tabindex="-1">Choose a model</h2>
+        <h2 id="step-model-heading" tabindex="-1"><span class="step-number">03</span> Model</h2>
         <p class="hint">
           The model is what Sage thinks with. The local model runner downloads it once. Choosing a model here
           makes Sage think on this computer, even if it uses an online service now.
@@ -93,18 +98,36 @@
           <button type="button" id="model-cancel" hidden>Cancel</button>
         </div>
         <progress id="model-progress" max="1" value="0" hidden></progress>
+        <ol id="model-checks" class="check-list" aria-label="Checks"></ol>
         <p id="model-status" role="status"></p>
+        <p id="model-code" class="support-code" hidden></p>
         <p id="model-skills" class="hint"></p>
         <div class="row">
           <button type="button" id="model-next" class="primary" hidden>Next</button>
+          <button type="button" id="model-diagnostics" hidden>Copy diagnostics…</button>
         </div>
       </section>
 
       <section id="step-done" class="step" hidden>
-        <h2 id="step-done-heading" tabindex="-1">Sage is ready</h2>
+        <h2 id="step-done-heading" tabindex="-1"><span class="step-number">04</span> Ready</h2>
+        <ol id="done-checks" class="check-list" aria-label="Checks"></ol>
         <p id="done-summary"></p>
         <p id="done-voice" class="hint"></p>
         <button type="button" id="start-chatting" class="primary">Start chatting</button>
+      </section>
+
+      <!-- Copy diagnostics: the text the main process built, shown in full before it is copied. -->
+      <section id="welcome-diagnostics" class="step diagnostics" aria-labelledby="diagnostics-heading" hidden>
+        <h2 id="diagnostics-heading" tabindex="-1">Diagnostics</h2>
+        <p class="hint">
+          This is everything Copy to clipboard puts there, put together by Sage on this PC: no keys, addresses,
+          names, notes or reminders. Nothing is sent anywhere; paste it wherever you ask for help.
+        </p>
+        <textarea id="diagnostics-text" class="diagnostics-text" rows="14" readonly aria-label="Diagnostics text"></textarea>
+        <div class="row">
+          <button type="button" id="diagnostics-copy" class="primary">Copy to clipboard</button>
+        </div>
+        <p id="diagnostics-status" class="hint" role="status"></p>
       </section>
     </main>
 

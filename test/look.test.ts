@@ -135,3 +135,40 @@ test("Home's clock, greeting, panels and brief use only the checked colours, at 
   // The panels get the corner ticks, like the other panels.
   assert.match(css, /fieldset::before,\s*\.step::before,\s*\.composer::before,\s*\.panel::before,/);
 });
+
+test("the Welcome screen's numbers, check lines, support codes and diagnostics use only checked colours, at 12 px or more", () => {
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((match) =>
+    /\.step-number|\.check-l|\.support-code|\.diagnostics-text/.test(match[1]!),
+  );
+  assert.ok(rules.length >= 14, `found ${rules.length} Welcome rules`);
+  // Each of these has its contrast checked above, on every background and in both themes.
+  const checked = new Set([
+    "var(--text)",
+    "var(--muted)",
+    "var(--accent)",
+    "var(--amber)",
+    "var(--danger)",
+    "transparent",
+  ]);
+  const seen = new Set<string>();
+  for (const [, selector, body] of rules) {
+    for (const color of body!.matchAll(/(?:^|[\s;])color:\s*([^;]+);/g)) {
+      assert.ok(checked.has(color[1]!.trim()), `${selector!.trim()}: color ${color[1]}`);
+      seen.add(color[1]!.trim());
+    }
+    for (const size of body!.matchAll(/font-size:\s*([^;]+);/g)) {
+      const value = size[1]!.trim();
+      if (value === "var(--label-size)") continue;
+      assert.ok(Number(value.match(/^(\d+)px$/)?.[1]) >= 12, `${selector!.trim()}: ${value}`);
+    }
+  }
+  for (const used of ["var(--text)", "var(--muted)", "var(--accent)", "var(--amber)", "var(--danger)"]) {
+    assert.ok(seen.has(used), used);
+  }
+  // A typing line's own text is transparent only while its copy is drawn over it.
+  assert.match(css, /\.check-line\.typing \{\s*color: transparent;\s*\}/);
+  assert.match(css, /\.check-line \.typed \{[^}]*color: var\(--text\);/);
+  // The diagnostics box has the panel colours, and the support code is a label in amber.
+  assert.match(css, /\.diagnostics-text \{[^}]*background: var\(--panel-2\);/);
+  assert.match(css, /\.support-code \{[^}]*font-size: var\(--label-size\);[^}]*color: var\(--amber\);/);
+});

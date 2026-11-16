@@ -8,6 +8,7 @@ import {
   CHANNELS,
   COMPANIES,
   type Channel,
+  type DiagnosticsResult,
   type GuideResult,
   type HomeSummary,
   type ModelListResult,
@@ -22,6 +23,7 @@ import {
   type Result,
   type TranscribeResult,
 } from "../shared/api.js";
+import { DIAGNOSTIC_STEPS, SUPPORT_CODE_LIST } from "../shared/support-codes.js";
 
 /** Native pickers, supplied by the main process (Electron's dialog module). */
 export interface Pickers {
@@ -68,6 +70,15 @@ const soundPayload = z.strictObject({ on: z.boolean() });
 
 // Home's two requests carry nothing: an empty object, and nothing else is accepted.
 const emptyPayload = z.strictObject({});
+
+// Copy diagnostics: the step and code on screen and the window's reduced-motion setting, from
+// closed lists; then the id of the text the main process built. Never any text from the window.
+const diagnosticsPayload = z.strictObject({
+  step: z.enum(DIAGNOSTIC_STEPS),
+  code: z.enum(SUPPORT_CODE_LIST),
+  reducedMotion: z.boolean(),
+});
+const copyDiagnosticsPayload = z.strictObject({ id: z.string().regex(/^diag-\d{1,9}$/) });
 
 // The window picks one of Sage's two models; it never sends a model name.
 const pullPayload = z.strictObject({ choice: z.enum(MODEL_CHOICES) });
@@ -259,7 +270,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     // The main process asks the user first, in its own box; the window can only ask for it.
     [CHANNELS.pullModel]: async (payload): Promise<PullResult> => {
       const parsed = pullPayload.safeParse(payload);
-      if (!parsed.success) return { status: "failed", message: NOT_READ };
+      if (!parsed.success) return { status: "failed", message: NOT_READ, code: "SAGE-APP-01" };
       return sage.setup.pullModel(parsed.data.choice);
     },
     [CHANNELS.pullStatus]: async () => sage.setup.pullStatus(),
@@ -267,6 +278,18 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
     // Asks first, then opens the one fixed address; nothing from the window is used.
     [CHANNELS.openInstallGuide]: () => sage.setup.openInstallGuide(),
     [CHANNELS.finishSetup]: () => sage.setup.finish(),
+    // Built here from a fixed list of fields, to show in full; nothing is copied or sent.
+    [CHANNELS.diagnostics]: async (payload): Promise<DiagnosticsResult> => {
+      const parsed = diagnosticsPayload.safeParse(payload);
+      if (!parsed.success) return { ok: false, message: NOT_READ };
+      return sage.diagnostics.build(parsed.data);
+    },
+    // Copies the text built above under this id, and only that; the window supplies no text.
+    [CHANNELS.copyDiagnostics]: async (payload): Promise<Result> => {
+      const parsed = copyDiagnosticsPayload.safeParse(payload);
+      if (!parsed.success) return fail(NOT_READ);
+      return sage.diagnostics.copy(parsed.data.id);
+    },
     // Changes only the sound switch, so unsaved changes on the Settings screen are neither saved
     // nor lost.
     [CHANNELS.setSound]: async (payload): Promise<Result> => {

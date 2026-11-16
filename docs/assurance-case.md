@@ -40,9 +40,11 @@ risk that remains. The tests named here run with `npm run verify`.
    against a strict schema, and every "confirm" skill passes through the gate.
 2. **Outside text → model.** Web results, notes and reminders go back to the model inside a labelled
    untrusted block, and are never read as commands by Sage itself.
-3. **Window → main process.** The window is treated as untrusted input: it gets twenty-six typed
+3. **Window → main process.** The window is treated as untrusted input: it gets twenty-eight typed
    calls, and each handler checks the sender and validates the payload. One of them, Home's summary, is
-   read-only and returns a bounded summary of reminders and note titles (see T8). The other way, the main
+   read-only and returns a bounded summary of reminders and note titles (see T8); two are Copy
+   diagnostics, which return a text built in the main process and copy that text, never one from the
+   window (see T7). The other way, the main
    process sends the window one thing by itself, news of its asking box, which the window can only
    listen to.
 4. **Sage → network.** The main process talks to `127.0.0.1:11434` (local brain, and the runner's model
@@ -416,6 +418,40 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   `test/setup.test.ts`.
 - **Notices and the talk key.** While the Welcome screen is open, notices wait (they are confirmed only
   while Chat is visible) and Ctrl+Space does nothing. *Evidence:* `test/renderer-welcome.test.ts`.
+- **Check lines and support codes say only what Sage really found.** Each typed line is built from an
+  answer the window already has (the runner's status, the model request's result, the voice status);
+  nothing is shown as progress that didn't happen. The runner's version is the one new piece of runner
+  text that reaches the window, and only when it is a plain version number (digits and dots, a short
+  suffix at most; anything else counts as not reported). Support codes come from one table in
+  `src/shared/support-codes.ts`; each is a failure Sage can tell apart, and the docs list the same
+  codes. *Evidence:* `test/renderer-welcome.test.ts` (each line and code from each answer, typing,
+  skip and reduced motion), `test/setup.test.ts` (the version kept only when plain, the code on each
+  failed download), `test/support-codes.test.ts` (the docs table matches the code table, no code twice,
+  every code used).
+- **Copy diagnostics carries nothing private, and goes nowhere by itself.** Two requests:
+  `diagnostics` (`sage:setup-diagnostics`) takes a strict object with the step (`runner` or `model`), a
+  support code from the table and a yes or no for reduced motion; it returns the text, built in the
+  main process from a fixed list of fields (Sage's version, the system and its version, the
+  processor, the step and code, the kind of brain, whether the runner answered and its version, the model the step tried (from the closed choice, kept in the main process) and the saved local
+  model, each by name only if it is one of Sage's two and with whether it is downloaded, the voice status, the
+  theme and reduced motion). It never reads a key, an online address, the apps, folders, notes or
+  reminders, and every value is also scrubbed of the home folder, the user name, e-mail addresses, web
+  addresses other than loopback and every key the redactor knows. `copyDiagnostics`
+  (`sage:setup-diagnostics-copy`) takes only `{ id }` (`diag-` and digits) and writes the text the main
+  process kept under that id, the latest one only, to the clipboard with Electron's `clipboard` in the
+  main process; the window never supplies the text that is copied. The window shows the whole text in a
+  read-only box first, and asks the main process to copy Sage's own text when the user chooses **Copy
+  to clipboard**; the window can't choose the text. The window could ask without the user, so each
+  text can be copied at most 3 times and only within 2 minutes of being built; after that a fresh
+  build is needed. A build that finishes after a newer one started isn't kept. Nothing is sent or
+  logged. No new message from the main process, no CSP change. *Evidence:*
+  `test/diagnostics.test.ts` (each expected line; a planted key, other service's key, home path, user
+  name, e-mail address, note text and title, reminder and online address all absent from the text and
+  the clipboard; only the latest id copies, at most 3 times and within 2 minutes; keys redacted before any other scrubbing; payloads with text or unknown values refused),
+  `test/key-leak.test.ts` (the sentinel key absent from the diagnostics and the clipboard),
+  `test/security.test.ts` (the two requests, the preload's payloads, the clipboard written in one place
+  in the main process), `test/renderer-welcome.test.ts` (the window shows the text, and Copy sends only
+  the id).
 
 ### T8. Home and the daily brief
 
@@ -488,7 +524,9 @@ sources for them and lists every network address). With the local brain, only we
 computer, plus the one-time download of the speech file, an ordinary request that carries none of your
 speech or text. A model download from the Welcome screen is started by the user and made by the local
 model runner from its own registry; opening the install guide shows GitHub the PC's address like any
-web page. Speech is turned into text
+web page. When the user chooses Copy, the window asks the main process to
+put Sage's own diagnostics text on the clipboard (the window can't choose the text); Sage sends it
+nowhere. Speech is turned into text
 on the PC, and replies are read aloud with the PC's own voices. With an online brain, the conversation,
 including tool results and words that came from talking, goes to the service the user chose: Anthropic
 for Claude, OpenAI for OpenAI, Google for Gemini, or the address the user entered. What each company

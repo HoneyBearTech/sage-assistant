@@ -8,7 +8,7 @@ import {
   type RunnerStatus,
   SAGE_MODELS,
 } from "../shared/api.js";
-import { hasModel, PULL_MESSAGES, type RunnerClient } from "./brain/runner.js";
+import { hasModel, PULL_MESSAGES, pullCode, type RunnerClient } from "./brain/runner.js";
 import type { Logger } from "./log.js";
 import type { SettingsStore } from "./settings.js";
 import type { Timers } from "./voice/download.js";
@@ -38,6 +38,12 @@ export const SETUP_MESSAGES = {
   guideFailed: `Sage couldn't open your web browser. The install guide is at ${INSTALL_GUIDE_URL}`,
   notMarked: "Sage couldn't save that setup is done. Try again.",
 } as const;
+
+/** The model a request tried: one of Sage's two, and whether it was there but couldn't be saved. */
+export interface TriedModel {
+  choice: ModelChoice;
+  saveFailed: boolean;
+}
 
 export interface SetupDeps {
   settings: SettingsStore;
@@ -77,12 +83,27 @@ export class Setup {
       }
     | undefined;
 
+  /**
+   * The model the last request tried, from the closed choice, for Copy diagnostics: set when a
+   * request starts, marked when the model was there but couldn't be saved, cleared on success.
+   */
+  private attempt: TriedModel | null = null;
+
   constructor(private readonly deps: SetupDeps) {}
+
+  /** The model the last model request tried and didn't finish with, or null. */
+  triedModel(): TriedModel | null {
+    return this.attempt ? { ...this.attempt } : null;
+  }
 
   async status(): Promise<RunnerStatus> {
     const model = (await this.deps.settings.load()).local.model;
-    const list = await this.deps.runner.models();
-    if (!list.ok) return { state: list.reason, model, downloaded: { standard: false, smaller: false } };
+    // Both at once, each with the same time limit, so a runner that hangs on one costs one wait;
+    // the version is kept only when the list answered.
+    const [list, version] = await Promise.all([this.deps.runner.models(), this.deps.runner.version()]);
+    if (!list.ok) {
+      return { state: list.reason, model, downloaded: { standard: false, smaller: false }, version: null };
+    }
     return {
       state: hasModel(list.names, model) ? "ready" : "no-model",
       model,
@@ -90,6 +111,7 @@ export class Setup {
         standard: hasModel(list.names, SAGE_MODELS.standard.name),
         smaller: hasModel(list.names, SAGE_MODELS.smaller.name),
       },
+      version,
     };
   }
 
@@ -106,19 +128,20 @@ export class Setup {
    * even while the box is open or the save is waiting for the settings lock, saves nothing.
    */
   async pullModel(choice: ModelChoice): Promise<PullResult> {
-    if (this.pull) return { status: "failed", message: SETUP_MESSAGES.alreadyDownloading };
+    if (this.pull) {
+      return { status: "failed", message: SETUP_MESSAGES.alreadyDownloading, code: "SAGE-MOD-04" };
+    }
     const current = { controller: new AbortController(), transferring: false, completed: 0, total: 0 };
     this.pull = current;
+    this.attempt = { choice, saveFailed: false };
     const signal = current.controller.signal;
     try {
       const model = SAGE_MODELS[choice].name;
       const list = await this.deps.runner.models(signal);
       if (signal.aborted) return { status: "cancelled" };
       if (!list.ok) {
-        return {
-          status: "failed",
-          message: list.reason === "unreachable" ? PULL_MESSAGES.unreachable : PULL_MESSAGES.unreadable,
-        };
+        const message = list.reason === "unreachable" ? PULL_MESSAGES.unreachable : PULL_MESSAGES.unreadable;
+        return { status: "failed", message, code: pullCode(message) };
       }
       if (!hasModel(list.names, model)) {
         let agreed: boolean;
@@ -141,18 +164,23 @@ export class Setup {
           ...(this.deps.stallMs ? { stallMs: this.deps.stallMs } : {}),
         });
         current.transferring = false;
-        if (outcome.status !== "done") {
-          if (outcome.status === "failed")
-            this.deps.logger.warn(`A model download failed: ${outcome.message}`);
-          return outcome;
+        if (outcome.status === "cancelled") return outcome;
+        if (outcome.status === "failed") {
+          this.deps.logger.warn(`A model download failed: ${outcome.message}`);
+          return { ...outcome, code: pullCode(outcome.message) };
         }
         this.deps.logger.info(`The local model runner downloaded ${model}.`);
       }
-      return await this.useModel(model, current);
+      const result = await this.useModel(model, current);
+      if (result.status === "done") this.attempt = null;
+      else if (result.status === "failed" && result.code === "SAGE-SET-01") {
+        this.attempt = { choice, saveFailed: true };
+      }
+      return result;
     } catch (error) {
       // A fixed line only: nothing from the runner (or an error carrying its text) reaches the log.
       this.deps.logger.warn(`A model download failed unexpectedly (${errorName(error)}).`);
-      return { status: "failed", message: PULL_MESSAGES.other };
+      return { status: "failed", message: PULL_MESSAGES.other, code: pullCode(PULL_MESSAGES.other) };
     } finally {
       if (this.pull === current) this.pull = undefined;
     }
@@ -177,9 +205,9 @@ export class Setup {
       saved = await saving;
     } catch (error) {
       this.deps.logger.warn(`The local model couldn't be saved (${errorName(error)}).`);
-      return { status: "failed", message: SETUP_MESSAGES.notSaved };
+      return { status: "failed", message: SETUP_MESSAGES.notSaved, code: "SAGE-SET-01" };
     }
-    if (!saved.ok) return { status: "failed", message: SETUP_MESSAGES.notSaved };
+    if (!saved.ok) return { status: "failed", message: SETUP_MESSAGES.notSaved, code: "SAGE-SET-01" };
     // A turn started against the online service stops, as when Settings changes the brain.
     if (saved.previous.brain !== saved.settings.brain) this.deps.brainChanged?.();
     const tools = await this.deps.runner.toolSupport(model);
