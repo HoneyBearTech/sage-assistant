@@ -48,6 +48,8 @@ export interface SetupDeps {
   confirmOpenGuide: () => Promise<boolean>;
   /** Opens an address in the web browser (Electron's shell.openExternal). */
   openExternal: (url: string) => Promise<void>;
+  /** Called when a download switched the brain (to local), so a turn on the old one stops. */
+  brainChanged?: () => void;
   /** For tests: the stall limit's timer. */
   timers?: Timers;
   stallMs?: number;
@@ -59,7 +61,13 @@ export interface SetupDeps {
  * time), opening the install guide, and marking setup as done. Each saves only its own settings.
  */
 export class Setup {
-  private pull: { controller: AbortController; completed: number; total: number } | undefined;
+  /**
+   * The model request in progress, from its first step (asking the runner for its models) to its
+   * last (saving the model). Cancel, Skip and quitting abort it at whichever step it is on.
+   */
+  private pull:
+    | { controller: AbortController; transferring: boolean; completed: number; total: number }
+    | undefined;
 
   constructor(private readonly deps: SetupDeps) {}
 
@@ -78,40 +86,45 @@ export class Setup {
   }
 
   pullStatus(): PullStatus {
-    return this.pull
+    return this.pull?.transferring
       ? { downloading: true, completed: this.pull.completed, total: this.pull.total }
       : { downloading: false, completed: 0, total: 0 };
   }
 
   /**
    * Has the runner download one of Sage's models, after asking. A model the runner already has
-   * needs no download. Only once the model is there is it saved as the local model.
+   * needs no download. Only once the model is there is it saved as the local model (and the brain
+   * set to local, which stops a turn running against the online service). A cancel at any step,
+   * even while the box is open or the save is waiting for the settings lock, saves nothing.
    */
   async pullModel(choice: ModelChoice): Promise<PullResult> {
     if (this.pull) return { status: "failed", message: SETUP_MESSAGES.alreadyDownloading };
-    const model = SAGE_MODELS[choice].name;
-    const list = await this.deps.runner.models();
-    if (!list.ok) {
-      return {
-        status: "failed",
-        message: list.reason === "unreachable" ? PULL_MESSAGES.unreachable : PULL_MESSAGES.unreadable,
-      };
-    }
-    if (!hasModel(list.names, model)) {
-      let agreed: boolean;
-      try {
-        agreed = await this.deps.confirmPull(choice);
-      } catch {
-        agreed = false;
+    const current = { controller: new AbortController(), transferring: false, completed: 0, total: 0 };
+    this.pull = current;
+    const signal = current.controller.signal;
+    try {
+      const model = SAGE_MODELS[choice].name;
+      const list = await this.deps.runner.models(signal);
+      if (signal.aborted) return { status: "cancelled" };
+      if (!list.ok) {
+        return {
+          status: "failed",
+          message: list.reason === "unreachable" ? PULL_MESSAGES.unreachable : PULL_MESSAGES.unreadable,
+        };
       }
-      if (!agreed) return { status: "declined" };
-      // The box may have been answered twice over; one download only.
-      if (this.pull) return { status: "failed", message: SETUP_MESSAGES.alreadyDownloading };
-      const current = { controller: new AbortController(), completed: 0, total: 0 };
-      this.pull = current;
-      try {
+      if (!hasModel(list.names, model)) {
+        let agreed: boolean;
+        try {
+          agreed = await this.deps.confirmPull(choice);
+        } catch {
+          agreed = false;
+        }
+        // Cancelled (or skipped) while the box was open: no download, whatever the answer.
+        if (signal.aborted) return { status: "cancelled" };
+        if (!agreed) return { status: "declined" };
+        current.transferring = true;
         const outcome = await this.deps.runner.pull(model, {
-          signal: current.controller.signal,
+          signal,
           onProgress: (progress) => {
             current.completed = progress.completed;
             current.total = progress.total;
@@ -119,36 +132,46 @@ export class Setup {
           ...(this.deps.timers ? { timers: this.deps.timers } : {}),
           ...(this.deps.stallMs ? { stallMs: this.deps.stallMs } : {}),
         });
+        current.transferring = false;
         if (outcome.status !== "done") {
           if (outcome.status === "failed")
             this.deps.logger.warn(`A model download failed: ${outcome.message}`);
           return outcome;
         }
         this.deps.logger.info(`The local model runner downloaded ${model}.`);
-      } catch (error) {
-        this.deps.logger.error("A model download failed", error);
-        return { status: "failed", message: PULL_MESSAGES.other };
-      } finally {
-        this.pull = undefined;
       }
-    }
-    // Only the model and the brain change; everything else stays as saved.
-    try {
-      const saved = await this.deps.settings.update((current) => ({
-        ...current,
-        brain: "local",
-        local: { ...current.local, model },
-      }));
-      if (!saved.ok) return { status: "failed", message: SETUP_MESSAGES.notSaved };
+      return await this.useModel(model, signal);
     } catch (error) {
-      this.deps.logger.error("The local model couldn't be saved", error);
+      // A fixed line only: nothing from the runner (or an error carrying its text) reaches the log.
+      this.deps.logger.warn(`A model download failed unexpectedly (${errorName(error)}).`);
+      return { status: "failed", message: PULL_MESSAGES.other };
+    } finally {
+      if (this.pull === current) this.pull = undefined;
+    }
+  }
+
+  /** Saves the model as the local model, unless the request was cancelled; then the skills check. */
+  private async useModel(model: string, signal: AbortSignal): Promise<PullResult> {
+    let saved: Awaited<ReturnType<SettingsStore["update"]>>;
+    try {
+      // Checked inside the settings lock: a Skip that got there first leaves the settings alone.
+      saved = await this.deps.settings.update((current) => {
+        if (signal.aborted) throw new Cancelled();
+        return { ...current, brain: "local", local: { ...current.local, model } };
+      });
+    } catch (error) {
+      if (error instanceof Cancelled) return { status: "cancelled" };
+      this.deps.logger.warn(`The local model couldn't be saved (${errorName(error)}).`);
       return { status: "failed", message: SETUP_MESSAGES.notSaved };
     }
+    if (!saved.ok) return { status: "failed", message: SETUP_MESSAGES.notSaved };
+    // A turn started against the online service stops, as when Settings changes the brain.
+    if (saved.previous.brain !== saved.settings.brain) this.deps.brainChanged?.();
     const tools = await this.deps.runner.toolSupport(model);
     return { status: "done", skills: tools === "tools" ? "yes" : tools === "no-tools" ? "no" : "unknown" };
   }
 
-  /** Stops a download in progress. Whether the runner keeps what it has so far is up to it. */
+  /** Stops the model request at whatever step it is on. Whether the runner keeps a part is up to it. */
   cancelPull(): void {
     this.pull?.controller.abort(new Error("cancelled"));
   }
@@ -171,13 +194,14 @@ export class Setup {
     }
   }
 
-  /** Setup was finished or skipped. Only this one setting changes. */
+  /** Setup was finished or skipped: a model request still running is cancelled, and only this one setting changes. */
   async finish(): Promise<Result> {
+    this.cancelPull();
     try {
       const saved = await this.deps.settings.update((current) => ({ ...current, setupDone: true }));
       return saved.ok ? { ok: true } : { ok: false, message: SETUP_MESSAGES.notMarked };
     } catch (error) {
-      this.deps.logger.error("Setup couldn't be marked as done", error);
+      this.deps.logger.warn(`Setup couldn't be marked as done (${errorName(error)}).`);
       return { ok: false, message: SETUP_MESSAGES.notMarked };
     }
   }
@@ -186,4 +210,12 @@ export class Setup {
   dispose(): void {
     this.cancelPull();
   }
+}
+
+/** Thrown inside the settings lock when the request was cancelled first; nothing is saved. */
+class Cancelled extends Error {}
+
+/** The kind of error only (its name), never its message, which could carry outside text. */
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
 }

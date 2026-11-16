@@ -163,6 +163,9 @@ export function createSage(deps: SageDeps): Sage {
       ...(deps.fetch ? { fetch: deps.fetch } : {}),
     }),
     logger,
+    // A download switches the brain to local; a turn on the online service stops, as it does when
+    // Settings changes the brain.
+    brainChanged: () => assistant.stopTurn(),
     ...NO_SETUP,
     ...deps.setup,
   });

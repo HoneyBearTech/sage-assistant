@@ -447,3 +447,133 @@ test("without the main process's parts, nothing is asked, downloaded or opened",
   assert.deepEqual(await sage.setup.pullModel("standard"), { status: "declined" });
   assert.deepEqual(await sage.setup.openInstallGuide(), { status: "declined" });
 });
+
+// --- Cancelling the whole request (Skip, Cancel, quitting) ---
+
+/** A settings store whose `update` waits for `gate` first, as if another save held the lock. */
+class HeldSettings extends SettingsStore {
+  gate: ReturnType<typeof deferred<void>> | undefined;
+  readonly waiting = deferred<void>();
+  override async update(...args: Parameters<SettingsStore["update"]>) {
+    if (this.gate) {
+      this.waiting.resolve();
+      await this.gate.promise;
+    }
+    return super.update(...args);
+  }
+}
+
+async function cancellable(
+  t: Parameters<typeof tempDir>[0],
+  options: { tags?: (res: ServerResponse) => void; confirm?: () => Promise<boolean> } = {},
+) {
+  const tagsReached = deferred<void>();
+  const server = await fakeServer(t, (req, res) => {
+    if (req.url === "/api/tags") {
+      tagsReached.resolve();
+      return options.tags ? options.tags(res) : json(res, 200, { models: [] });
+    }
+    if (req.url === "/api/show") return json(res, 200, {});
+    res.writeHead(200);
+    res.end('{"status":"success"}\n');
+  });
+  const { logger, lines } = captureLogs();
+  const settings = new HeldSettings(await tempDir(t), logger);
+  const asked: ModelChoice[] = [];
+  let brainChanged = 0;
+  const setup = new Setup({
+    settings,
+    runner: new RunnerClient({ port: server.port }),
+    logger,
+    confirmPull: async (choice) => {
+      asked.push(choice);
+      return options.confirm ? options.confirm() : true;
+    },
+    confirmOpenGuide: async () => false,
+    openExternal: async () => {},
+    brainChanged: () => brainChanged++,
+  });
+  const pulls = () => server.requests.filter((req) => req.url === "/api/pull");
+  return { setup, settings, asked, pulls, tagsReached, lines, brainChanged: () => brainChanged };
+}
+
+test("Skip while Sage is still asking the runner for its models: no box, nothing saved", async (t) => {
+  // The runner takes the request and doesn't answer yet.
+  const { setup, settings, asked, pulls, tagsReached } = await cancellable(t, { tags: () => {} });
+  const running = setup.pullModel("standard");
+  await tagsReached.promise;
+  assert.deepEqual(await setup.finish(), { ok: true });
+  assert.deepEqual(await running, { status: "cancelled" });
+  assert.deepEqual(asked, [], "the download box never opens");
+  assert.equal(pulls().length, 0);
+  assert.deepEqual(await settings.load(), { ...defaultSettings(), setupDone: true });
+});
+
+test("Skip while the download box is open: Download afterwards starts nothing", async (t) => {
+  const answer = deferred<boolean>();
+  const boxOpen = deferred<void>();
+  const { setup, settings, pulls } = await cancellable(t, {
+    confirm: () => {
+      boxOpen.resolve();
+      return answer.promise;
+    },
+  });
+  const running = setup.pullModel("smaller");
+  await boxOpen.promise;
+  assert.deepEqual(setup.pullStatus(), { downloading: false, completed: 0, total: 0 }, "not downloading yet");
+  await setup.finish();
+  answer.resolve(true);
+  assert.deepEqual(await running, { status: "cancelled" });
+  assert.equal(pulls().length, 0);
+  assert.deepEqual(await settings.load(), { ...defaultSettings(), setupDone: true });
+});
+
+test("Cancel while the model is being saved: the settings stay as they were", async (t) => {
+  const { setup, settings, brainChanged } = await cancellable(t, {
+    tags: (res) => json(res, 200, { models: [{ name: "qwen3:1.7b" }] }),
+  });
+  await settings.save({
+    ...defaultSettings(),
+    brain: "online",
+    online: { baseUrl: "https://api.example.com", model: "m" },
+  });
+  settings.gate = deferred<void>();
+  const running = setup.pullModel("smaller");
+  await settings.waiting.promise;
+  setup.cancelPull();
+  settings.gate.resolve();
+  assert.deepEqual(await running, { status: "cancelled" });
+  const after = await settings.load();
+  assert.equal(after.brain, "online");
+  assert.equal(after.local.model, "qwen3:4b");
+  assert.equal(brainChanged(), 0);
+  // The request is over: a new one can start.
+  settings.gate = undefined;
+  assert.deepEqual(await setup.pullModel("smaller"), { status: "done", skills: "unknown" });
+  assert.equal((await settings.load()).brain, "local");
+  assert.equal(brainChanged(), 1, "told once the brain switched");
+  assert.deepEqual(await setup.pullModel("standard"), { status: "done", skills: "unknown" });
+  assert.equal(brainChanged(), 1, "not again: the brain was already local");
+});
+
+test("an unexpected error is logged as a fixed line, never with its text", async (t) => {
+  const { logger, lines } = captureLogs();
+  const runner = {
+    models: async () => ({ ok: true as const, names: [] }),
+    pull: async () => {
+      throw new TypeError(`broken ${RUNNER_TEXT}`);
+    },
+    toolSupport: async () => "unknown" as const,
+  } as unknown as RunnerClient;
+  const setup = new Setup({
+    settings: new SettingsStore(await tempDir(t), logger),
+    runner,
+    logger,
+    confirmPull: async () => true,
+    confirmOpenGuide: async () => false,
+    openExternal: async () => {},
+  });
+  assert.deepEqual(await setup.pullModel("standard"), { status: "failed", message: PULL_MESSAGES.other });
+  assert.ok(!lines.join("\n").includes(RUNNER_TEXT));
+  assert.ok(lines.some((line) => line.includes("A model download failed unexpectedly (TypeError).")));
+});
