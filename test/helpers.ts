@@ -176,11 +176,11 @@ export class FakeClock implements Clock {
 /** A brain that replays scripted replies and records what it was sent. */
 export class ScriptedBrain implements Brain {
   readonly kind = "local";
-  readonly calls: { messages: ChatMessage[]; tools: ToolSpec[] }[] = [];
+  readonly calls: { messages: ChatMessage[]; tools: ToolSpec[]; allowTools: boolean }[] = [];
   private index = 0;
   constructor(private readonly replies: (BrainReply | ((messages: ChatMessage[]) => BrainReply))[]) {}
-  async chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply> {
-    this.calls.push({ messages: structuredClone(messages), tools });
+  async chat(messages: ChatMessage[], tools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+    this.calls.push({ messages: structuredClone(messages), tools, allowTools });
     const next = this.replies[Math.min(this.index++, this.replies.length - 1)];
     if (!next) return { ok: true, content: "", toolCalls: [] };
     return typeof next === "function" ? next(messages) : next;

@@ -102,12 +102,21 @@ export class Assistant {
     const perSkill = new Map<string, number>();
     for (let round = 0; round < MAX_ROUNDS_PER_TURN; round++) {
       if (!current()) return CLEARED_REPLY;
-      const reply = await brain.chat(messages, callsUsed < MAX_TOOL_CALLS_PER_TURN ? tools : []);
+      // The same tools for every request of this message, so an online service that checks its
+      // earlier replies against the request finds nothing changed; past the limit, tool use is off.
+      const reply = await brain.chat(messages, tools, callsUsed < MAX_TOOL_CALLS_PER_TURN);
       if (!current()) return CLEARED_REPLY;
       if (!reply.ok) return reply.message;
       if (reply.toolCalls.length === 0) return reply.content.trim() || "(Sage had nothing to say.)";
 
-      messages.push({ role: "assistant", content: reply.content, toolCalls: reply.toolCalls });
+      // The request list only grows: earlier entries are never changed, and the service's own reply
+      // goes back to it exactly as it arrived.
+      messages.push({
+        role: "assistant",
+        content: reply.content,
+        toolCalls: reply.toolCalls,
+        ...(reply.replay ? { replay: reply.replay } : {}),
+      });
       for (const call of reply.toolCalls) {
         if (!current()) return CLEARED_REPLY;
         const skillLimit = PER_TURN_SKILL_LIMITS[call.name];

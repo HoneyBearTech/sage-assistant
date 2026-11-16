@@ -98,7 +98,9 @@ export class OnlineBrain implements Brain {
     this.service = options.service ?? OTHER_SERVICE;
   }
 
-  async chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], allTools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+    // Past the skill limit no tools are offered at all.
+    const tools = allowTools ? allTools : [];
     const url = this.options.endpoint ?? completionsUrl(this.options.baseUrl ?? "");
     if (!url) {
       return {
@@ -141,7 +143,7 @@ export class OnlineBrain implements Brain {
       this.service,
       this.timeoutMs,
     );
-    if (!reply.ok) return reply;
+    if (!reply.ok) return { ok: false, message: reply.message };
     const parsed = completionReply.safeParse(reply.body);
     if (!parsed.success) return { ok: false, message: unreadableMessage(this.service) };
     // A service can echo the key back even in a successful reply. Remove it (and any other secret

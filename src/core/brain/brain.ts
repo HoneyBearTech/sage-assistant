@@ -7,17 +7,27 @@ export interface ToolCall {
   /** The arguments exactly as the model sent them. Validated by the skill's schema before use. */
   args: unknown;
   /**
-   * An opaque token a service sends with a tool call and needs back with it on the next request of
-   * the same turn (Gemini's thought signature). Only the brain that received it sends it back; it is
-   * never shown, logged or used for anything else. The local and chat-completions brains never set it.
+   * The id the service gave this call, if it gave one. It goes back only to the same brain, with
+   * this call's result, so the service can match them; it is never used for approval (Sage's own
+   * `id` is). The local and chat-completions brains never set it.
    */
-  signature?: string;
+  serviceId?: string;
+}
+
+/**
+ * A service's own reply, kept exactly as it arrived so the same brain can send it back unchanged
+ * on the next request of the same message (thinking blocks, signatures and all). It lives only in
+ * the current message's request list: never shown, logged, saved or put in the chat history.
+ */
+export interface Replay {
+  format: "messages" | "generate" | "responses";
+  items: unknown[];
 }
 
 export type ChatMessage =
   | { role: "system"; content: string }
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
+  | { role: "assistant"; content: string; toolCalls?: ToolCall[]; replay?: Replay }
   | { role: "tool"; toolCallId: string; name: string; content: string };
 
 export interface ToolSpec {
@@ -28,12 +38,18 @@ export interface ToolSpec {
 }
 
 export type BrainReply =
-  | { ok: true; content: string; toolCalls: ToolCall[] }
+  | { ok: true; content: string; toolCalls: ToolCall[]; replay?: Replay }
   | { ok: false; message: string };
 
 export interface Brain {
   readonly kind: "local" | "online";
-  chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply>;
+  /**
+   * One request. `tools` is the same list for every request of a message; once the skill limit is
+   * reached `allowTools` is false, and the brain must not let the model ask for a skill (an online
+   * service that checks its earlier replies against the request is sent the same tools with tool
+   * use switched off; the others are sent none).
+   */
+  chat(messages: ChatMessage[], tools: ToolSpec[], allowTools?: boolean): Promise<BrainReply>;
 }
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;

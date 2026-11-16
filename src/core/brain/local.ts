@@ -56,7 +56,9 @@ export class LocalBrain implements Brain {
     this.timeoutMs = options.timeoutMs ?? 180_000;
   }
 
-  async chat(messages: ChatMessage[], tools: ToolSpec[]): Promise<BrainReply> {
+  async chat(messages: ChatMessage[], allTools: ToolSpec[], allowTools = true): Promise<BrainReply> {
+    // Past the skill limit no tools are offered at all.
+    const tools = allowTools ? allTools : [];
     const body = {
       model: this.options.model,
       stream: false,

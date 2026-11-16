@@ -7,8 +7,14 @@ import {
   timeoutMessage,
 } from "./errors.js";
 
-/** A service's reply: its parsed JSON body (undefined when too large or not JSON), or a plain message. */
-export type ServiceReply = { ok: true; body: unknown } | { ok: false; message: string };
+/**
+ * A service's reply: its parsed JSON body (undefined when too large or not JSON), or a plain message.
+ * A refusal also carries its HTTP status and known error kinds, for a brain that can recover from
+ * one; they are only compared, never shown.
+ */
+export type ServiceReply =
+  | { ok: true; body: unknown }
+  | { ok: false; message: string; status?: number; kinds?: Set<string> };
 
 /**
  * Sends one request to an online service and reads its JSON reply, within `timeoutMs` for the whole
@@ -21,19 +27,27 @@ export async function requestService(
   init: { method: "GET" | "POST"; headers: Record<string, string>; body?: string },
   service: ServiceName,
   timeoutMs: number,
+  /** Makes the time limit's signal; tests pass one they fire themselves. */
+  timeoutSignal: (ms: number) => AbortSignal = (ms) => AbortSignal.timeout(ms),
 ): Promise<ServiceReply> {
   let response: Response;
   try {
     response = await fetchFn(url, {
       ...init,
       redirect: "error",
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: timeoutSignal(timeoutMs),
     });
   } catch (error) {
     return { ok: false, message: networkMessage(service, error) };
   }
   if (!response.ok) {
-    return { ok: false, message: failureMessage(service, response.status, await readErrorKinds(response)) };
+    const kinds = await readErrorKinds(response);
+    return {
+      ok: false,
+      message: failureMessage(service, response.status, kinds),
+      status: response.status,
+      kinds,
+    };
   }
   try {
     return { ok: true, body: await readJsonCapped(response) };

@@ -136,8 +136,31 @@ test("tool calls per message are capped", async (t) => {
   assert.equal(await assistant.send("go"), "ok");
   assert.equal(ran.length, MAX_TOOL_CALLS_PER_TURN);
   const last = brain.calls[1]!;
-  assert.deepEqual(last.tools, [], "no more tools offered once the cap is reached");
+  assert.equal(last.allowTools, false, "no more skills once the cap is reached");
+  assert.deepEqual(last.tools, brain.calls[0]!.tools, "the same tools list for every request of a message");
+  assert.equal(brain.calls[0]!.allowTools, true);
   assert.equal(last.messages.filter((m) => m.role === "tool" && m.content.startsWith("Not run")).length, 3);
+});
+
+test("the request list only grows within a message, and a service's own reply goes back as it came", async (t) => {
+  const replay = {
+    format: "messages" as const,
+    items: [{ type: "thinking", thinking: "", signature: "c2ln" }],
+  };
+  const brain = new ScriptedBrain([
+    { ok: true, content: "", toolCalls: [toolCall("fetch_page", {})], replay },
+    toolReply(toolCall("fetch_page", {})),
+    textReply("done"),
+  ]);
+  const { assistant } = await setup(t, brain);
+  assert.equal(await assistant.send("go"), "done");
+  const [first, second, third] = brain.calls;
+  // Every request starts with exactly the previous one: nothing earlier is changed or dropped.
+  assert.deepEqual(second!.messages.slice(0, first!.messages.length), first!.messages);
+  assert.deepEqual(third!.messages.slice(0, second!.messages.length), second!.messages);
+  const assistantTurn = second!.messages.find((m) => m.role === "assistant");
+  assert.deepEqual(assistantTurn && "replay" in assistantTurn ? assistantTurn.replay : undefined, replay);
+  assert.equal(JSON.stringify(assistant.transcript).includes("c2ln"), false, "never in the chat history");
 });
 
 test("a model that keeps calling tools is stopped after a few rounds", async (t) => {

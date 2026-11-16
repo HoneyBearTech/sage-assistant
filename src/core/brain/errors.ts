@@ -26,8 +26,31 @@ export function serviceName(name: string): ServiceName {
   return { subject: name, ref: name };
 }
 
+/**
+ * Kinds Sage adds itself from what an error says, not from a type field (see `readErrorKinds`).
+ * `CREDIT_TOO_LOW`: prepaid credit used up (Anthropic answers this with a plain 400).
+ * `QUOTA_PER_DAY`: a daily quota used up (Google's 429 with a per-day QuotaFailure), so waiting a
+ * minute won't help. `THINKING_SIGNATURE`: the service refused a thinking block it sent earlier.
+ */
+export const CREDIT_TOO_LOW = "sage:credit_too_low";
+export const QUOTA_PER_DAY = "sage:quota_per_day";
+export const THINKING_SIGNATURE = "sage:thinking_signature";
+
+/**
+ * Fixed, lower-case phrases looked for in an error's message, and the kind each one means. The
+ * message itself is only searched for these: never shown, logged or kept.
+ */
+const MESSAGE_PHRASES: readonly [phrase: string, kind: string][] = [
+  ["credit balance", CREDIT_TOO_LOW],
+  ["invalid `signature` in `thinking` block", THINKING_SIGNATURE],
+  ["invalid signature in thinking block", THINKING_SIGNATURE],
+];
+
 /** Error types and codes that mean the credit, quota or spending limit is used up. */
 const QUOTA_KINDS = new Set([
+  CREDIT_TOO_LOW,
+  QUOTA_PER_DAY,
+  "quota_exceeded",
   "billing_error",
   "insufficient_quota",
   "credit_balance_exhausted",
@@ -48,7 +71,9 @@ const MAX_ERROR_BYTES = 64 * 1024;
 /**
  * Reads only the known type fields of an error reply (error.type, error.code, error.status, the
  * top-level type, and error.details[].reason), lower-cased, and only if they look like identifiers.
- * Nothing else in the body is kept, and these values are only compared, never shown or logged.
+ * Two more things are only checked, never kept: whether error.message contains one of the fixed
+ * phrases above, and whether a QuotaFailure's quotaId names a per-day quota. Nothing else in the
+ * body is kept, and none of it is ever shown or logged.
  */
 export async function readErrorKinds(response: Response): Promise<Set<string>> {
   const kinds = new Set<string>();
@@ -68,13 +93,26 @@ export async function readErrorKinds(response: Response): Promise<Set<string>> {
   const { type, error } = top as { type?: unknown; error?: unknown };
   add(type);
   if (error && typeof error === "object") {
-    const { type: errorType, code, status, details } = error as Record<string, unknown>;
+    const { type: errorType, code, status, details, message } = error as Record<string, unknown>;
     add(errorType);
     add(code);
     add(status);
+    if (typeof message === "string") {
+      const lower = message.slice(0, 2000).toLowerCase();
+      for (const [phrase, kind] of MESSAGE_PHRASES) if (lower.includes(phrase)) kinds.add(kind);
+    }
     if (Array.isArray(details)) {
       for (const detail of details.slice(0, 10)) {
-        if (detail && typeof detail === "object") add((detail as { reason?: unknown }).reason);
+        if (!detail || typeof detail !== "object") continue;
+        const { reason, violations } = detail as { reason?: unknown; violations?: unknown };
+        add(reason);
+        // google.rpc.QuotaFailure: a per-day quota is used up until the next day, not a minute.
+        if (Array.isArray(violations)) {
+          for (const violation of violations.slice(0, 10)) {
+            const quotaId = (violation as { quotaId?: unknown } | null)?.quotaId;
+            if (typeof quotaId === "string" && /perday/i.test(quotaId)) kinds.add(QUOTA_PER_DAY);
+          }
+        }
       }
     }
   }
