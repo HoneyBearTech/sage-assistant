@@ -317,8 +317,10 @@ runner as if it were Sage's; a setup request could overwrite the user's settings
   choice to `qwen3:4b` or `qwen3:1.7b`. It asks in its own box ("Download the Standard model (about
   2.5 GB)?", with a note that it needs an internet connection and free disk space and that the runner
   downloads and checks the files), **Not now** by default, and asks the runner only on **Download**. One
-  download at a time. Cancel, Skip and Sage quitting cancel the request at any step, including while
-  the box is open or the save waits for the settings lock, so nothing starts or is saved afterwards; 2
+  download at a time. Cancel, Skip and Sage quitting cancel the request at any step before its commit
+  point, the save starting (including while the box is open), so nothing starts or is saved afterwards.
+  Once the save has started it is never undone: Cancel answers "too late", the model stays chosen, and
+  Skip waits for the save before marking setup done, so the two writes never interleave. 2
   minutes without a line that moves the download on (repeated lines and bytes with no end of line
   don't count) stop it. *Evidence:* `test/setup.test.ts` (no request without **Download**, a model name
   from the window refused, one at a time, cancel at each step, quit), `test/runner.test.ts` (the stall

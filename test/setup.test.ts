@@ -396,7 +396,7 @@ test("the window can only pick one of Sage's two models, never send a model name
     completed: 0,
     total: 0,
   });
-  await handlers[CHANNELS.cancelPull](undefined);
+  assert.equal(await handlers[CHANNELS.cancelPull](undefined), "idle", "nothing to cancel");
 });
 
 test("the runner's status, the install guide and finishing go through their own requests", async (t) => {
@@ -533,32 +533,66 @@ test("Skip while the download box is open: Download afterwards starts nothing", 
   assert.deepEqual(await settings.load(), { ...defaultSettings(), setupDone: true });
 });
 
-test("Cancel while the model is being saved: the settings stay as they were", async (t) => {
+test("before the save starts, Cancel saves nothing; once it has started, Cancel is too late", async (t) => {
+  const answer = deferred<boolean>();
+  const boxOpen = deferred<void>();
+  const { setup, settings, brainChanged } = await cancellable(t, {
+    confirm: () => {
+      boxOpen.resolve();
+      return answer.promise;
+    },
+  });
+  const online = {
+    ...defaultSettings(),
+    brain: "online" as const,
+    online: { baseUrl: "https://api.example.com", model: "m" },
+  };
+  await settings.save(online);
+  assert.equal(setup.cancelPull(), "idle", "nothing running");
+
+  // Before the commit point: cancelled, and nothing is saved even after Download is chosen.
+  const early = setup.pullModel("smaller");
+  await boxOpen.promise;
+  assert.equal(setup.cancelPull(), "cancelled");
+  answer.resolve(true);
+  assert.deepEqual(await early, { status: "cancelled" });
+  assert.deepEqual(await settings.load(), online);
+  assert.equal(brainChanged(), 0);
+});
+
+test("once the save has started it finishes; Skip waits for it, then marks setup done", async (t) => {
   const { setup, settings, brainChanged } = await cancellable(t, {
     tags: (res) => json(res, 200, { models: [{ name: "qwen3:1.7b" }] }),
   });
-  await settings.save({
+  const online = {
     ...defaultSettings(),
-    brain: "online",
+    brain: "online" as const,
     online: { baseUrl: "https://api.example.com", model: "m" },
-  });
+  };
+  await settings.save(online);
+  // The save is waiting for the settings lock (another save holds it).
   settings.gate = deferred<void>();
   const running = setup.pullModel("smaller");
   await settings.waiting.promise;
-  setup.cancelPull();
+  assert.equal(setup.cancelPull(), "too-late", "the model stays chosen");
+  let finished = false;
+  const skipping = setup.finish().then((result) => {
+    finished = true;
+    return result;
+  });
+  await settled();
+  assert.equal(finished, false, "Skip waits for the save in progress");
   settings.gate.resolve();
-  assert.deepEqual(await running, { status: "cancelled" });
-  const after = await settings.load();
-  assert.equal(after.brain, "online");
-  assert.equal(after.local.model, "qwen3:4b");
-  assert.equal(brainChanged(), 0);
-  // The request is over: a new one can start.
-  settings.gate = undefined;
-  assert.deepEqual(await setup.pullModel("smaller"), { status: "done", skills: "unknown" });
-  assert.equal((await settings.load()).brain, "local");
-  assert.equal(brainChanged(), 1, "told once the brain switched");
-  assert.deepEqual(await setup.pullModel("standard"), { status: "done", skills: "unknown" });
-  assert.equal(brainChanged(), 1, "not again: the brain was already local");
+  assert.deepEqual(await running, { status: "done", skills: "unknown" });
+  assert.deepEqual(await skipping, { ok: true });
+  assert.deepEqual(await settings.load(), {
+    ...online,
+    brain: "local",
+    local: { model: "qwen3:1.7b" },
+    setupDone: true,
+  });
+  assert.equal(brainChanged(), 1);
+  assert.equal(setup.cancelPull(), "idle");
 });
 
 test("an unexpected error is logged as a fixed line, never with its text", async (t) => {

@@ -1,4 +1,5 @@
 import {
+  type CancelPullResult,
   type GuideResult,
   type ModelChoice,
   type PullResult,
@@ -66,7 +67,14 @@ export class Setup {
    * last (saving the model). Cancel, Skip and quitting abort it at whichever step it is on.
    */
   private pull:
-    | { controller: AbortController; transferring: boolean; completed: number; total: number }
+    | {
+        controller: AbortController;
+        transferring: boolean;
+        completed: number;
+        total: number;
+        /** Set when the save starts: the commit point, after which a cancel no longer applies. */
+        saving?: Promise<unknown>;
+      }
     | undefined;
 
   constructor(private readonly deps: SetupDeps) {}
@@ -140,7 +148,7 @@ export class Setup {
         }
         this.deps.logger.info(`The local model runner downloaded ${model}.`);
       }
-      return await this.useModel(model, signal);
+      return await this.useModel(model, current);
     } catch (error) {
       // A fixed line only: nothing from the runner (or an error carrying its text) reaches the log.
       this.deps.logger.warn(`A model download failed unexpectedly (${errorName(error)}).`);
@@ -150,17 +158,24 @@ export class Setup {
     }
   }
 
-  /** Saves the model as the local model, unless the request was cancelled; then the skills check. */
-  private async useModel(model: string, signal: AbortSignal): Promise<PullResult> {
-    let saved: Awaited<ReturnType<SettingsStore["update"]>>;
+  /**
+   * Saves the model as the local model, unless the request was cancelled before this point; then
+   * the skills check. Starting the save is the commit point: from then on a cancel is too late
+   * (cancelPull says so), and finish() waits for the save before marking setup done. A write in
+   * progress is never undone.
+   */
+  private async useModel(model: string, current: NonNullable<Setup["pull"]>): Promise<PullResult> {
+    if (current.controller.signal.aborted) return { status: "cancelled" };
+    const saving = this.deps.settings.update((settings) => ({
+      ...settings,
+      brain: "local",
+      local: { ...settings.local, model },
+    }));
+    current.saving = saving.catch(() => undefined);
+    let saved: Awaited<typeof saving>;
     try {
-      // Checked inside the settings lock: a Skip that got there first leaves the settings alone.
-      saved = await this.deps.settings.update((current) => {
-        if (signal.aborted) throw new Cancelled();
-        return { ...current, brain: "local", local: { ...current.local, model } };
-      });
+      saved = await saving;
     } catch (error) {
-      if (error instanceof Cancelled) return { status: "cancelled" };
       this.deps.logger.warn(`The local model couldn't be saved (${errorName(error)}).`);
       return { status: "failed", message: SETUP_MESSAGES.notSaved };
     }
@@ -171,9 +186,17 @@ export class Setup {
     return { status: "done", skills: tools === "tools" ? "yes" : tools === "no-tools" ? "no" : "unknown" };
   }
 
-  /** Stops the model request at whatever step it is on. Whether the runner keeps a part is up to it. */
-  cancelPull(): void {
-    this.pull?.controller.abort(new Error("cancelled"));
+  /**
+   * Stops the model request at whatever step it is on, up to the commit point (the save starting).
+   * "too-late": the model is already being saved as the local model, and stays chosen. Whether the
+   * runner keeps part of a cancelled download is up to it.
+   */
+  cancelPull(): CancelPullResult {
+    const current = this.pull;
+    if (!current) return "idle";
+    if (current.saving) return "too-late";
+    current.controller.abort(new Error("cancelled"));
+    return "cancelled";
   }
 
   /** Asks first, then opens the one fixed address of the install guide. */
@@ -196,7 +219,11 @@ export class Setup {
 
   /** Setup was finished or skipped: a model request still running is cancelled, and only this one setting changes. */
   async finish(): Promise<Result> {
+    // A model request before its commit point is cancelled; a save already started is let finish,
+    // so "set up" is written after it, never in the middle of it.
+    const saving = this.pull?.saving;
     this.cancelPull();
+    if (saving) await saving;
     try {
       const saved = await this.deps.settings.update((current) => ({ ...current, setupDone: true }));
       return saved.ok ? { ok: true } : { ok: false, message: SETUP_MESSAGES.notMarked };
@@ -211,9 +238,6 @@ export class Setup {
     this.cancelPull();
   }
 }
-
-/** Thrown inside the settings lock when the request was cancelled first; nothing is saved. */
-class Cancelled extends Error {}
 
 /** The kind of error only (its name), never its message, which could carry outside text. */
 function errorName(error: unknown): string {

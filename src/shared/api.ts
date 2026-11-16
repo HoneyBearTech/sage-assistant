@@ -125,6 +125,12 @@ export interface PullStatus {
   total: number;
 }
 
+/**
+ * Cancel: "cancelled" before the commit point; "too-late" once the downloaded model is being saved
+ * as the local model (it stays chosen); "idle" when nothing was running.
+ */
+export type CancelPullResult = "cancelled" | "too-late" | "idle";
+
 /** Opening the install guide. `address` is shown to copy when no browser opened. */
 export type GuideResult =
   | { status: "opened" }
@@ -162,7 +168,7 @@ export interface SageApi {
    */
   pullModel(choice: ModelChoice): Promise<PullResult>;
   pullStatus(): Promise<PullStatus>;
-  cancelPull(): Promise<void>;
+  cancelPull(): Promise<CancelPullResult>;
   /** The main process asks first, then opens Sage's install guide (one fixed address). */
   openInstallGuide(): Promise<GuideResult>;
   /** Saves that setup was finished or skipped, so the Welcome screen isn't shown at start-up. */

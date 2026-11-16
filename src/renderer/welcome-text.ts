@@ -29,6 +29,7 @@ export const WELCOME_TEXT = {
   ready: (choice: ModelChoice) => `The ${SAGE_MODELS[choice].label} model is ready.`,
   declined: "The model wasn't downloaded.",
   cancelled: "Cancelled.",
+  tooLate: "The download had already finished, so Sage is keeping this model.",
   failed: "Sage couldn't download the model. Try again.",
   noSkills:
     "The local model runner says this model can't use Sage's skills, so skills like notes and reminders won't work with it. Try the other model, or an online service.",

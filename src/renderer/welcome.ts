@@ -257,7 +257,15 @@ export function createWelcome(sage: SageApi, el: WelcomeElements, hooks: Welcome
     });
   }
   el.modelDownload.addEventListener("click", () => void download());
-  el.modelCancel.addEventListener("click", () => void sage.cancelPull().catch(() => undefined));
+  el.modelCancel.addEventListener("click", () => {
+    void sage
+      .cancelPull()
+      .then((answer) => {
+        // Already being saved as the local model: it stays chosen, and the result says it is ready.
+        if (answer === "too-late" && downloading) el.modelStatus.textContent = WELCOME_TEXT.tooLate;
+      })
+      .catch(() => undefined);
+  });
   el.modelNext.addEventListener("click", () => showStep("done"));
   el.startChatting.addEventListener("click", () => void finish("chat"));
 

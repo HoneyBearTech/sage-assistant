@@ -562,3 +562,25 @@ test("a late answer after setup doesn't overwrite edits made since", async (t) =
     "the saved state is shown",
   );
 });
+
+test("Cancel after the download finished is too late: the window keeps the model as chosen", async (t) => {
+  const result = deferred<PullResult>();
+  const { el, click, calls } = await atModelStep(t, {
+    pullModel: async () => result.promise,
+    pullStatus: async () => ({ downloading: true, completed: 10, total: 10 }),
+    cancelPull: async () => {
+      calls.cancelPull++;
+      return "too-late";
+    },
+  });
+  await click("model-download");
+  t.mock.timers.tick(PULL_POLL_MS);
+  await settled();
+  await click("model-cancel");
+  assert.equal(calls.cancelPull, 1);
+  assert.equal(el("model-status").textContent, WELCOME_TEXT.tooLate);
+  result.resolve({ status: "done", skills: "yes" });
+  await settled();
+  assert.equal(el("model-status").textContent, "The Standard model is ready.");
+  assert.equal(el("model-next").hidden, false);
+});

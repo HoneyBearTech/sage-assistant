@@ -89,6 +89,7 @@ export async function startWindow(
     pullStatus: async () => ({ downloading: false, completed: 0, total: 0 }),
     cancelPull: async () => {
       calls.cancelPull++;
+      return "cancelled";
     },
     openInstallGuide: async () => {
       calls.openGuide++;

@@ -171,9 +171,7 @@ export function createIpcHandlers(sage: Sage, pickers: Pickers): Record<Channel,
       return sage.setup.pullModel(parsed.data.choice);
     },
     [CHANNELS.pullStatus]: async () => sage.setup.pullStatus(),
-    [CHANNELS.cancelPull]: async () => {
-      sage.setup.cancelPull();
-    },
+    [CHANNELS.cancelPull]: async () => sage.setup.cancelPull(),
     // Asks first, then opens the one fixed address; nothing from the window is used.
     [CHANNELS.openInstallGuide]: () => sage.setup.openInstallGuide(),
     [CHANNELS.finishSetup]: () => sage.setup.finish(),

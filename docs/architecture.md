@@ -156,14 +156,17 @@ their SHA-256 (`verifyModel`); a mismatch deletes the model folder and the downl
    is there is it saved as the local model, with the brain set to local (the box and the model step say
    so), and the runner is asked whether the model can use tools. Switching the brain this way stops a
    turn running against the online service, as a Settings save does.
-   Cancel, Skip and quitting cancel the whole request at whatever step it is on (asking the runner for
-   its models, the box, the download, or the save waiting for the settings lock, where it is checked
-   inside the lock); a cancelled request opens no box, starts no download and saves nothing.
+   **The commit point is the save starting.** Before it (asking the runner for its models, the box, the
+   download, and the moment between the download ending and the save starting), Cancel, Skip and
+   quitting cancel the request: it opens no box, starts no download and saves nothing. Once the
+   download has finished and the save has started, a cancel no longer applies: a write in progress is
+   never undone, Cancel answers "too late" and the window keeps the model as chosen, and Skip waits for
+   the save to settle before it marks setup as done.
 5. **Done** says which model Sage uses and how to talk to it; **Start chatting** marks setup as done.
-   **Skip setup** does the same at any step, and cancels a model request in progress. If setup can't be
-   saved as done, the Welcome screen stays and says so. Afterwards, Settings updates only the fields setup
-   saved, and only where the form still shows what it showed when the Welcome screen closed. **Set up Sage** in Settings
-   opens the Welcome screen again.
+   **Skip setup** does the same at any step, and cancels a model request that hasn't reached its commit
+   point. If setup can't be saved as done, the Welcome screen stays and says so. Afterwards, Settings
+   updates only the fields setup saved, and only where the form still shows what it showed when the
+   Welcome screen closed. **Set up Sage** in Settings opens the Welcome screen again.
 
 `setupDone` is changed only by the Welcome screen's own request; a Settings save keeps the stored value.
 Each of the Welcome screen's requests loads the settings, changes only its own fields and saves them
