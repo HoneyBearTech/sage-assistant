@@ -55,6 +55,22 @@ test("decodes redirect links and refuses odd schemes and internal links", () => 
   assert.equal(resultUrl("http://[bad"), null);
 });
 
+test("only duckduckgo.com and its own subdomains count as DuckDuckGo", () => {
+  const target = "https%3A%2F%2Fexample.com%2Fa";
+  // A look-alike name is not DuckDuckGo: its redirect is not unwrapped and its result is kept.
+  assert.equal(
+    resultUrl(`https://evilduckduckgo.com/l/?uddg=${target}`),
+    `https://evilduckduckgo.com/l/?uddg=${target}`,
+  );
+  assert.equal(resultUrl("https://evilduckduckgo.com/page"), "https://evilduckduckgo.com/page");
+  assert.equal(resultUrl("https://duckduckgo.com.example.org/x"), "https://duckduckgo.com.example.org/x");
+  // The real hosts still unwrap their redirects and are dropped as results.
+  assert.equal(resultUrl(`https://duckduckgo.com/l/?uddg=${target}`), "https://example.com/a");
+  assert.equal(resultUrl(`https://html.duckduckgo.com/l/?uddg=${target}`), "https://example.com/a");
+  assert.equal(resultUrl("https://duckduckgo.com/about"), null);
+  assert.equal(resultUrl("https://html.duckduckgo.com/html/"), null);
+});
+
 test("the small HTML helpers decode entities and strip tags and scripts", () => {
   assert.equal(
     decodeEntities("&lt;b&gt; &amp;amp; &#65;&#x42; &bogus; &#0; &#xD800;"),
