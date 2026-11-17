@@ -51,7 +51,7 @@ test("the page's CSP is strict and matches the one in the code", async () => {
   assert.match(CONTENT_SECURITY_POLICY, /object-src 'none'/);
   assert.doesNotMatch(CONTENT_SECURITY_POLICY, /unsafe-inline|unsafe-eval|https?:|\*/);
   // No inline script, no inline event handlers, nothing loaded from elsewhere.
-  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
+  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
   // Every opening tag, in any letter case, must be matched above, so one the pattern misses fails here.
   assert.equal(scripts.length, html.match(/<script\b/gi)?.length ?? 0);
   for (const script of scripts) {
