@@ -6,6 +6,10 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Web search now treats only duckduckgo.com and its own subdomains as DuckDuckGo, so a look-alike name is no longer taken for its redirect.
+
 ## [0.2.0] - 2026-11-16
 
 ### Added
