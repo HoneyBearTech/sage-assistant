@@ -83,12 +83,17 @@ export function resultUrl(href: string): string | null {
   } catch {
     return null;
   }
-  if (url.hostname.endsWith("duckduckgo.com") && url.pathname === "/l/") {
+  if (isDuckDuckGoHost(url.hostname) && url.pathname === "/l/") {
     const target = url.searchParams.get("uddg");
     if (!target) return null;
     return resultUrl(target);
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-  if (url.hostname.endsWith("duckduckgo.com")) return null;
+  if (isDuckDuckGoHost(url.hostname)) return null;
   return url.toString();
+}
+
+/** True for duckduckgo.com itself and its own subdomains, never for a look-alike such as evilduckduckgo.com. */
+function isDuckDuckGoHost(hostname: string): boolean {
+  return hostname === "duckduckgo.com" || hostname.endsWith(".duckduckgo.com");
 }

@@ -2,6 +2,36 @@
 
 Why past decisions were made, newest first.
 
+## 2026-11-17 - codeql-alerts
+
+**Context:** the owner asked the team to look at the repository's code scanning alerts and resolve them.
+Ten were open: three from CodeQL and seven from Scorecard.
+
+**Decisions:**
+- **Fix the three CodeQL alerts in code.** `resultUrl()` in web search matched DuckDuckGo with
+  `hostname.endsWith("duckduckgo.com")`, which also matched look-alike names such as
+  `evilduckduckgo.com`. A small helper now accepts only `duckduckgo.com` and names ending in
+  `.duckduckgo.com`, in both places. The page test's inline-script check now matches any letter case and
+  any end tag (`</script ...>`), and it counts every `<script` opening, so a tag the pattern misses fails.
+- **Leave the Scorecard alerts to settings and time.** Branch protection is a repository setting (an
+  owner item). Code review needs a second person. Maintained, SAST and CI tests change by themselves.
+  The Best Practices questionnaire was already an owner item. Fuzzing becomes its own job because it adds
+  a development dependency.
+- Fixed alerts aren't dismissed by hand: CodeQL closes them on its next scan of `main`.
+
+**Review:** the Security Officer found the fix real. They also checked port, case, userinfo,
+look-alike, punycode, nested redirect and scheme cases. Search links are shown only as text inside the
+untrusted-data block, and no other host or tag check in `src/` has the same weakness. The Auditor
+approved: the new tests fail on the old code, and the page test fails for upper case, mixed case, spaced,
+odd, unclosed and self-closing script tags. CodeQL on the pull request still flagged the end-tag form
+`</script foo>`, so the end of the pattern was widened in a fix round. A second security review wasn't
+available this month.
+
+**Rejected findings:**
+- *Strip one trailing dot from the host before the check* (Security Officer, should-fix, optional).
+  Not taken: the old code behaved the same way, DuckDuckGo's page doesn't send that form, and such a link
+  would only be shown as an ordinary result in text.
+
 ## 2026-11-16 - release-0-2-0
 
 **Context:** the owner asked for a release with everything merged since 0.1.1, so the new work can be

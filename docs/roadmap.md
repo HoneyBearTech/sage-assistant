@@ -55,9 +55,8 @@ later, and what Sage will not do.
       `file://`, so check it still loads its script and styles) and `EnableCookieEncryption` on.
 - [x] **Owner:** add the release workflow from [Releasing](releasing.md), then make the first release
       (`v0.1.0`) and check its installer against the checksum. The workflow is added (#16, the same text
-      as in Releasing). 0.1.0 and 0.1.1 were released on 2026-11-16, and each installer was checked
-      against the checksum and build record; 0.2.0's version pull request is done and waits for the
-      owner's tag (step 6 of Releasing).
+      as in Releasing). 0.1.0, 0.1.1 and 0.2.0 were released on 2026-11-16, and each installer was
+      checked against the checksum and build record.
 - [ ] **Owner:** after installing 0.2.0, run the "Installed app", "New look", "Home screen" and
       "First-run setup" sections of [the Windows checklist](windows-checklist.md), and "Online brains"
       too if wanted, after setting a spending limit with that company.
@@ -145,6 +144,17 @@ later, and what Sage will not do.
       title, explained in [the GitHub checks notes](github-checks.md).
 - [ ] **Owner:** fill in the questionnaire at https://www.bestpractices.dev/projects/16810 (the badge
       shows "in progress" until then). A later job can draft suggested answers from the repo.
+- [x] **Code scanning alerts** (codeql-alerts): web search treats only `duckduckgo.com` and its own
+      subdomains as DuckDuckGo, and the page test catches inline script in any letter case and with any
+      end tag. This closes CodeQL alerts #1-#3.
+- [ ] **Owner:** the Scorecard alerts that only a repository setting can fix. In the branch rules for
+      `main`, require one approving review and approval of the most recent push (Branch protection, now
+      3/10). Code review (0/10) counts approvals by someone other than the change's author, so it stays low
+      while one person runs the project. Maintained (0/10) rises by itself once the repository is 90 days
+      old, and SAST and CI tests (9/10) as older changes age out.
+- [ ] **Fuzzing** (Scorecard, now 0/10): property tests for the parts that read outside text (the search
+      page reader and the brains' replies), with a property-testing tool. It is its own pull request,
+      since it adds a development dependency.
 - [ ] **GitHub Copilot sign-in** with the user's subscription, after a trial that checks it can answer
       without using its own tools. Its own plan.
 
