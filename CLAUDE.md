@@ -101,8 +101,8 @@ strike them through with a reason.
   by size and SHA-256; it is the only thing Sage downloads by itself. Spoken replies use only voices
   installed on the PC (`localService`). The speech engine is loaded only in the speech helper.
 - **The speech engine** (`sherpa-onnx-node` and its `sherpa-onnx-<platform>-<arch>` packages) is updated
-  as one Renovate pull request: check install scripts again, keep its native files unpacked, and run the
-  Voice section of `docs/windows-checklist.md` before merging.
+  as one Renovate pull request, which Renovate does not merge by itself: check install scripts again, keep its
+  native files unpacked, and run the Voice section of `docs/windows-checklist.md` before merging.
 - **First-run setup.** The window names only `standard` or `smaller`, never a model name; a model is
   downloaded by the local model runner, not by Sage, only after the main process's own box returns
   Download, and saved as the local model only once it is there. The runner's replies are capped and

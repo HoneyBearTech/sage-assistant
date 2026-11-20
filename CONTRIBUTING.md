@@ -127,8 +127,11 @@ one more reason to use Node 24.
 
 ## Reviewing a Renovate update
 
-Renovate opens the dependency update pull requests (see [renovate.json](renovate.json)). Review each one
-like any other change, because an update can carry a compromised release:
+Renovate opens the dependency update pull requests (see [renovate.json](renovate.json)) and merges them
+itself once every required check passes. Only these stay manual, because each needs a follow-up change
+or a test on the Windows PC that CI can't do: Electron major updates, esbuild, electron-builder, the
+sherpa-onnx speech engine and Biome. Review those like any other change, because an update can carry a
+compromised release:
 
 - It runs every check on GitHub, like any other pull request. Don't merge it until they pass.
 - New releases wait 3 days before Renovate proposes them. Security fixes don't wait.

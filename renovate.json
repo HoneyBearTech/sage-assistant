@@ -11,15 +11,26 @@
     "schedule": ["at any time"]
   },
   "enabledManagers": ["npm", "github-actions"],
+  "automerge": true,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "platformAutomerge": false,
+  "minimumReleaseAge": "3 days",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 6am on the first day of the month"]
   },
   "packageRules": [
     {
-      "description": "A just-published npm release isn't proposed for 3 days. Vulnerability-alert pull requests are exempt (Renovate's default for them is no wait).",
+      "description": "An image rebuild (a new digest under the same tag) doesn't wait: Docker Hub dates it by the tag's last push, so a tag rebuilt about weekly would restart the 3-day clock each time. Only images: a moved tag on a GitHub Action is also a digest update and keeps the wait. No image is tracked today; the rule is here so one added later behaves the same.",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "A just-published npm release isn't proposed until the 3-day wait (minimumReleaseAge) is over. Vulnerability-alert pull requests are exempt (Renovate's default for them is no wait).",
       "matchManagers": ["npm"],
-      "minimumReleaseAge": "3 days",
       "internalChecksFilter": "strict"
     },
     {
@@ -41,40 +52,45 @@
       "groupName": "codeql-action"
     },
     {
-      "description": "Each new Electron major version gets its own pull request, because CI can't open the window.",
+      "description": "Each new Electron major version gets its own pull request, because CI can't open the window. It is not merged automatically: the Windows checklist has to be run first.",
       "matchPackageNames": ["electron"],
       "matchUpdateTypes": ["major"],
+      "automerge": false,
       "groupName": null,
       "prBodyNotes": [
         "Electron major update: CI can't open the window, so run docs/windows-checklist.md on the Windows PC before merging."
       ]
     },
     {
-      "description": "esbuild runs an install script that package.json lists under allowScripts.",
+      "description": "esbuild runs an install script that package.json lists under allowScripts. Not merged automatically: a person inspects the script and updates the allowScripts entry first.",
       "matchPackageNames": ["esbuild"],
+      "automerge": false,
       "prBodyNotes": [
         "esbuild runs an install script: inspect the new script, then update the allowScripts entry in package.json in this pull request, in a signed-off commit (git commit -s)."
       ]
     },
     {
-      "description": "electron-builder brings electron-winstaller, whose install script package.json turns off under allowScripts.",
+      "description": "electron-builder brings electron-winstaller, whose install script package.json turns off under allowScripts. Not merged automatically: a person checks the allowScripts entry and the minimatch overrides first.",
       "matchPackageNames": ["electron-builder"],
+      "automerge": false,
       "prBodyNotes": [
         "electron-builder update: check whether the electron-winstaller version changed (npm install-scripts ls, or package-lock.json); if it did, inspect its install script and update the allowScripts entry in package.json (keep it false) in this pull request, in a signed-off commit (git commit -s).",
         "Also check the minimatch overrides in package.json (see CONTRIBUTING.md, Reviewing a Renovate update)."
       ]
     },
     {
-      "description": "The speech engine: sherpa-onnx-node and its ready-built packages for each kind of PC share one version, so they come in one pull request.",
+      "description": "The speech engine: sherpa-onnx-node and its ready-built packages for each kind of PC share one version, so they come in one pull request. Not merged automatically: the Voice section of the Windows checklist has to be run first.",
       "matchPackageNames": ["sherpa-onnx-node", "sherpa-onnx-*"],
+      "automerge": false,
       "groupName": "sherpa-onnx speech engine",
       "prBodyNotes": [
         "Speech engine update: it brings native code, which runs outside the app archive's integrity check. Check the install scripts again (npm install-scripts ls, and \"hasInstallScript\" in the package-lock.json diff), make sure electron-builder.json still unpacks its native files, and run the Voice section of docs/windows-checklist.md (from source and in the installed app) before merging."
       ]
     },
     {
-      "description": "biome.jsonc names the Biome version in its $schema line.",
+      "description": "biome.jsonc names the Biome version in its $schema line. Not merged automatically: a person updates that line and fixes new warnings first.",
       "matchPackageNames": ["@biomejs/biome"],
+      "automerge": false,
       "prBodyNotes": [
         "Biome update: update the $schema version in biome.jsonc and fix any new warnings, in this pull request, in a signed-off commit (git commit -s)."
       ]
