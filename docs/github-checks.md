@@ -63,15 +63,18 @@ confirmed here):
 
 - **When:** one weekly run, before 6am on Monday (US Central time), plus a monthly refresh of
   `package-lock.json`. Security fixes don't wait for the weekly slot and carry a `security` label.
-- **A 3-day wait:** a new npm release isn't proposed until it is 3 days old, so a just-published (possibly
+- **A 3-day wait:** a new release isn't proposed until it is 3 days old, so a just-published (possibly
   bad) release isn't offered at once. Security-fix pull requests are exempt: Renovate's own default for
   them is no wait. The monthly lockfile refresh doesn't wait either, because it has no release date to
-  count from.
+  count from; like the other updates, it merges automatically once the required checks pass.
 - **What:** npm versions stay exact (the `engines` line in `package.json` stays a range) and actions stay
   pinned to a full SHA. Minor, patch and digest updates of actions come in one pull request (a "digest"
   update moves the SHA behind a tag that was re-pointed), and the CodeQL actions always move together.
   Each new Electron major version gets its own pull request.
-- **Merging:** Renovate never merges its own pull requests. Review each one like any other change (an
+- **Merging:** Renovate merges its own pull requests itself (squash, patch, minor and major), on its next
+  run once every required check on the pull request has passed. These stay manual, because each needs a
+  follow-up change or a test on the Windows PC that CI can't do: Electron major updates, esbuild,
+  electron-builder, the sherpa-onnx speech engine and Biome. Review those like any other change (an
   update can carry a compromised release):
   - it runs every check on GitHub;
   - after an esbuild (or any install-script package) update, inspect the new script and update the
@@ -86,6 +89,9 @@ confirmed here):
     with an older npm, use the lockfile diff);
   - after a Biome update, update the `$schema` line in `biome.jsonc` and fix any new warnings;
   - push those changes as a signed-off commit on the same pull request.
+
+  Until the "Code Owners" review requirement in the branch rule below is switched off, every Renovate
+  pull request, including the ones that merge themselves, also waits for the owner.
 
   The same checklist is in [CONTRIBUTING.md](../CONTRIBUTING.md#reviewing-a-renovate-update).
 

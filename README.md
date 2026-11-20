@@ -239,7 +239,8 @@ Everything lives in Sage's folder in your user profile (Electron's `userData` fo
 isn't installed). On GitHub, every pull request also gets CI (the same command on Ubuntu and Windows),
 the DCO check, a secret scan, CodeQL and dependency review, and the OpenSSF Scorecard runs on `main`
 (see [docs/github-checks.md](docs/github-checks.md)). Renovate opens the dependency update pull
-requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
+requests and merges them once every required check passes (all but a few that need a person: see
+[CONTRIBUTING.md](CONTRIBUTING.md#reviewing-a-renovate-update)). See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
 
 `npm run dist` builds the Windows installer into `out/` (on Windows only), and `npm run dist:dir` the
 unpacked app (also on Linux). Releases are built on GitHub from a version tag, with a checksum and build

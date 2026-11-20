@@ -6,6 +6,10 @@ All notable changes to Sage are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Renovate now merges its own update pull requests (majors included, squash) once every required check passes, after a three-day wait for new versions. Electron major updates, esbuild, electron-builder, the sherpa-onnx speech engine and Biome stay manual.
+
 ### Fixed
 
 - Web search now treats only duckduckgo.com and its own subdomains as DuckDuckGo, so a look-alike name is no longer taken for its redirect.
