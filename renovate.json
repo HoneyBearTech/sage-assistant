@@ -7,7 +7,7 @@
   "assignees": ["HoneyBearTech"],
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
-    "labels": ["security"],
+    "labels": ["security", "openssf"],
     "schedule": ["at any time"]
   },
   "enabledManagers": ["npm", "github-actions"],
