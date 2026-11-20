@@ -66,7 +66,7 @@ confirmed here):
 - **A 3-day wait:** a new release isn't proposed until it is 3 days old, so a just-published (possibly
   bad) release isn't offered at once. Security-fix pull requests are exempt: Renovate's own default for
   them is no wait. The monthly lockfile refresh doesn't wait either, because it has no release date to
-  count from.
+  count from; like the other updates, it merges automatically once the required checks pass.
 - **What:** npm versions stay exact (the `engines` line in `package.json` stays a range) and actions stay
   pinned to a full SHA. Minor, patch and digest updates of actions come in one pull request (a "digest"
   update moves the SHA behind a tag that was re-pointed), and the CodeQL actions always move together.
