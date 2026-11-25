@@ -35,7 +35,7 @@
     "verify": "npm run check && npm run typecheck && npm run test:coverage && npm run check:public && npm run secret-scan"
   },
   "dependencies": {
-    "sherpa-onnx-node": "2.0.1"
+    "sherpa-onnx-node": "2.0.3"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
